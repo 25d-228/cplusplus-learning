@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap — Strata: a C++ storage and query engine · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/index.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html" aria-current="page"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Roadmap</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/1">Read on GitHub</a><a href="source/roadmap.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#what-the-engine-does">What the engine does</a></li><li class="toc-h3"><a href="#two-relations-and-one-ordered-key-space">Two relations and one ordered key space</a></li><li class="toc-h3"><a href="#a-query-with-a-hand-checkable-answer">A query with a hand-checkable answer</a></li><li class="toc-h2"><a href="#architecture-and-ownership">Architecture and ownership</a></li><li class="toc-h3"><a href="#storage-ordered-generations-and-sorted-files">Storage: ordered generations and sorted files</a></li><li class="toc-h3"><a href="#read-views-freeze-first-then-share">Read views: freeze first, then share</a></li><li class="toc-h3"><a href="#execution-streaming-operators-with-explicit-barriers">Execution: streaming operators with explicit barriers</a></li><li class="toc-h3"><a href="#runtime-admit-work-before-it-consumes-resources">Runtime: admit work before it consumes resources</a></li><li class="toc-h2"><a href="#boundaries-that-determine-correctness">Boundaries that determine correctness</a></li><li class="toc-h3"><a href="#acknowledged-rejected-and-uncertain-writes">Acknowledged, rejected, and uncertain writes</a></li><li class="toc-h3"><a href="#budgeted-memory-is-not-total-process-memory">Budgeted memory is not total process memory</a></li><li class="toc-h2"><a href="#starting-knowledge-and-native-tools">Starting knowledge and native tools</a></li><li class="toc-h2"><a href="#the-implementation-workspace">The implementation workspace</a></li><li class="toc-h2"><a href="#the-chapter-sequence-and-implementation-budget">The chapter sequence and implementation budget</a></li><li class="toc-h2"><a href="#part-i-language-and-tools">Part I — Language and tools</a></li><li class="toc-h3"><a href="#chapter-1-from-c-files-to-a-native-c-program">Chapter 1 — From C files to a native C++ program</a></li><li class="toc-h3"><a href="#chapter-2-values-references-containers-and-views">Chapter 2 — Values, references, containers, and views</a></li><li class="toc-h3"><a href="#chapter-3-lifetime-raii-and-move-only-owners">Chapter 3 — Lifetime, RAII, and move-only owners</a></li><li class="toc-h3"><a href="#chapter-4-errors-and-failure-safe-state-changes">Chapter 4 — Errors and failure-safe state changes</a></li><li class="toc-h3"><a href="#chapter-5-templates-concepts-and-ordering-contracts">Chapter 5 — Templates, concepts, and ordering contracts</a></li><li class="toc-h2"><a href="#part-ii-persistent-storage-and-read-views">Part II — Persistent storage and read views</a></li><li class="toc-h3"><a href="#chapter-6-records-bytes-and-a-dependable-file-boundary">Chapter 6 — Records, bytes, and a dependable file boundary</a></li><li class="toc-h3"><a href="#chapter-7-an-arena-backed-skip-list-memtable">Chapter 7 — An arena-backed skip-list memtable</a></li><li class="toc-h3"><a href="#chapter-8-indexed-immutable-tables">Chapter 8 — Indexed immutable tables</a></li><li class="toc-h3"><a href="#chapter-9-memory-budgets-and-a-pinned-block-cache">Chapter 9 — Memory budgets and a pinned block cache</a></li><li class="toc-h3"><a href="#chapter-10-atomic-batches-and-write-ahead-recovery">Chapter 10 — Atomic batches and write-ahead recovery</a></li><li class="toc-h3"><a href="#chapter-11-flush-installation-and-database-reopening">Chapter 11 — Flush installation and database reopening</a></li><li class="toc-h3"><a href="#chapter-12-immutable-snapshots-and-merged-reads">Chapter 12 — Immutable snapshots and merged reads</a></li><li class="toc-h3"><a href="#chapter-13-streaming-compaction-and-safe-reclamation">Chapter 13 — Streaming compaction and safe reclamation</a></li><li class="toc-h2"><a href="#part-iii-bounded-query-execution">Part III — Bounded query execution</a></li><li class="toc-h3"><a href="#chapter-14-owned-batches-and-a-streaming-query-pipeline">Chapter 14 — Owned batches and a streaming query pipeline</a></li><li class="toc-h3"><a href="#chapter-15-external-sorting-with-bounded-fan-in">Chapter 15 — External sorting with bounded fan-in</a></li><li class="toc-h3"><a href="#chapter-16-a-streaming-many-to-one-merge-join">Chapter 16 — A streaming many-to-one merge join</a></li><li class="toc-h3"><a href="#chapter-17-grouping-checked-aggregates-and-complete-queries">Chapter 17 — Grouping, checked aggregates, and complete queries</a></li><li class="toc-h2"><a href="#part-iv-concurrency-and-runtime-integration">Part IV — Concurrency and runtime integration</a></li><li class="toc-h3"><a href="#chapter-18-synchronization-and-thread-lifetime">Chapter 18 — Synchronization and thread lifetime</a></li><li class="toc-h3"><a href="#chapter-19-bounded-execution-and-cooperative-cancellation">Chapter 19 — Bounded execution and cooperative cancellation</a></li><li class="toc-h3"><a href="#chapter-20-concurrent-readers-ingestion-and-maintenance">Chapter 20 — Concurrent readers, ingestion, and maintenance</a></li><li class="toc-h2"><a href="#part-v-integrated-workloads-failures-and-measurements">Part V — Integrated workloads, failures, and measurements</a></li><li class="toc-h3"><a href="#chapter-21-reproducible-workloads-and-independent-answers">Chapter 21 — Reproducible workloads and independent answers</a></li><li class="toc-h3"><a href="#chapter-22-recovery-and-resource-pressure-experiments">Chapter 22 — Recovery and resource-pressure experiments</a></li><li class="toc-h3"><a href="#chapter-23-profiling-optimization-and-the-final-demonstration">Chapter 23 — Profiling, optimization, and the final demonstration</a></li><li class="toc-h2"><a href="#the-final-demonstration">The final demonstration</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="strata-a-c-storage-and-query-engine">Strata: a C++ storage and query engine</h1>
+<p>Strata is an embedded, single-node engine for persistent numeric records and
+bounded-memory analytical queries. You will build its in-memory index, disk
+format, recovery protocol, read views, compaction, query operators, and concurrent
+runtime. A small command-line program will exercise those mechanisms without
+adding a server or a SQL parser.</p>
+<p>The central problem is not merely saving rows. A successful write must have a
+precise recovery meaning. A query must keep a consistent view while newer data
+arrives. A sort must make progress when its input exceeds its allocation budget.
+A canceled task must release its files, memory, and snapshot without destroying
+resources another reader still uses. These requirements meet in the same engine.</p>
+<blockquote>
+<p><strong>Learning objectives</strong></p>
+<p>Explain and implement resource ownership, object lifetime, value and move
+semantics, exception guarantees, useful generic interfaces, explicit byte
+layouts, indexed storage, recovery ordering, external-memory algorithms, and
+synchronized publication. Diagnose failures and measure tradeoffs in the
+resulting system rather than treating these subjects as isolated vocabulary.</p>
+</blockquote>
+<h2 id="what-the-engine-does">What the engine does</h2>
+<h3 id="two-relations-and-one-ordered-key-space">Two relations and one ordered key space</h3>
+<p>The workload uses two fixed schemas. The names below denote unsigned integer
+fields with the stated widths; they do not prescribe a packed C++ object layout.</p>
+<table>
+<thead>
+<tr>
+<th>Relation</th>
+<th>Primary key</th>
+<th>Value fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Events</td>
+<td><code>event_id</code>, 64 bits</td>
+<td><code>account_id</code>, 64 bits; <code>day</code>, 32 bits; <code>amount_cents</code>, 64 bits</td>
+</tr>
+<tr>
+<td>Accounts</td>
+<td><code>account_id</code>, 64 bits</td>
+<td><code>region_id</code>, 32 bits</td>
+</tr>
+</tbody>
+</table>
+<p>A storage key is the pair <code>(relation_id, primary_key)</code>. The day is an integer
+label, not a date parser. Amounts are nonnegative integer cents; counts and sums
+use checked 64-bit arithmetic. A result that would overflow is an error, not a
+wrapped number. Records have explicit byte encodings; writing <code>sizeof(record)</code>
+bytes from a C++ object is not the disk format.</p>
+<p>The engine supports put, delete, point lookup, ordered range scanning, and
+bounded atomic write batches that can change both relations. Each committed
+batch receives one increasing sequence number. Repeated writes to the same
+storage key within a single batch are rejected during validation; updates in
+successive batches remain valid. A deletion is represented by a <em>tombstone</em>, a
+record that suppresses older values.</p>
+<p>A snapshot is a repeatable read view of both relations at one committed batch
+boundary. This is not a general transaction system: there are no concurrent
+writers, read-write transactions, historical timestamp queries, or conflict
+resolution protocols. One process owns a database directory, with an operating
+system lock preventing a second writer process from opening it.</p>
+<h3 id="a-query-with-a-hand-checkable-answer">A query with a hand-checkable answer</h3>
+<p>The main query filters events by a day interval, joins them to existing accounts,
+and groups by region and day. It returns an event count and a sum of cents for
+each group, in <code>(region_id, day)</code> order. It is an inner, many-to-one join: an event
+without a visible account is omitted; each account key has at most one visible
+value in a snapshot.</p>
+<p>Consider these accounts:</p>
+<table>
+<thead>
+<tr>
+<th>Account</th>
+<th style="text-align:right">Region</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10</td>
+<td style="text-align:right">1</td>
+</tr>
+<tr>
+<td>20</td>
+<td style="text-align:right">2</td>
+</tr>
+</tbody>
+</table>
+<p>And these events:</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th style="text-align:right">Account</th>
+<th style="text-align:right">Day</th>
+<th style="text-align:right">Cents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>100</td>
+<td style="text-align:right">10</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">500</td>
+</tr>
+<tr>
+<td>101</td>
+<td style="text-align:right">10</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">250</td>
+</tr>
+<tr>
+<td>102</td>
+<td style="text-align:right">20</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">700</td>
+</tr>
+<tr>
+<td>103</td>
+<td style="text-align:right">99</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">50</td>
+</tr>
+<tr>
+<td>104</td>
+<td style="text-align:right">10</td>
+<td style="text-align:right">4</td>
+<td style="text-align:right">100</td>
+</tr>
+</tbody>
+</table>
+<p>Filtering to day 3 produces these rows:</p>
+<figure class="code-block"><figcaption><span class="code-title">Expected query result</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>region_id,day,event_count,total_cents
+1,3,2,750
+2,3,1,700
+</code></pre></figure>
+<p>The missing account removes event 103, and the day filter removes event 104.
+Now commit one batch that changes account 10 to region 3, changes event 101 to
+900 cents, and deletes event 102. An older snapshot must still return the result
+above. A new snapshot must return only <code>(3, 3, 2, 1400)</code>. No reader may combine
+the new region with the old amount by observing a partial batch. This small
+example becomes a reference case for storage, execution, and concurrent tests.</p>
+<h2 id="architecture-and-ownership">Architecture and ownership</h2>
+<h3 id="storage-ordered-generations-and-sorted-files">Storage: ordered generations and sorted files</h3>
+<p>Strata uses a restricted log-structured merge design. A mutable <em>memtable</em> is an
+arena-backed skip list ordered by storage key and descending sequence number.
+You implement its search, insertion, allocation, and iteration. A write-ahead
+log records complete batches before their in-memory publication. Sealed
+memtables become immutable sorted tables on disk.</p>
+<p>Sorted tables contain checksummed blocks, a sparse block directory, and a Bloom
+filter for negative point lookups. A bounded cache owns reusable block buffers;
+a pin keeps a block alive while a decoder borrows its bytes. File identity, block
+identity, and the lifetime of those borrowed bytes are explicit. The learner
+implements the cache policy, index search, checksums, and Bloom filter rather
+than calling a storage library.</p>
+<p>A small manifest names the installed table set, required log generations, and
+recovery progress. Its publication protocol establishes when a new set of files
+becomes authoritative. Flushes occur in generation order. The merge policy has
+bounded newly flushed runs and one consolidated base run, which may span
+size-limited files. Compaction merges the selected inputs into a new base using
+bounded buffers. Rewriting a large base is a deliberate, measurable cost of this
+limited policy; the book does not disguise it as a full industrial LSM hierarchy.</p>
+<p>The <a href="https://chromium.googlesource.com/external/leveldb/+/HEAD/doc/impl.md">LevelDB implementation description</a>
+provides useful background on these file roles and on deletion markers. Strata
+uses a narrower policy and develops its own installation and recovery rules;
+the reference is neither a dependency nor a substitute for that protocol.</p>
+<h3 id="read-views-freeze-first-then-share">Read views: freeze first, then share</h3>
+<p>Acquiring a snapshot seals the active memtable at a batch boundary and captures
+its immutable sources together with the installed disk runs. Replacement
+capacity is prepared before publication; an empty active table need not be
+sealed again. Future writes use another memtable. Readers never traverse links
+that a writer is modifying.</p>
+<p>Each view owns the exact generations it captured. A later flush or compaction
+does not silently replace sources inside that view. Thus an old view can keep an
+arena or obsolete file alive even when a newer view no longer needs it. Bounds
+on retained generations, metadata, and files make this cost visible. Snapshot
+creation can report resource pressure; ingestion can wait or return a bounded
+admission failure. Retention is not allowed to become an unbounded allocation.</p>
+<p>Compaction chooses the latest version for each key in its selected sources. It
+may discard a tombstone only when every possible older source for that key in
+the new serving state has been covered. Older snapshots remain valid through
+their original sources, not through retained versions in the replacement base.
+There is no general multiversion transaction manager hidden behind this design.</p>
+<h3 id="execution-streaming-operators-with-explicit-barriers">Execution: streaming operators with explicit barriers</h3>
+<p>The final operator pipeline is:</p>
+<figure class="code-block"><figcaption><span class="code-title">Query data flow</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>event snapshot scan -&gt; day filter -&gt; narrow projection
+    -&gt; external sort by (account_id, event_id)
+    -&gt; merge join with the account snapshot scan in account_id order
+    -&gt; external sort by (region_id, day, event_id)
+    -&gt; streaming count/sum by (region_id, day)
+    -&gt; ordered output
+</code></pre></figure>
+<p>Batches own their column buffers; views borrow from a named owner for a stated
+interval. Sorting is a blocking boundary, so it generates temporary runs when
+its allocation is exhausted. The learner implements run generation, buffered
+readers, a merge heap, bounded fan-in, multiple merge passes, and temporary-file
+cleanup. Only the sort of an already-budgeted in-memory chunk is delegated to
+<code>std::sort</code>.</p>
+<p>The account relation is scanned incrementally; the join does not assume that it
+fits in memory. Repeated event keys are consumed one at a time against a single
+matching account. The final sort makes equal aggregation keys adjacent, so the
+aggregator needs one current group rather than an unbounded hash table. General
+many-to-many joins and an optimizer are outside the scope.</p>
+<h3 id="runtime-admit-work-before-it-consumes-resources">Runtime: admit work before it consumes resources</h3>
+<p>The first storage and query implementations execute synchronously. Only after
+those paths work does the course add threads: one serialized writer, a dedicated
+flush/compaction worker, and a small pool for independent read-only queries.
+Whole-query jobs avoid nested tasks that wait for children in their own saturated
+pool. Maintenance has separate progress resources rather than borrowing the last
+query worker and its entire allocation.</p>
+<p>Queued requests contain bounded descriptors, not full data sets or pre-acquired
+snapshots. A query obtains its memory reservation and snapshot when admitted to
+execution; the snapshot time is not the time its request entered the queue.
+Cancellation, resource-pressure waits, exceptions, and shutdown all have explicit
+state transitions. Blocking waits release the locks needed by the work that can
+satisfy them. Thread construction failure and shutdown during a blocked operation
+are part of the implementation, not exceptional afterthoughts.</p>
+<h2 id="boundaries-that-determine-correctness">Boundaries that determine correctness</h2>
+<h3 id="acknowledged-rejected-and-uncertain-writes">Acknowledged, rejected, and uncertain writes</h3>
+<p>A batch is validated and its publication resources are prepared before entering
+the irreversible part of the write path. Appending and synchronizing a complete
+log record precedes publishing the batch. Publishing the prepared in-memory
+state must not allocate or throw. A definite pre-commit rejection leaves the
+visible state unchanged.</p>
+<p>An I/O or synchronization failure after writing begins can instead produce an
+<em>uncertain outcome</em>. The writer then stops accepting changes until recovery; a
+caller must not assume that retrying the batch is harmless. Recovery preserves
+acknowledged durable batches under the stated persistence assumptions, may
+include a complete but unacknowledged final batch, and never exposes half a
+batch. There is no automatic exactly-once retry API.</p>
+<p>An incomplete final log frame is different from corruption in required committed
+storage. The parser accepts only the specifically defined torn-tail cases; it
+does not turn every checksum mismatch into permission to discard data. Required
+missing files and malformed installed tables cause an explicit recovery failure.</p>
+<p>Native process-stop tests and a deterministic persistence model serve different
+purposes. Killing a process leaves operating-system caches alive; it does not
+establish power-loss durability. Apple's archived
+<a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fsync.2.html"><code>fsync</code> documentation</a>
+describes drive-cache concerns and <code>F_FULLFSYNC</code>. The file layer will inspect the
+installed platform, check synchronization results, and state its file and
+namespace persistence assumptions rather than silently downgrade them. SQLite's
+<a href="https://www.sqlite.org/atomiccommit.html#_testing_atomic_commit_behavior">atomic-commit testing discussion</a>
+illustrates failure simulation, but its rollback-journal algorithm is not
+Strata's recovery algorithm.</p>
+<h3 id="budgeted-memory-is-not-total-process-memory">Budgeted memory is not total process memory</h3>
+<p>The initial measurement configuration uses a <strong>256 MiB engine-managed budget</strong>,
+with <strong>32 MiB per admitted query</strong>. These are experiment settings, not hardware
+requirements or measured results. One mebibyte is <span class="math-input" data-display="false">2^{20}</span> bytes. Budget charges
+include allocated capacities rather than only logical row sizes, plus bounded
+metadata, pinned cache blocks, merge buffers, and retained arenas. A buffer shared
+by several pins is charged once; a pin prevents that charge from being released.</p>
+<p>For a merge with <span class="math-input" data-display="false">k</span> input runs, let <span class="math-input" data-display="false">b_i</span> be the byte capacity of one input
+buffer, <span class="math-input" data-display="false">b_o</span> the output-buffer capacity, and <span class="math-input" data-display="false">h(k)</span> the charged heap and reader
+metadata. Let <span class="math-input" data-display="false">B_m</span> be the bytes reserved for that merge after accounting for
+other live operator buffers. Admission requires</p>
+<div class="math-input" data-display="true">k b_i + b_o + h(k) \leq B_m.</div>
+<p>For example, with a 2 MiB merge reservation, eight 64 KiB input buffers, one
+64 KiB output buffer, and 32 KiB of metadata, the charge is
+<span class="math-input" data-display="false">8 \times 64 + 64 + 32 = 608</span> KiB, below 2048 KiB. Eight is the number of live
+input readers, not the total number of runs ever created. More runs require
+additional passes. The implementation also respects a file-descriptor limit;
+memory alone does not determine fan-in.</p>
+<p>Admission reserves capacity; allocation consumes it. Those counters must not
+be added together as if they described two independent copies of the same bytes.
+The course distinguishes reservations, live charged allocation, process resident
+memory, and filesystem cache effects. Allocator bookkeeping, thread stacks,
+runtime libraries, and the operating system make a 256 MiB engine budget
+something other than a 256 MiB process-memory guarantee.</p>
+<p>Run lists, table directories, queued tasks, and retained generations have explicit
+caps or bounded representations. Cache misses have a reserved-buffer bypass path
+when all cache entries are pinned; a full cache must not deadlock a scan. Disk
+headroom is checked for old and new compaction files, pinned obsolete files,
+logs, and overlapping spill passes. Reducing input size is acceptable only while
+it still forces the spill and compaction paths being measured.</p>
+<h2 id="starting-knowledge-and-native-tools">Starting knowledge and native tools</h2>
+<p>The starting knowledge is basic C and Python: functions, loops, arrays, pointers,
+and a simple command line. No prior knowledge of C++ ownership, database internals,
+external-memory algorithms, or the memory model is assumed. The first five
+chapters contain standalone runnable programs before the engine build begins.
+Concurrency receives another language-focused introduction immediately before
+threaded engine work.</p>
+<p>Use native ARM64 macOS on the M4 Mac mini with 16 GB memory. Chapter 1 observes
+the installed operating system and tools, compiles small feature probes, and
+builds a multi-file program. It does not assume a particular macOS release or
+require a virtual machine. A compatible Apple Clang/libc++ toolchain or maintained
+LLVM alternative is suitable. The needed baseline is C++20 concepts and
+<code>std::span</code>, together with the C++ standard library facilities actually used.
+Apple documents <a href="https://developer.apple.com/xcode/cpp/">compiler, library, and deployment distinctions</a>;
+upstream <a href="https://libcxx.llvm.org/Status/Cxx20.html">libc++ feature status</a> is a
+separate source, not an Apple compiler version map.</p>
+<p>CMake and CTest manage builds and focused tests. CMake's
+<a href="https://cmake.org/cmake/help/latest/manual/cmake-compile-features.7.html#requiring-language-standards">language-standard meta-features</a>
+select a language mode, but do not prove every required library facility is
+available. Real feature probes and test programs decide compatibility. No C++23
+<code>std::expected</code>, modules, <code>std::format</code>, coroutines, or <code>std::jthread</code> requirement
+is introduced merely to use a newer feature.</p>
+<p>LLDB, <a href="https://clang.llvm.org/docs/AddressSanitizer.html">AddressSanitizer</a>, and a
+separate <a href="https://clang.llvm.org/docs/ThreadSanitizer.html">ThreadSanitizer</a> build
+are used where the installed toolchain supports them; undefined-behavior checks
+are added to the applicable diagnostic build. Unsupported diagnostics are
+reported, not mistaken for a passing run. Measurements use a separate optimized
+build. Python supplies deterministic data generation, independent small-data
+answers, and experiment drivers, never the engine's storage or query execution.</p>
+<p>The standard library and operating system may supply containers for bounded
+metadata, threads, synchronization, file primitives, and ordinary utilities. No
+database, query, columnar-data, or task-runtime library supplies the required
+index, recovery, cache, merge, executor, or scheduling mechanisms. The course
+does not require an external test framework.</p>
+<h2 id="the-implementation-workspace">The implementation workspace</h2>
+<p>The implementation lives on <code>work/strata</code>. The following is the intended source
+layout as it grows; later files are created by their owning chapters, not required
+by an earlier runnable example. Headers use the <code>strata</code> namespace. The book
+names concrete files and complete prerequisite interfaces at each step.</p>
+<figure class="code-block"><figcaption><span class="code-title">Learner source tree</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>CMakeLists.txt
+include/strata/
+  core/          errors, byte views, checked arithmetic, record types
+  io/            file ownership and synchronization interface
+  memory/        arena, budget, reservations
+  storage/       memtable, table, cache, log, manifest, view, database
+  query/         batch, scan, sort, merge join, aggregation
+  runtime/       task, executor, cancellation, engine coordination
+src/
+  core/
+  io/
+  memory/
+  storage/
+  query/
+  runtime/
+apps/strata.cpp
+exercises/
+  chapter-01/    a multi-translation-unit program
+  chapter-02/    values, containers, and borrowed views
+  chapter-03/    a move-only resource owner
+  chapter-04/    failure-safe state replacement
+  chapter-05/    constrained generic code
+  chapter-18/    synchronization and thread lifetime
+tests/          unit, integration, fault, and concurrency tests
+scripts/        deterministic fixtures, oracle, and measurements
+</code></pre></figure>
+<p>Build trees, database directories, spill files, generated data, and measurement
+output are local ignored artifacts,
+not source. Chapter 1 supplies the first build targets; later chapters extend
+them without requiring unfinished future targets.</p>
+<h2 id="the-chapter-sequence-and-implementation-budget">The chapter sequence and implementation budget</h2>
+<p>The plan allocates <strong>86.0 hours of implementation</strong>, plus <strong>6.5 hours of additional
+debugging and integration reserve</strong>, for <strong>92.5 hours total</strong>. Reading, authoring,
+site generation, and publication are excluded. Each chapter allocation already
+includes its local tests and ordinary debugging; the reserve is for additional
+cross-system problems, not a second charge for the same work. The estimates assume
+a fast implementer following the complete worked mechanisms.</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Chapters</th>
+<th style="text-align:right">Implementation hours</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Language and tools</td>
+<td>1–5</td>
+<td style="text-align:right">10.5</td>
+</tr>
+<tr>
+<td>Persistent storage and read views</td>
+<td>6–13</td>
+<td style="text-align:right">34.5</td>
+</tr>
+<tr>
+<td>Bounded query execution</td>
+<td>14–17</td>
+<td style="text-align:right">18.0</td>
+</tr>
+<tr>
+<td>Concurrency and runtime integration</td>
+<td>18–20</td>
+<td style="text-align:right">10.5</td>
+</tr>
+<tr>
+<td>Integrated workloads, failures, and measurements</td>
+<td>21–23</td>
+<td style="text-align:right">12.5</td>
+</tr>
+<tr>
+<td>Additional debugging and integration reserve</td>
+<td>Across the course</td>
+<td style="text-align:right">6.5</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>23 chapters</strong></td>
+<td style="text-align:right"><strong>92.5</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The sequence is cumulative. A chapter requires all earlier completed code unless
+its outline explicitly identifies a standalone exercise; the prerequisites below
+name the particularly important dependencies. Each chapter ends in runnable code,
+including chapters whose subsystem is not yet connected to the database. No
+chapter needs a future implementation to make its own demonstration work.</p>
+<table>
+<thead>
+<tr>
+<th>Chapter</th>
+<th>Topic</th>
+<th style="text-align:right">Hours</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>From C files to a native C++ program</td>
+<td style="text-align:right">2.0</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Values, references, containers, and views</td>
+<td style="text-align:right">2.0</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Lifetime, RAII, and move-only owners</td>
+<td style="text-align:right">2.5</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Errors and failure-safe state changes</td>
+<td style="text-align:right">2.0</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Templates, concepts, and ordering contracts</td>
+<td style="text-align:right">2.0</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Records, bytes, and a dependable file boundary</td>
+<td style="text-align:right">3.0</td>
+</tr>
+<tr>
+<td>7</td>
+<td>An arena-backed skip-list memtable</td>
+<td style="text-align:right">4.5</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Indexed immutable tables</td>
+<td style="text-align:right">5.0</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Memory budgets and a pinned block cache</td>
+<td style="text-align:right">3.5</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Atomic batches and write-ahead recovery</td>
+<td style="text-align:right">4.5</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Flush installation and database reopening</td>
+<td style="text-align:right">5.5</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Immutable snapshots and merged reads</td>
+<td style="text-align:right">4.5</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Streaming compaction and safe reclamation</td>
+<td style="text-align:right">4.0</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Owned batches and a streaming query pipeline</td>
+<td style="text-align:right">3.5</td>
+</tr>
+<tr>
+<td>15</td>
+<td>External sorting with bounded fan-in</td>
+<td style="text-align:right">6.0</td>
+</tr>
+<tr>
+<td>16</td>
+<td>A streaming many-to-one merge join</td>
+<td style="text-align:right">5.0</td>
+</tr>
+<tr>
+<td>17</td>
+<td>Grouping, checked aggregates, and complete queries</td>
+<td style="text-align:right">3.5</td>
+</tr>
+<tr>
+<td>18</td>
+<td>Synchronization and thread lifetime</td>
+<td style="text-align:right">3.0</td>
+</tr>
+<tr>
+<td>19</td>
+<td>Bounded execution and cooperative cancellation</td>
+<td style="text-align:right">4.0</td>
+</tr>
+<tr>
+<td>20</td>
+<td>Concurrent readers, ingestion, and maintenance</td>
+<td style="text-align:right">3.5</td>
+</tr>
+<tr>
+<td>21</td>
+<td>Reproducible workloads and independent answers</td>
+<td style="text-align:right">4.5</td>
+</tr>
+<tr>
+<td>22</td>
+<td>Recovery and resource-pressure experiments</td>
+<td style="text-align:right">4.0</td>
+</tr>
+<tr>
+<td>23</td>
+<td>Profiling, optimization, and the final demonstration</td>
+<td style="text-align:right">4.0</td>
+</tr>
+<tr>
+<td><strong>Allocated implementation</strong></td>
+<td></td>
+<td style="text-align:right"><strong>86.0</strong></td>
+</tr>
+</tbody>
+</table>
+<p>These are planning numbers rather than deadlines. Compare actual setup, coding,
+and debugging time with the allocation after each chapter. Use actuals to revise
+the remaining forecast. Reduce peripheral command variants, dataset size, or
+optional measurement sweeps before removing the index, recovery, spill, or
+concurrent-lifetime work. A larger explanation does not make a small coding task
+consume more hours.</p>
+<h2 id="part-i-language-and-tools">Part I — Language and tools</h2>
+<h3 id="chapter-1-from-c-files-to-a-native-c-program">Chapter 1 — From C files to a native C++ program</h3>
+<p><strong>Prerequisites:</strong> basic C functions, pointers, and shell commands. No engine code.
+<strong>Implementation: 2.0 hours.</strong></p>
+<p><strong>A translation unit is not a program.</strong> Separate declarations, definitions,
+headers, and linkage in <code>exercises/chapter-01/main.cpp</code>, <code>stats.hpp</code>, and
+<code>stats.cpp</code>. Introduce namespaces, initialization, a small aggregate, and the
+C++ compilation model by extending a familiar C-style loop.</p>
+<p><strong>Build for the machine you have.</strong> Observe the installed macOS, architecture,
+compiler, library, CMake, and debugger. Compile the required C++20 feature probes;
+configure a native Debug build and explain include paths, warnings, and linkage.
+The probes are complete short programs, not a requirement to understand concepts
+before Chapter 5.</p>
+<p><strong>A check that can fail.</strong> Add the <code>foundation-01</code> executable and CTest entry.
+Summarizing <code>{10, 20, 12}</code> must produce <code>count=3 sum=42</code>; empty input has count and
+sum zero. Checks remain active in optimized builds rather than placing required
+work inside <code>assert</code>.</p>
+<p><strong>Follow an execution.</strong> Set an LLDB breakpoint in the accumulation function,
+inspect values, and diagnose a deliberately missing definition at link time.</p>
+<p><strong>Outcome:</strong> a working multi-file executable and repeatable build/test commands.
+<strong>Work split:</strong> observation and probes 0.5; program 0.5; CMake/CTest 0.5;
+debugger and diagnosis 0.5 hours.</p>
+<h3 id="chapter-2-values-references-containers-and-views">Chapter 2 — Values, references, containers, and views</h3>
+<p><strong>Prerequisites:</strong> Chapter 1's build, functions, and initialization.
+<strong>Implementation: 2.0 hours.</strong></p>
+<p><strong>Copy a value or refer to an object.</strong> Compare value parameters, mutable
+references, <code>const</code> references, and returned values. Introduce <code>auto</code>, range-for,
+<code>std::array</code>, and <code>std::vector</code> with concrete element and capacity traces.</p>
+<p><strong>Borrow bytes without owning them.</strong> Use <code>std::span</code> and <code>std::string_view</code> in
+complete programs under <code>exercises/chapter-02/</code>. Name each owner and show why
+read-only access does not extend the owner's lifetime.</p>
+<p><strong>Invalidation changes the contract.</strong> Grow a vector, reacquire its views, and
+separate size, capacity, storage, and iterator validity. The normal exercise
+never dereferences a dangling view; predict invalidation before checking it with
+a separate diagnostic example.</p>
+<p><strong>Make interfaces say what changes.</strong> Build <code>foundation-02</code>: changing the middle
+value of <code>{3, 5, 8}</code> through a mutable span to 7 makes a read-only sum equal 18.
+Copying the original array into a value parameter must not change its caller.</p>
+<p><strong>Outcome:</strong> small value/view programs and explicit borrowing rules ready for
+block decoding and query batches. <strong>Work split:</strong> programs 1.0; interface
+variations 0.5; invalidation diagnosis and tests 0.5 hours.</p>
+<h3 id="chapter-3-lifetime-raii-and-move-only-owners">Chapter 3 — Lifetime, RAII, and move-only owners</h3>
+<p><strong>Prerequisites:</strong> Chapters 1–2, especially references and borrowed views.
+<strong>Implementation: 2.5 hours.</strong></p>
+<p><strong>Storage and an object are different.</strong> Introduce classes, constructors,
+destructors, member initialization, access control, and the lifetime of members.
+Trace scope exit and destruction order before introducing ownership transfer.
+The <a href="https://eel.is/c++draft/basic.life">language lifetime rules</a> are a reference
+for this distinction, not prerequisite reading.</p>
+<p><strong>Acquire and release together.</strong> Build a small owning byte buffer in
+<code>exercises/chapter-03/buffer_owner.cpp</code>. Contrast a value type, which can copy
+its contents, with a move-only resource type; explain <code>std::unique_ptr</code>, deleted
+copy operations, and the rule of zero before writing custom special members.</p>
+<p><strong>A move is a change of responsibility.</strong> Implement move construction, move
+assignment, <code>std::move</code>, and a safe moved-from state. Borrowed spans are separate
+from their owner. Account for an already-owned destination and self-move without
+double release; explain why a nonthrowing move matters to containers.</p>
+<p><strong>Observe cleanup.</strong> <code>foundation-03</code> moves a three-byte buffer, verifies the
+payload in its new owner and the documented empty source, then reports zero live
+allocations after scope exit. Run the focused ownership checks with supported
+memory diagnostics.</p>
+<p><strong>Outcome:</strong> a complete move-only owner and a resource-lifetime trace, not a
+handwritten replacement for every standard smart pointer. <strong>Work split:</strong> owner
+and lifetime exercises 1.0; move paths 1.0; checks and diagnosis 0.5 hours.</p>
+<h3 id="chapter-4-errors-and-failure-safe-state-changes">Chapter 4 — Errors and failure-safe state changes</h3>
+<p><strong>Prerequisites:</strong> Chapter 3's resource owner and destruction rules.
+<strong>Implementation: 2.0 hours.</strong></p>
+<p><strong>Failures have different meanings.</strong> Introduce exceptions, stack unwinding,
+<code>std::optional</code> for absence, scoped status enums, and a small error vocabulary.
+Distinguish invalid input, resource exhaustion, absent data, and failed I/O.
+Destructors release resources without throwing; explicit completion reports
+failures that callers need to see.</p>
+<p><strong>Prepare, then commit.</strong> Write a replacement operation for an owned record
+buffer in <code>exercises/chapter-04/transactional_buffer.cpp</code>. Build and validate the
+replacement before a nonthrowing swap. Contrast the no-change guarantee with a
+weaker valid-but-changed state.</p>
+<p><strong>Fail the second allocation.</strong> Add a deterministic allocation-failure seam.
+<code>foundation-04</code> starts with <code>{4, 5}</code>, fails a proposed replacement with <code>{8, 9, 10}</code>, and must preserve <code>{4, 5}</code> with no leaked allocation. A subsequent
+successful replacement produces <code>{8, 9, 10}</code>.</p>
+<p><strong>Memory rollback is not disk rollback.</strong> Trace which guarantees survive an
+exception and which cannot undo an external write. This prepares the distinction
+between a rejected batch and an uncertain storage outcome.</p>
+<p><strong>Outcome:</strong> tested state replacement and a consistent error boundary.
+<strong>Work split:</strong> error handling 0.5; replacement implementation 1.0; injected
+failure and cleanup checks 0.5 hours.</p>
+<h3 id="chapter-5-templates-concepts-and-ordering-contracts">Chapter 5 — Templates, concepts, and ordering contracts</h3>
+<p><strong>Prerequisites:</strong> Chapters 2–4, especially value semantics and error handling.
+<strong>Implementation: 2.0 hours.</strong></p>
+<p><strong>Parameterize one real operation.</strong> Introduce function templates, type
+parameters, instantiation, lambdas, captures, and function objects using an
+ordered merge over two small integer spans. Show why a template definition must
+be available at its point of instantiation.</p>
+<p><strong>Constrain the interface, test the meaning.</strong> Add a C++20 concept for the
+comparison/callable interface and explain a <code>requires</code> expression line by line.
+The <a href="https://eel.is/c++draft/concepts">concepts specification</a> distinguishes the
+expressions a compiler can check from semantic requirements. A well-typed
+comparator can still violate its ordering contract.</p>
+<p><strong>Ownership crosses a generic boundary.</strong> Return an owned result while accepting
+borrowed input. Teach <code>typename</code>, overload selection, and only the forwarding
+syntax actually needed; do not introduce a generic framework before a second
+use exists.</p>
+<p><strong>Compile and run both kinds of check.</strong> In <code>exercises/chapter-05/</code>,
+<code>foundation-05</code> merges <code>{1, 4}</code> and <code>{2, 4}</code> into <code>{1, 2, 4, 4}</code>. A separate
+expected-failure compilation rejects a non-callable comparator. Runtime tests
+cover equivalent keys and bad comparator behavior without calling a standard
+algorithm with a knowingly invalid comparator.</p>
+<p><strong>Outcome:</strong> a complete constrained algorithm and precise generic-interface
+vocabulary. <strong>Work split:</strong> syntax experiments 0.5; generic merge 0.75; ordering
+tests 0.5; negative compilation 0.25 hours.</p>
+<h2 id="part-ii-persistent-storage-and-read-views">Part II — Persistent storage and read views</h2>
+<h3 id="chapter-6-records-bytes-and-a-dependable-file-boundary">Chapter 6 — Records, bytes, and a dependable file boundary</h3>
+<p><strong>Prerequisites:</strong> Chapters 1–5. This chapter starts the engine source tree.
+<strong>Implementation: 3.0 hours.</strong></p>
+<p><strong>Specify the bytes.</strong> Create <code>include/strata/core/</code> record and key types, checked
+size arithmetic, and explicit integer encoders/decoders. Define relation tags,
+endianness, supported record sizes, and overflow rejection with byte-by-byte
+examples. Introduce <code>std::byte</code>, casts, alignment, and object representation
+before using them.</p>
+<p><strong>Own a file, not an integer.</strong> Implement <code>io::File</code> in <code>include/strata/io/</code> and
+<code>src/io/</code>, with move-only descriptor ownership, explicit completion operations,
+and a nonthrowing destructor. Handle partial reads/writes, interrupted calls,
+end-of-file, checked offsets, and native synchronization capability.</p>
+<p><strong>Put failure behind a narrow seam.</strong> Define the small file-operations interface
+used by real files and deterministic test doubles. Teach runtime polymorphism
+and virtual destruction here when introducing that interface. File and namespace
+operations remain distinct; the seam is not a replacement filesystem project.</p>
+<p><strong>Run the boundary.</strong> Round-trip both schemas; reject truncated and oversized
+records. Force two-byte transfers and a mid-write error, verify cleanup, and
+inspect the resulting byte fixture independently.</p>
+<p><strong>Outcome:</strong> reusable codecs and tested native/test I/O paths, with no durability
+claim from a successful ordinary write. <strong>Work split:</strong> encoding 1.0; file
+ownership and transfer loops 1.25; fault checks and debugging 0.75 hours.</p>
+<h3 id="chapter-7-an-arena-backed-skip-list-memtable">Chapter 7 — An arena-backed skip-list memtable</h3>
+<p><strong>Prerequisites:</strong> Chapters 3–6: ownership, exception guarantees, comparison,
+record encoding, and checked arithmetic. <strong>Implementation: 4.5 hours.</strong></p>
+<p><strong>Allocate stable storage.</strong> Implement aligned arena chunks under
+<code>memory/arena.*</code>, with a byte cap, checked alignment, and prepared-allocation
+rollback. Explain placement construction and explicit destruction before using
+arena storage for nodes; do not use an out-of-bounds flexible array trick.</p>
+<p><strong>Search at several heights.</strong> Derive skip-list search and insertion using a
+small tower trace. Implement nodes, bounded heights, deterministic test seeds,
+and link updates under <code>storage/memtable.*</code>. Internal ordering is storage key
+ascending, then sequence descending; comparisons do not subtract integers.</p>
+<p><strong>Prepare a whole batch.</strong> Validate duplicate keys, construct nodes and value
+storage before committing links, and keep insertion publication nonthrowing.
+Handle several prepared nodes whose ordering interacts. The memtable is still
+single-threaded; immutable sharing comes later.</p>
+<p><strong>Check structure, not just answers.</strong> Compare randomized lookup and ordered
+iteration with a test-only reference container. Exercise updates, tombstones,
+height extremes, arena exhaustion, and allocation failure before publication.</p>
+<p><strong>Outcome:</strong> a learner-written ordered index that can be frozen and iterated,
+plus a prepared-batch interface for the log chapter. <strong>Work split:</strong> arena 1.0;
+index and preparation 2.5; structural tests and diagnosis 1.0 hours.</p>
+<h3 id="chapter-8-indexed-immutable-tables">Chapter 8 — Indexed immutable tables</h3>
+<p><strong>Prerequisites:</strong> Chapters 6–7 and their codecs and ordered iterator.
+<strong>Implementation: 5.0 hours.</strong></p>
+<p><strong>Build blocks with boundaries.</strong> Implement <code>storage/table.*</code>: versioned file
+headers, framed data blocks, checksums, and a footer locating bounded metadata.
+Derive offsets and sizes from encoded bytes rather than C++ padding. Implement
+the checksum and deterministic Bloom hashing in portable C++.</p>
+<p><strong>Find a block without reading every block.</strong> Build a sparse directory, binary
+search it, and seek inside the selected block. Work through keys at block and
+file boundaries, including repeated user keys with different sequences. A Bloom
+filter may skip an absent key, never establish that a present key exists.</p>
+<p><strong>Stream a table.</strong> Connect the memtable iterator to the table builder and add a
+reader that traverses blocks without loading the file. Enforce maximum file,
+block, and metadata sizes before allocations or offset arithmetic.</p>
+<p><strong>Break the format deliberately.</strong> Check missing keys, empty tables, corrupted
+checksums, malformed lengths, a damaged footer, and multi-block iteration. All
+inserted keys pass the Bloom test; negative probes measure false positives
+without asserting an exact random count.</p>
+<p><strong>Outcome:</strong> standalone indexed tables with validated point and sequential reads.
+<strong>Work split:</strong> format/builder 1.75; directory/filter/reader 2.0; corruption and
+boundary tests 1.25 hours.</p>
+<h3 id="chapter-9-memory-budgets-and-a-pinned-block-cache">Chapter 9 — Memory budgets and a pinned block cache</h3>
+<p><strong>Prerequisites:</strong> Chapters 3–5 and Chapter 8's immutable blocks.
+<strong>Implementation: 3.5 hours.</strong></p>
+<p><strong>Charge storage before using it.</strong> Implement <code>memory/budget.*</code> and move-only
+leases, distinguishing reservation, allocation charge, and release. Cover arena
+chunks, buffer capacities, and bounded container/control metadata. Any allocator
+adapter used for metadata is taught here, including its allocation and ownership
+contract; merely counting logical payload bytes is insufficient.</p>
+<p><strong>Evict only what is unpinned.</strong> Build <code>storage/block_cache.*</code> with an explicit
+recency list, bounded lookup metadata, byte-based capacity, and pin handles.
+Introduce shared ownership only where readers genuinely share one immutable
+buffer; explain why shared lifetime does not imply synchronized mutation.</p>
+<p><strong>A full cache is a normal condition.</strong> Implement a charged, noncached read path
+when pinned entries prevent admission. Stable file IDs prevent a stale cached
+block from aliasing a newly created file. Transfer of a pin never charges the
+same block twice.</p>
+<p><strong>Observe the bound.</strong> Use tiny capacities to force hits, misses, eviction,
+bypass, and allocation rejection. Dropping the last pin releases the correct
+charge; failed insertion does not lose the old cache entry.</p>
+<p><strong>Outcome:</strong> synchronous, budget-aware block access; threading is added in
+Chapter 20. <strong>Work split:</strong> accounting 1.0; cache/pins 1.5; pressure tests 1.0 hours.</p>
+<h3 id="chapter-10-atomic-batches-and-write-ahead-recovery">Chapter 10 — Atomic batches and write-ahead recovery</h3>
+<p><strong>Prerequisites:</strong> Chapters 4, 6, 7, and 9: prepared mutation, I/O, and budgets.
+<strong>Implementation: 4.5 hours.</strong></p>
+<p><strong>Frame one commit.</strong> Implement <code>storage/wal.*</code> and bounded batch encoding,
+including lengths, sequence numbers, operation counts, and checksums. Distinguish
+physical truncation from a logically complete batch. No partial replay becomes
+visible.</p>
+<p><strong>Cross the irreversible boundary.</strong> Connect preparation, log append,
+synchronization, and nonthrowing memtable publication. Define return states for
+success, definite rejection, and uncertainty; uncertainty poisons the writer
+until reopening. Allocation failure before append has a different outcome.</p>
+<p><strong>Replay with a rule, not a guess.</strong> Recover complete batches in sequence order.
+Define exactly which incomplete final-frame cases may be ignored and reject
+other corrupt required records. Do not resynchronize past arbitrary damage and
+pretend the skipped data was uncommitted.</p>
+<p><strong>Stop between transitions.</strong> Exercise every byte truncation of a small final
+batch, a complete unacknowledged batch, short I/O, and sync failure. Recovery
+compares whole batches, including a batch touching both relations.</p>
+<p><strong>Outcome:</strong> a log-backed memtable harness that reopens without sorted-table or
+manifest integration yet. <strong>Work split:</strong> framing 1.0; commit path 1.5; replay
+1.0; fault checks 1.0 hours.</p>
+<h3 id="chapter-11-flush-installation-and-database-reopening">Chapter 11 — Flush installation and database reopening</h3>
+<p><strong>Prerequisites:</strong> Chapters 6–10 and their table, log, and budget interfaces.
+<strong>Implementation: 5.5 hours.</strong></p>
+<p><strong>Name the authoritative state.</strong> Implement <code>storage/manifest.*</code> with a versioned,
+checksummed, bounded description of installed tables, required logs, sequence
+progress, and file identities. Build and atomically replace a complete manifest
+snapshot; teach the required data and namespace synchronization ordering. A
+successful rename alone is not the persistence argument.</p>
+<p><strong>Rotate without losing the recovery path.</strong> Install a new active log before
+acknowledging writes that depend on it. Seal and flush old memtables in generation
+order, synchronize new table data/names, install the manifest change, and only
+then retire superseded log dependencies. Trace crashes between these steps.</p>
+<p><strong>Open the database deliberately.</strong> Add <code>storage/database.*</code>, the directory lock,
+validation of referenced files, ordered replay, and safe discovery of temporary
+or orphan files. Never reuse an observed file identity after a crash or silently
+fall back from a corrupt authoritative manifest to stale data.</p>
+<p><strong>Run across process lifetimes.</strong> A synchronous storage driver writes batches,
+flushes, closes, and reopens. Test an empty directory, missing required table,
+interrupted installation, unused temporary file, and competing directory open.</p>
+<p><strong>Outcome:</strong> a persistent single-threaded database, with synchronous maintenance
+and runnable reopen tests. <strong>Work split:</strong> manifest 1.25; flush/rotation 1.75;
+open/recovery 1.5; integration/fault checks 1.0 hours.</p>
+<h3 id="chapter-12-immutable-snapshots-and-merged-reads">Chapter 12 — Immutable snapshots and merged reads</h3>
+<p><strong>Prerequisites:</strong> Chapters 7–11; especially immutable tables, pins, and file-set
+publication. <strong>Implementation: 4.5 hours.</strong></p>
+<p><strong>Freeze at a batch boundary.</strong> Add <code>storage/read_view.*</code>, reserve a replacement
+memtable, and capture a complete immutable generation set before releasing the
+old active state. Explain <code>shared_ptr&lt;const T&gt;</code> and the difference between
+lifetime ownership and immutability. Bound both snapshots and retained sources.</p>
+<p><strong>Choose the visible version.</strong> Implement point lookup and a learner-written
+cursor heap for ordered merging across frozen memtables and disk runs. Compare
+sequence numbers, collapse duplicate keys, and suppress tombstones. Derive the
+cursor's owner, pin lifetime, and advancement order with a duplicate-key trace.</p>
+<p><strong>Keep a view unchanged.</strong> Old views hold their original arenas/files even after
+a synchronous flush publishes a newer serving set. Source replacement is not
+performed inside an existing snapshot.</p>
+<p><strong>Exercise the limits.</strong> Apply the roadmap's cross-relation batch, check old and
+new answers, and verify a range result across block boundaries. Exhaust retained
+generation capacity, observe a no-change admission failure, release a view, and
+retry successfully.</p>
+<p><strong>Outcome:</strong> consistent point/range reads and bounded snapshot ownership,
+still without thread races to diagnose. <strong>Work split:</strong> view ownership 1.25;
+merged lookup/scan 2.0; retention and visibility tests 1.25 hours.</p>
+<h3 id="chapter-13-streaming-compaction-and-safe-reclamation">Chapter 13 — Streaming compaction and safe reclamation</h3>
+<p><strong>Prerequisites:</strong> Chapters 8–12, including the merge cursor and manifest install.
+<strong>Implementation: 4.0 hours.</strong></p>
+<p><strong>Select a complete older set.</strong> Implement <code>storage/compaction.*</code> for bounded
+new runs and one base run. Flush ordering establishes a selected prefix; frozen
+or newly published newer sources remain outside that prefix. Define when the
+selection covers all older versions relevant to dropping a tombstone.</p>
+<p><strong>Merge into a replacement base.</strong> Reuse the cursor mechanism, retain the newest
+selected value per key, and split output into size-limited files with bounded
+builders. Account for read buffers, output buffers, metadata, and disk headroom.</p>
+<p><strong>Install before reclaiming.</strong> Publish the new file set with the manifest
+protocol. Newly acquired views use the new set; existing views do not. Remove an
+obsolete file only after its last view/cache-related ownership permits it.
+Failed deletions are observable and safely retried or rediscovered on reopening,
+not thrown from a destructor.</p>
+<p><strong>Measure the cost.</strong> Force several flushes and a compaction with tiny limits;
+verify no deleted key reappears. Keep an old view alive, inspect retained files,
+then release it. Count bytes read and written, including failed output cleanup.</p>
+<p><strong>Outcome:</strong> a compacting persistent engine with observable retention and write
+amplification. <strong>Work split:</strong> selection/merge 1.5; install/reclamation 1.25;
+interaction tests and counters 1.25 hours.</p>
+<h2 id="part-iii-bounded-query-execution">Part III — Bounded query execution</h2>
+<h3 id="chapter-14-owned-batches-and-a-streaming-query-pipeline">Chapter 14 — Owned batches and a streaming query pipeline</h3>
+<p><strong>Prerequisites:</strong> Chapters 2, 5, 9, and 12–13: views, generic interfaces,
+reservations, and ordered snapshots. <strong>Implementation: 3.5 hours.</strong></p>
+<p><strong>Choose a batch layout.</strong> Create <code>query/batch.*</code> with owned column buffers,
+row counts, capacity accounting, and borrowed column spans. Compare arrays of
+records with arrays of columns using actual field widths and address arithmetic.
+Every borrowed view has a documented expiration point.</p>
+<p><strong>Advance one operator.</strong> Define the pull interface and separate end-of-stream
+from an empty filtered batch. Implement <code>query/scan.*</code>, filtering, and projection;
+introduce any new interface syntax before it appears in the pipeline.</p>
+<p><strong>Make fewer bytes flow.</strong> Retain only the fields later operators need and
+compact selected rows into owned output. Include a one-row baseline for later
+measurement rather than claiming that batching must win.</p>
+<p><strong>Keep boundaries visible.</strong> Run the tiny event fixture through scanning and
+filtering with batch capacities one and three. Exercise empty input, all rows
+filtered, exact buffer exhaustion, and a storage decoding error; no escaped view
+may outlive the batch or cache pin it borrows from.</p>
+<p><strong>Outcome:</strong> a runnable, synchronous scan/filter/project executor.
+<strong>Work split:</strong> batches/interfaces 1.0; operators 1.5; lifetime and boundary
+checks 1.0 hours.</p>
+<h3 id="chapter-15-external-sorting-with-bounded-fan-in">Chapter 15 — External sorting with bounded fan-in</h3>
+<p><strong>Prerequisites:</strong> Chapters 6, 9, 12, and 14: files, budgets, cursor heaps, and
+batches. <strong>Implementation: 6.0 hours.</strong></p>
+<p><strong>Turn one budget into many runs.</strong> Implement <code>query/external_sort.*</code>: reserve a
+bounded chunk, sort it with <code>std::sort</code>, and spill an explicitly encoded run.
+Include sort scratch/stack allowance and run-descriptor storage in the resource
+model. Deterministic tie keys make the final ordering reproducible.</p>
+<p><strong>Merge only what fits.</strong> Derive buffer and descriptor bounds, implement buffered
+run readers and the merge heap, and compute legal fan-in. If more runs exist,
+perform multiple passes. Reject a reservation too small for the minimum useful
+merge instead of entering a zero-progress loop.</p>
+<p><strong>Own the temporary work.</strong> A move-only run owner covers files through creation,
+completed output, input retirement, failure, and later cancellation. Give spill
+files their own validated format and bounded lengths. Reserve headroom for input
+and output coexistence, not just the eventual final run.</p>
+<p><strong>Force a second pass.</strong> Tiny budgets produce more initial runs than fan-in.
+Compare the streamed output against an independent in-memory oracle; test equal
+keys, partial final blocks, missing/corrupt runs, disk-write failure, and cleanup.
+A small query also exercises the no-spill path.</p>
+<p><strong>Outcome:</strong> reusable external sorting, with actual spill bytes and pass counts.
+<strong>Work split:</strong> run generation 1.5; buffered multi-pass merge 2.25; ownership and
+failure paths 1.0; integration/tests 1.25 hours.</p>
+<h3 id="chapter-16-a-streaming-many-to-one-merge-join">Chapter 16 — A streaming many-to-one merge join</h3>
+<p><strong>Prerequisites:</strong> Chapters 12 and 14–15: consistent scans, batches, and sorting.
+<strong>Implementation: 5.0 hours.</strong></p>
+<p><strong>Establish both input orders.</strong> Sort projected events by account and event ID;
+scan accounts in primary-key order from the same snapshot. Implement
+<code>query/merge_join.*</code> without materializing the account relation.</p>
+<p><strong>Advance the right cursor.</strong> Derive the comparison cases for event key less
+than, equal to, or greater than the account key. Repeated events reuse one
+account row; unmatched events are omitted. An account stream that violates its
+unique-visible-key contract is an error, not an invitation to emit duplicates.</p>
+<p><strong>Pause without losing the match.</strong> Resume across input and output batch
+boundaries with explicit iterator state. Release a block pin only when no saved
+view needs it; copy the small current account value when that simplifies the
+lifetime. Share one reservation across overlapping operators rather than giving
+each the full query budget.</p>
+<p><strong>Test shape, skew, and absence.</strong> Join with a hot account spanning many batches,
+a dimension larger than a merge buffer, deleted/missing accounts, empty sides,
+and a full output buffer at a key transition. Compare every output row with an
+independent reference.</p>
+<p><strong>Outcome:</strong> a bounded-memory join that can consume a spilled fact stream and a
+streamed dimension. <strong>Work split:</strong> state machine 1.5; streaming integration
+1.5; budget/lifetime work 0.75; skew/boundary checks 1.25 hours.</p>
+<h3 id="chapter-17-grouping-checked-aggregates-and-complete-queries">Chapter 17 — Grouping, checked aggregates, and complete queries</h3>
+<p><strong>Prerequisites:</strong> Chapters 14–16 and the checked arithmetic from Chapter 6.
+<strong>Implementation: 3.5 hours.</strong></p>
+<p><strong>Make groups adjacent.</strong> Reuse external sorting for joined rows ordered by
+region, day, and event ID. Explain why primary-key storage order is not grouping
+order and why a second sort is required for this plan.</p>
+<p><strong>Hold one group.</strong> Implement <code>query/aggregate.*</code> with current key, count, and
+sum. Emit on a key change and once at end-of-stream; empty input emits no group.
+Check overflow before mutation, including at the final group.</p>
+<p><strong>Connect one complete query.</strong> Add a fixed-plan query API and a thin local
+driver. Stage boundaries transfer or release reservations and temporary runs.
+Results stream to an output sink instead of collecting every group in a vector.
+The API reports completion separately from partial output on failure.</p>
+<p><strong>Compare complete answers.</strong> Reproduce both roadmap snapshot results, exercise
+many groups and one giant group, force both sorts to spill, and test overflow.
+A failed query must not leave an apparently successful final output artifact.</p>
+<p><strong>Outcome:</strong> the full analytical pipeline working synchronously against persistent
+storage. <strong>Work split:</strong> aggregation 1.0; plan/output integration 1.25;
+reference and failure checks 1.25 hours.</p>
+<h2 id="part-iv-concurrency-and-runtime-integration">Part IV — Concurrency and runtime integration</h2>
+<h3 id="chapter-18-synchronization-and-thread-lifetime">Chapter 18 — Synchronization and thread lifetime</h3>
+<p><strong>Prerequisites:</strong> Chapters 2–5. The exercise is standalone; the integrated engine
+remains at Chapter 17. <strong>Implementation: 3.0 hours.</strong></p>
+<p><strong>Visibility needs a relationship.</strong> Introduce <code>std::thread</code>, mutexes, lock guards,
+unique locks, data races, and happens-before with two-thread traces. A shared
+pointer protects lifetime, not the payload. An atomic flag is not a substitute
+for protecting a multi-field transition. The
+<a href="https://eel.is/c++draft/thread.mutex.requirements">mutex requirements</a> explain
+the relevant synchronization relation.</p>
+<p><strong>Wait on state.</strong> Build a small bounded ownership-transfer exercise in
+<code>exercises/chapter-18/</code>. Teach predicate waits, spurious wakeups, and close versus
+drain. The <a href="https://eel.is/c++draft/thread.condition.condvar">condition-variable contract</a>
+is connected to the predicate, not presented as a notification-counting service.</p>
+<p><strong>Finish every thread.</strong> Implement explicit joining and cleanup when construction
+of a later worker fails. Capture worker exceptions instead of letting them escape
+the thread function. Cancellation state, wakeup, and join are different actions.</p>
+<p><strong>Run without sleeps as synchronization.</strong> <code>foundation-18</code> transfers jobs valued
+10, 20, and 12, drains to a sum of 42, and preserves a rejected late job in its
+caller. Test close while producers and consumers are waiting, using controlled
+rendezvous and a supported separate race-diagnostic build.</p>
+<p><strong>Outcome:</strong> runnable synchronization exercises before threaded engine mutation.
+<strong>Work split:</strong> mutex/visibility programs 0.75; queue and lifecycle 1.25;
+failure/wakeup checks 1.0 hours.</p>
+<h3 id="chapter-19-bounded-execution-and-cooperative-cancellation">Chapter 19 — Bounded execution and cooperative cancellation</h3>
+<p><strong>Prerequisites:</strong> Chapters 9, 15, 17, and 18: reservations, temporary files,
+complete queries, and synchronization. <strong>Implementation: 4.0 hours.</strong></p>
+<p><strong>A task is more than a callable.</strong> Implement <code>runtime/task.*</code> and
+<code>runtime/executor.*</code> with bounded request descriptors and explicit queued,
+running, completed, failed, and canceled states. Teach <code>std::exception_ptr</code> and
+completion ownership before transporting errors to callers.</p>
+<p><strong>Admit an entire query.</strong> Reserve a query's working allowance before acquiring
+its snapshot and starting its operators. A queued request owns neither a full
+input nor a snapshot. Jobs do not submit blocking descendants into the same
+worker pool. Failure to admit has a defined retry/wait/cancel policy.</p>
+<p><strong>Cancel at safe boundaries.</strong> Implement a cancellation token and checks at
+batch, block, and spill-pass boundaries. Wake resource waiters, unwind owned
+runs and buffers, and report partial-output status without claiming that a
+blocking filesystem operation is instantly interruptible.</p>
+<p><strong>Close in an order that terminates.</strong> Stop admission, resolve queued work,
+request cancellation of running work, wake waiters, and join all workers before
+destroying shared state. Test rejection ownership and partial worker startup.</p>
+<p><strong>Outcome:</strong> a bounded query executor running against an immutable/open-for-read
+database fixture, before concurrent writes are enabled. <strong>Work split:</strong> task
+states/pool 1.25; admission/cancellation 1.25; completion/shutdown/fault tests
+1.5 hours.</p>
+<h3 id="chapter-20-concurrent-readers-ingestion-and-maintenance">Chapter 20 — Concurrent readers, ingestion, and maintenance</h3>
+<p><strong>Prerequisites:</strong> Chapters 11–13 and 18–19; all storage and query paths already
+run synchronously. <strong>Implementation: 3.5 hours.</strong></p>
+<p><strong>Publish a whole serving state.</strong> Add <code>runtime/engine.*</code> coordination around
+writer commits, snapshot freezing, and manifest/file-set changes. State what
+each mutex protects and when a captured maintenance plan must be revalidated.
+Never overwrite newer state while installing older compaction output.</p>
+<p><strong>Preserve maintenance progress.</strong> Move ordered flush and compaction work to a
+dedicated worker with its own minimum buffers and descriptors. Keep writer
+backpressure and snapshot pressure waits outside the locks required to relieve
+them. Long-lived snapshots may deliberately stall admission; they do not license
+extra uncharged generations.</p>
+<p><strong>Synchronize shared infrastructure.</strong> Extend budgets, cache recency/pins, file
+retirement, and counters to concurrent access without holding global locks over
+bulk I/O. Avoid duplicate cache admission races and preserve the pinned-cache
+bypass guarantee.</p>
+<p><strong>Exercise actual overlap.</strong> Use deterministic pause points to hold an old query,
+commit the cross-relation update, publish a compaction, and cancel another query.
+Verify old/new answers and then shut down while a writer is backpressured.
+Maintenance failures reach the engine's visible error state.</p>
+<p><strong>Outcome:</strong> concurrent reads, ingestion, and maintenance with tested ownership
+and lock order. <strong>Work split:</strong> publication/locking 1.25; maintenance/backpressure
+1.0; controlled overlap and shutdown tests 1.25 hours.</p>
+<h2 id="part-v-integrated-workloads-failures-and-measurements">Part V — Integrated workloads, failures, and measurements</h2>
+<h3 id="chapter-21-reproducible-workloads-and-independent-answers">Chapter 21 — Reproducible workloads and independent answers</h3>
+<p><strong>Prerequisites:</strong> Chapters 1–20, especially the complete query and runtime APIs.
+<strong>Implementation: 4.5 hours.</strong></p>
+<p><strong>Generate cases that exercise the engine.</strong> Write <code>scripts/generate_data.py</code>
+with a seed, controlled account skew, day selectivity, updates, tombstones, and
+bounded batches. Keep small exact fixtures separate from larger streaming data.
+Input size is defined in logical encoded bytes, not inferred from CSV text size.</p>
+<p><strong>Compute answers independently.</strong> Write <code>scripts/reference_query.py</code> using
+straightforward Python state for small snapshots. Preserve commit boundaries,
+unsigned ranges, join semantics, output order, and overflow rules. Use deterministic
+checkable aggregates for larger data without requiring an unbounded Python copy
+of the full database.</p>
+<p><strong>Expose a thin driver.</strong> Complete <code>apps/strata.cpp</code> with only the commands needed
+to generate/import, mutate, query, compact, inspect counters, and reopen. Add an
+in-process scenario runner for concurrent behavior; a directory lock means two
+separate writer processes are not the concurrency demonstration.</p>
+<p><strong>Make the run diagnosable.</strong> Add fixed tiny-budget presets that force flush,
+compaction, two merge passes, retention pressure, and cancellation. Preflight
+storage space and resource limits. Report a failed stage with its seed and
+parameters, not an unexplained final mismatch.</p>
+<p><strong>Outcome:</strong> repeatable correctness workloads and a single-machine end-to-end
+scenario. <strong>Work split:</strong> generator/oracle 1.5; driver/scenario 1.25;
+interaction checks 1.0; diagnosis/fixtures 0.75 hours.</p>
+<h3 id="chapter-22-recovery-and-resource-pressure-experiments">Chapter 22 — Recovery and resource-pressure experiments</h3>
+<p><strong>Prerequisites:</strong> Chapters 6, 10–13, and 19–21, including failure seams and the
+scenario driver. <strong>Implementation: 4.0 hours.</strong></p>
+<p><strong>Model persistence explicitly.</strong> Extend the existing I/O double with separate
+volatile and stable file bytes and namespace state. Select deterministic crash
+images around append, sync, rename, manifest installation, and deletion; permit
+specified unsynchronized writes to persist or disappear. The model's assumptions
+are documented, not mistaken for all real filesystems.</p>
+<p><strong>Test acknowledgement rather than convenience.</strong> Track acknowledged and
+uncertain batches externally to the crashed instance. After reopening, require
+all acknowledged batches and atomic inclusion or exclusion of permitted uncertain
+batches. A simulator that merely forgets every unsynchronized byte is not the
+only failure image exercised.</p>
+<p><strong>Use the native process boundary as well.</strong> Add child-process stop points and
+reopen tests. Cover damaged required files separately from valid truncated tails,
+orphan output, injected no-space/sync failures, allocation pressure, and
+cleanup after canceled spill. These native tests do not certify physical
+power-loss behavior.</p>
+<p><strong>Diagnose one failure chain.</strong> Trace a failed installation from file ownership
+to manifest state to replay decisions. Check that pressure errors terminate or
+backpressure as specified without losing resources or acknowledged data.</p>
+<p><strong>Outcome:</strong> deterministic persistence, native process-stop, and pressure tests
+with distinct meanings. <strong>Work split:</strong> persistence-model extension 1.25;
+crash/reopen scenarios 1.25; resource interactions and diagnosis 1.5 hours.</p>
+<h3 id="chapter-23-profiling-optimization-and-the-final-demonstration">Chapter 23 — Profiling, optimization, and the final demonstration</h3>
+<p><strong>Prerequisites:</strong> Chapters 1–22, with correctness, recovery, and concurrency
+checks passing on the chosen environment. <strong>Implementation: 4.0 hours.</strong></p>
+<p><strong>Measure a specified workload.</strong> Use <code>scripts/measure.py</code> to separate generation,
+loading, querying, compaction, and recovery. Capture build flags, parameters,
+seed, warmup policy, repeats, elapsed time, counters, charged peaks, and observed
+resident memory. Explain the platform's memory units rather than assuming a
+Linux timing format. Sanitized and optimized runs are different experiments.</p>
+<p><strong>Find where work goes.</strong> Profile a representative slow path with available
+native tools and distinguish CPU work, allocation, file I/O, cache behavior, and
+lock waiting. Define percentile calculations and sample counts; a handful of
+queries is not a credible tail-latency distribution. Report warm/cold conditions
+honestly without pretending the OS cache was cleared.</p>
+<p><strong>Change one implementation decision.</strong> Compare the one-row path with batching
+and compare wider intermediate records with early projection/filtering on the
+same data and result. Explain measured spill-volume changes and any regression.
+Tune one demonstrated bottleneck, rerun correctness checks, and keep the simple
+baseline available. No minimum speedup is required.</p>
+<p><strong>Run the combined demonstration.</strong> Exercise overlapping ingestion, old and new
+queries, forced spill, compaction, cancellation, crash/reopen, and reclamation.
+Present the actual answer checks and measurements with limits on what they show.</p>
+<p><strong>Outcome:</strong> the integrated engine, a reproducible demonstration, and a measured
+optimization with an explained tradeoff. <strong>Work split:</strong> measurement harness
+1.0; profiling/optimization 1.25; repeated comparisons 1.0; final integration
+0.75 hours. The 6.5-hour course reserve remains available for additional debugging.</p>
+<h2 id="the-final-demonstration">The final demonstration</h2>
+<p>The demonstration uses the same engine for two scales. The tiny fixture has exact
+human-readable answers and tiny limits that force otherwise rare transitions.
+The larger fixture starts around <strong>512 MiB–1 GiB of logical input</strong>, with the
+256 MiB managed budget and 32 MiB query allowance described above. Adjust sizes
+to the available disk and observed runtime, while keeping the projected fact
+stream larger than its sort allowance. A large file that filters down to one
+small batch does not demonstrate external sorting. Include an account-stream
+case larger than the join's working buffers to exercise dimension streaming.</p>
+<p>Begin with a repeatable load and a snapshot query. Retain that view while a
+bounded writer applies updates and deletions. Run new queries and background
+compaction, force a second query to create spill files, and cancel it at a
+controlled boundary. Check that its resources return while the older query's
+resources remain valid. Release the old view and observe reclamation. Separately
+inject a persistence/process failure, reopen, and compare whole recovered batches
+and query answers with the permitted states from the failure scenario.</p>
+<p>The final measurements include ingest throughput, query latency with sample
+counts, block reads and cache misses, spill bytes and merge passes, compaction
+bytes relative to logical input bytes, peak charged allocation, reservations,
+and separately observed process memory. Report the actual tested configuration
+and failures encountered. A slower optimized variant is a result to explain, not
+a reason to change the workload until it looks faster.</p>
+<p>This system does not include a SQL parser, arbitrary schemas, a network protocol,
+replication, multiple concurrent writers, general transaction isolation,
+lock-free indexing, arbitrary many-to-many joins, compression, or a cost-based
+optimizer. Those exclusions keep the implemented storage, recovery, external
+execution, and resource-lifetime mechanisms substantial within the stated budget.</p>
+<h2 id="technical-references">Technical references</h2>
+<p>These sources were consulted for the roadmap. The chapter explanations develop
+the necessary mechanisms rather than assigning links in place of teaching.
+The public C++ working draft evolves beyond C++20; only the facilities specified
+in the chapter text are part of the course baseline. Apple archived manual pages
+are background to verify against the installed platform, not evidence of its
+exact SDK or filesystem behavior.</p>
+<ul>
+<li><strong>Language and native tool support:</strong> <a href="https://developer.apple.com/xcode/cpp/">Apple C++ language support</a>,
+<a href="https://libcxx.llvm.org/Status/Cxx20.html">libc++ C++20 status</a>, and
+<a href="https://cmake.org/cmake/help/latest/manual/cmake-compile-features.7.html#requiring-language-standards">CMake compile features — requiring language standards</a>.</li>
+<li><strong>Lifetime, interfaces, and synchronization:</strong> <a href="https://eel.is/c++draft/basic.life">object lifetime</a>,
+<a href="https://eel.is/c++draft/concepts">concepts</a>,
+<a href="https://eel.is/c++draft/thread.mutex.requirements">mutex requirements</a>, and
+<a href="https://eel.is/c++draft/thread.condition.condvar">condition-variable wait</a>.</li>
+<li><strong>Storage structure and failure reasoning:</strong> <a href="https://chromium.googlesource.com/external/leveldb/+/HEAD/doc/impl.md">LevelDB implementation description</a>,
+<a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fsync.2.html">Apple archived <code>fsync</code> manual</a>, and
+<a href="https://www.sqlite.org/atomiccommit.html">SQLite atomic commit, particularly sections 2 and 8</a>.</li>
+<li><strong>Diagnostics:</strong> <a href="https://clang.llvm.org/docs/AddressSanitizer.html">Clang AddressSanitizer</a>
+and <a href="https://clang.llvm.org/docs/ThreadSanitizer.html">Clang ThreadSanitizer</a>.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-01.html"><small>Next · Chapter 1</small><span>From C files to a native C++ program</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Roadmap</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#what-the-engine-does">What the engine does</a></li><li class="toc-h3"><a href="#two-relations-and-one-ordered-key-space">Two relations and one ordered key space</a></li><li class="toc-h3"><a href="#a-query-with-a-hand-checkable-answer">A query with a hand-checkable answer</a></li><li class="toc-h2"><a href="#architecture-and-ownership">Architecture and ownership</a></li><li class="toc-h3"><a href="#storage-ordered-generations-and-sorted-files">Storage: ordered generations and sorted files</a></li><li class="toc-h3"><a href="#read-views-freeze-first-then-share">Read views: freeze first, then share</a></li><li class="toc-h3"><a href="#execution-streaming-operators-with-explicit-barriers">Execution: streaming operators with explicit barriers</a></li><li class="toc-h3"><a href="#runtime-admit-work-before-it-consumes-resources">Runtime: admit work before it consumes resources</a></li><li class="toc-h2"><a href="#boundaries-that-determine-correctness">Boundaries that determine correctness</a></li><li class="toc-h3"><a href="#acknowledged-rejected-and-uncertain-writes">Acknowledged, rejected, and uncertain writes</a></li><li class="toc-h3"><a href="#budgeted-memory-is-not-total-process-memory">Budgeted memory is not total process memory</a></li><li class="toc-h2"><a href="#starting-knowledge-and-native-tools">Starting knowledge and native tools</a></li><li class="toc-h2"><a href="#the-implementation-workspace">The implementation workspace</a></li><li class="toc-h2"><a href="#the-chapter-sequence-and-implementation-budget">The chapter sequence and implementation budget</a></li><li class="toc-h2"><a href="#part-i-language-and-tools">Part I — Language and tools</a></li><li class="toc-h3"><a href="#chapter-1-from-c-files-to-a-native-c-program">Chapter 1 — From C files to a native C++ program</a></li><li class="toc-h3"><a href="#chapter-2-values-references-containers-and-views">Chapter 2 — Values, references, containers, and views</a></li><li class="toc-h3"><a href="#chapter-3-lifetime-raii-and-move-only-owners">Chapter 3 — Lifetime, RAII, and move-only owners</a></li><li class="toc-h3"><a href="#chapter-4-errors-and-failure-safe-state-changes">Chapter 4 — Errors and failure-safe state changes</a></li><li class="toc-h3"><a href="#chapter-5-templates-concepts-and-ordering-contracts">Chapter 5 — Templates, concepts, and ordering contracts</a></li><li class="toc-h2"><a href="#part-ii-persistent-storage-and-read-views">Part II — Persistent storage and read views</a></li><li class="toc-h3"><a href="#chapter-6-records-bytes-and-a-dependable-file-boundary">Chapter 6 — Records, bytes, and a dependable file boundary</a></li><li class="toc-h3"><a href="#chapter-7-an-arena-backed-skip-list-memtable">Chapter 7 — An arena-backed skip-list memtable</a></li><li class="toc-h3"><a href="#chapter-8-indexed-immutable-tables">Chapter 8 — Indexed immutable tables</a></li><li class="toc-h3"><a href="#chapter-9-memory-budgets-and-a-pinned-block-cache">Chapter 9 — Memory budgets and a pinned block cache</a></li><li class="toc-h3"><a href="#chapter-10-atomic-batches-and-write-ahead-recovery">Chapter 10 — Atomic batches and write-ahead recovery</a></li><li class="toc-h3"><a href="#chapter-11-flush-installation-and-database-reopening">Chapter 11 — Flush installation and database reopening</a></li><li class="toc-h3"><a href="#chapter-12-immutable-snapshots-and-merged-reads">Chapter 12 — Immutable snapshots and merged reads</a></li><li class="toc-h3"><a href="#chapter-13-streaming-compaction-and-safe-reclamation">Chapter 13 — Streaming compaction and safe reclamation</a></li><li class="toc-h2"><a href="#part-iii-bounded-query-execution">Part III — Bounded query execution</a></li><li class="toc-h3"><a href="#chapter-14-owned-batches-and-a-streaming-query-pipeline">Chapter 14 — Owned batches and a streaming query pipeline</a></li><li class="toc-h3"><a href="#chapter-15-external-sorting-with-bounded-fan-in">Chapter 15 — External sorting with bounded fan-in</a></li><li class="toc-h3"><a href="#chapter-16-a-streaming-many-to-one-merge-join">Chapter 16 — A streaming many-to-one merge join</a></li><li class="toc-h3"><a href="#chapter-17-grouping-checked-aggregates-and-complete-queries">Chapter 17 — Grouping, checked aggregates, and complete queries</a></li><li class="toc-h2"><a href="#part-iv-concurrency-and-runtime-integration">Part IV — Concurrency and runtime integration</a></li><li class="toc-h3"><a href="#chapter-18-synchronization-and-thread-lifetime">Chapter 18 — Synchronization and thread lifetime</a></li><li class="toc-h3"><a href="#chapter-19-bounded-execution-and-cooperative-cancellation">Chapter 19 — Bounded execution and cooperative cancellation</a></li><li class="toc-h3"><a href="#chapter-20-concurrent-readers-ingestion-and-maintenance">Chapter 20 — Concurrent readers, ingestion, and maintenance</a></li><li class="toc-h2"><a href="#part-v-integrated-workloads-failures-and-measurements">Part V — Integrated workloads, failures, and measurements</a></li><li class="toc-h3"><a href="#chapter-21-reproducible-workloads-and-independent-answers">Chapter 21 — Reproducible workloads and independent answers</a></li><li class="toc-h3"><a href="#chapter-22-recovery-and-resource-pressure-experiments">Chapter 22 — Recovery and resource-pressure experiments</a></li><li class="toc-h3"><a href="#chapter-23-profiling-optimization-and-the-final-demonstration">Chapter 23 — Profiling, optimization, and the final demonstration</a></li><li class="toc-h2"><a href="#the-final-demonstration">The final demonstration</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></aside>
+</div></body></html>

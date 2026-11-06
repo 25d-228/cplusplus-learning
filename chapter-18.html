@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 18 · Part 1 — Synchronization and thread lifetime · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-18.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html" aria-current="page"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 18 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/41">Read on GitHub</a><a href="source/chapter-18.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-visibility-and-bounded-ownership-transfer">Part 1 — Visibility and bounded ownership transfer</a></li><li class="toc-h2"><a href="#a-thread-is-not-a-delayed-function-call">A thread is not a delayed function call</a></li><li class="toc-h2"><a href="#protect-the-relationship-between-fields">Protect the relationship between fields</a></li><li class="toc-h2"><a href="#a-one-shot-flag-can-publish-immutable-data">A one-shot flag can publish immutable data</a></li><li class="toc-h2"><a href="#define-ownership-before-defining-the-ring">Define ownership before defining the ring</a></li><li class="toc-h2"><a href="#allocate-before-concurrent-transfer-begins">Allocate before concurrent transfer begins</a></li><li class="toc-h2"><a href="#a-notification-is-a-reason-to-inspect-state">A notification is a reason to inspect state</a></li><li class="toc-h2"><a href="#move-only-at-the-acceptance-point">Move only at the acceptance point</a></li><li class="toc-h2"><a href="#stop-admission-then-decide-what-remains-owned">Stop admission, then decide what remains owned</a></li><li class="toc-h2"><a href="#bound-the-backlog-without-pretending-to-bound-a-process">Bound the backlog without pretending to bound a process</a></li><li class="toc-h2"><a href="#observe-waiting-without-using-time-as-evidence">Observe waiting without using time as evidence</a></li><li class="toc-h2"><a href="#what-must-survive-a-shutdown-request">What must survive a shutdown request</a></li><li class="toc-h3"><a href="#references-for-this-part">References for this part</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-18-synchronization-and-thread-lifetime">Chapter 18 — Synchronization and thread lifetime</h1>
+<h2 id="part-1-visibility-and-bounded-ownership-transfer">Part 1 — Visibility and bounded ownership transfer</h2>
+<p>An owning batch can remain alive while two threads corrupt its contents. A queue
+can protect every pointer with a mutex and still lose accepted work on shutdown.
+A worker can finish its calculation and leave a joinable thread handle whose
+destruction terminates the program. These are three different failures: unsafe
+access, incorrect state transitions, and incomplete lifetime management.</p>
+<p>We will make those differences observable before introducing threads into Strata.
+The final exercise transfers jobs valued <code>10</code>, <code>20</code>, and <code>12</code>, drains to a sum of
+42, and leaves a rejected late job valued <code>99</code> with its caller. It also stops
+blocked producers and consumers, transports worker exceptions, and cleans up when
+a later worker cannot be started. The queue is a teaching component, not the
+engine's query scheduler.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Trace the synchronization that makes a value visible; protect a multi-field
+invariant; distinguish notification from permission; transfer unique ownership
+through a bounded ring; separate draining from cancellation; and join every
+started thread before destroying anything it can access.</p>
+</blockquote>
+<p><strong>Prerequisites:</strong> the runnable programs and CMake setup from
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-01.html">Chapters 1–5</a>,
+especially borrowed references, RAII, moves, exceptions, and lambda captures.
+The engine remains exactly at
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-17.html">Chapter 17</a>.
+Nothing in this chapter makes its budgets, cache, or database safe for concurrent
+calls. The exercises include no engine headers and modify no engine source.</p>
+<p><strong>Implementation: 3.0 hours across both parts.</strong> Allocate approximately 0.75 hours
+to visibility and mutex programs, 1.25 to queue and thread ownership, and 1.0 to
+failure/wakeup checks and diagnosis. Reading is separate. These are working
+estimates, not minimum time requirements.</p>
+<p>Create <code>exercises/chapter-18/</code> in the learner workspace. The two parts supply
+these complete files:</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>exercises/chapter-18/
+  visibility.cpp       # A separate runnable visibility program.
+  job_queue.hpp
+  job_queue.cpp
+  workers.hpp
+  workers.cpp
+  main.cpp             # Ownership, shutdown, and failure exercises.
+  racy_counter.cpp     # Isolated, intentionally incorrect diagnostic.
+CMakeLists.txt          # Append the target definitions in Part 2.
+</code></pre></figure>
+<p>For each named file, concatenate its filename-labelled C++ blocks in reading
+order, with a blank line between blocks. Every function and header is supplied.
+The diagnostic is excluded from the normal build and test suite. Part 1 develops
+the visible-state and queue contracts; <a href="https://25d-228.github.io/cplusplus-learning/chapter-18-part-2.html">Part 2</a>
+completes the worker owner, tests, and build commands.</p>
+<h2 id="a-thread-is-not-a-delayed-function-call">A thread is not a delayed function call</h2>
+<p>Constructing a <code>std::thread</code> starts a separate execution of its callable. The
+constructing thread continues independently; it does not wait for that callable
+to return. A lambda such as <code>[&amp;] { result = input + 22; }</code> stores references to the
+surrounding variables it uses. Copying the callable does not extend those
+variables' lifetimes. We must keep them alive until the worker is finished.</p>
+<p>The first program has one writer of <code>result</code> and reads it only after joining.
+Create the beginning of <code>visibility.cpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/visibility.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;atomic&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;exception&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;mutex&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;thread&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;version&gt;</span>
+
+<span class="cp">#if !defined(__cpp_lib_atomic_wait) || __cpp_lib_atomic_wait &lt; 201907L</span>
+<span class="cp">#error "This exercise needs the C++20 standard-library atomic wait/notify feature."</span>
+<span class="cp">#endif</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="p">{</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">require</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">condition</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="p">(</span><span class="n">message</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">check_start_and_join</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">input</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kr">thread</span><span class="w"> </span><span class="n">worker</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">22</span><span class="p">;</span><span class="w"> </span><span class="p">});</span>
+<span class="w">    </span><span class="n">worker</span><span class="p">.</span><span class="n">join</span><span class="p">();</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">result</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s">"joined result differs"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The unnamed namespace keeps these helpers local to this translation unit.
+<code>require</code> throws on a failed check even in a Release build. The feature check
+asks for the C++20 standard-library <strong>atomic wait/notify</strong> facility used below;
+a compiler's acceptance of <code>-std=c++20</code> alone is not that library test. The
+<a href="https://eel.is/c++draft/version.syn"><code>&lt;version&gt;</code> feature-test interface</a>
+lets us check the actual library rather than a compiler banner. An appropriate
+native Apple or LLVM toolchain is sufficient; no particular macOS release is
+required here.</p>
+<p>The worker captures <code>input</code> and <code>result</code> by reference. Its expression cannot
+throw in this fixture. <code>worker.join()</code> waits for completion; after a successful
+join the handle is no longer joinable. We do not read <code>result</code> while the worker
+might be writing it. Thread construction and joining provide synchronization,
+rather than a guess about how quickly the worker runs. See
+<a href="https://eel.is/c++draft/thread.thread.constr">thread construction</a> and
+<a href="https://eel.is/c++draft/thread.thread.member">join</a>.</p>
+<p>Write <span class="math-input" data-display="false">A \prec B</span> for an operation sequenced before another in one thread, and
+<span class="math-input" data-display="false">A \rightarrow_{\mathrm{sync}} B</span> for a synchronization edge between threads.
+Combining those edges gives a happens-before relationship. Here the useful path
+is:</p>
+<div class="math-input" data-display="true">\text{write result}
+\prec \text{worker completion}
+\rightarrow_{\mathrm{sync}} \text{join returns}
+\prec \text{read result}.</div>
+<p>The labels name operations, not elapsed times. Reading after a long sleep would
+not establish that path. A join performed <strong>after</strong> an unsynchronized conflicting
+read would not repair the earlier read either.</p>
+<p>A plain increment is a read followed by computation and a write. Imagining two
+threads both reading 0 and both writing 1 explains a possible lost-update
+symptom, but is not a specification for an incorrect C++ program. Potentially
+concurrent conflicting accesses, at least one non-atomic, without the required
+happens-before ordering constitute a data race and produce undefined behavior.
+The language's <a href="https://eel.is/c++draft/intro.races">data-race rule</a> is stronger
+than “the answer may be slightly inaccurate.” <code>volatile</code> does not supply the
+missing cross-thread relationship.</p>
+<h2 id="protect-the-relationship-between-fields">Protect the relationship between fields</h2>
+<p>Our next object records a count and a sum. Every accepted contribution is two,
+so the representation invariant is</p>
+<div class="math-input" data-display="true">S = 2C,</div>
+<p>where <span class="math-input" data-display="false">C</span> is <code>count</code> and <span class="math-input" data-display="false">S</span> is <code>sum</code>. Each of two threads contributes 5,000 times;
+the final values must be <span class="math-input" data-display="false">C=10{,}000</span> and <span class="math-input" data-display="false">S=20{,}000</span>. These fixture bounds fit
+comfortably in <code>uint64_t</code>. We want readers to see the pair before or after a
+contribution, never halfway through it.</p>
+<p>Before the next listing, introduce a small exception-transport mechanism.
+<code>std::exception_ptr</code> is a nullable owner referring to an exception object.
+Inside <code>catch (...)</code>, <code>std::current_exception()</code> captures the current exception.
+After joining, <code>std::rethrow_exception()</code> raises it in the controlling thread.
+A worker's exception does not automatically propagate through <code>join</code>. An uncaught
+exception escaping the thread callable invokes termination. The
+<a href="https://eel.is/c++draft/propagation">exception propagation interface</a> and the
+<a href="https://eel.is/c++draft/thread.thread.constr">thread constructor contract</a>
+describe these separate mechanisms.</p>
+<p>Append the complete ledger and its check:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/visibility.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">Ledger</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="w"> </span><span class="n">mutex</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">add_twos</span><span class="p">(</span><span class="n">Ledger</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ledger</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">5000</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">ledger</span><span class="p">.</span><span class="n">mutex</span><span class="p">);</span>
+<span class="w">        </span><span class="o">++</span><span class="n">ledger</span><span class="p">.</span><span class="n">count</span><span class="p">;</span>
+<span class="w">        </span><span class="n">ledger</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">ledger</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ledger</span><span class="p">.</span><span class="n">count</span><span class="p">,</span><span class="w"> </span><span class="s">"multi-field invariant broken"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">check_mutex</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">ledger</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_shared</span><span class="o">&lt;</span><span class="n">Ledger</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">exception_ptr</span><span class="w"> </span><span class="n">worker_error</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kr">thread</span><span class="w"> </span><span class="n">worker</span><span class="p">([</span><span class="n">ledger</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">worker_error</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">add_twos</span><span class="p">(</span><span class="o">*</span><span class="n">ledger</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">worker_error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">current_exception</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">add_twos</span><span class="p">(</span><span class="o">*</span><span class="n">ledger</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">worker</span><span class="p">.</span><span class="n">join</span><span class="p">();</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">worker</span><span class="p">.</span><span class="n">join</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">worker_error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">rethrow_exception</span><span class="p">(</span><span class="n">worker_error</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">ledger</span><span class="o">-&gt;</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">10000</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">ledger</span><span class="o">-&gt;</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">20000</span><span class="p">,</span>
+<span class="w">            </span><span class="s">"protected ledger differs"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>std::mutex</code> gives exclusive access. <code>std::lock_guard lock(ledger.mutex)</code> acquires
+it immediately and releases it when the guard's scope ends, including exception
+unwinding. Class template argument deduction infers <code>lock_guard&lt;std::mutex&gt;</code>.
+The guard is named: a temporary guard destroyed at the end of its declaration
+would not protect the later statements.</p>
+<p>All modifications and the in-loop invariant check use <strong>the same mutex</strong>. For
+example, thread A changes <code>(7,14)</code> to <code>(8,16)</code> while holding it. Thread B cannot
+enter its guarded region and inspect <code>(8,14)</code>. A prior unlock synchronizes with a
+subsequent successful lock of that mutex; this supplies visibility as well as
+exclusion. See the <a href="https://eel.is/c++draft/thread.mutex.requirements">mutex requirements</a>.</p>
+<p>The worker captures <code>ledger</code> <strong>by value</strong>, creating another <code>shared_ptr</code> handle,
+and <code>worker_error</code> <strong>by reference</strong>. Each handle keeps the same <code>Ledger</code> alive.
+The reference count does not lock the pointed-to fields. The mutex, not the
+shared ownership, makes the updates safe. Similarly, concurrent mutation of the
+same ordinary <code>shared_ptr</code> handle would require its own synchronization; separate
+handles sharing a control block are a different case. The
+<a href="https://eel.is/c++draft/util.smartptr.shared">shared-pointer specification</a>
+distinguishes handle operations from access to the pointed-to object.</p>
+<p>Only the worker writes <code>worker_error</code>; the caller reads it after joining. No
+extra mutex is needed for that access pattern. If the caller's own loop throws,
+its catch joins before rethrowing. The worker catches its own error and exits, so
+the caller never waits for an exception to magically cross the thread boundary.
+In the normal path both loops have ended before the final unguarded ledger read.
+If both loops failed, this simple fixture reports the caller's exception first.</p>
+<p>Changing both fields to atomics would remove races on the individual fields,
+but two separate atomic stores still would not be one pair update. Even with
+strong ordering, a reader could observe one new field and one old field. For
+this representation a single mutex is the direct solution. Lock-free algorithms
+are not a prerequisite for correct concurrent software.</p>
+<h2 id="a-one-shot-flag-can-publish-immutable-data">A one-shot flag can publish immutable data</h2>
+<p>An atomic is useful when its precise contract matches the problem. The next
+fixture has one writer, one reader, and one transition from not-ready to ready.
+After publication, the writer never changes the payload again.</p>
+<p>Append the final portion of <code>visibility.cpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/visibility.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">Published</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">check_one_shot_publication</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Published</span><span class="w"> </span><span class="n">payload</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ready</span><span class="p">{</span><span class="nb">false</span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kr">thread</span><span class="w"> </span><span class="n">writer</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">42</span><span class="p">};</span>
+<span class="w">        </span><span class="n">ready</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="nb">true</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_release</span><span class="p">);</span>
+<span class="w">        </span><span class="n">ready</span><span class="p">.</span><span class="n">notify_one</span><span class="p">();</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="w">    </span><span class="n">ready</span><span class="p">.</span><span class="n">wait</span><span class="p">(</span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">Published</span><span class="w"> </span><span class="n">observed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">payload</span><span class="p">;</span><span class="w"> </span><span class="c1">// Before join: acquire is essential.</span>
+<span class="w">    </span><span class="n">writer</span><span class="p">.</span><span class="n">join</span><span class="p">();</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">observed</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">observed</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<span class="w">            </span><span class="s">"published pair differs"</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w"> </span><span class="c1">// namespace</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">check_start_and_join</span><span class="p">();</span>
+<span class="w">        </span><span class="n">check_mutex</span><span class="p">();</span>
+<span class="w">        </span><span class="n">check_one_shot_publication</span><span class="p">();</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"joined=42, ledger=(10000,20000), published=(3,42)</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exception</span><span class="o">&amp;</span><span class="w"> </span><span class="n">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"foundation-18-visibility: "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">error</span><span class="p">.</span><span class="n">what</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>std::atomic&lt;bool&gt;</code> makes operations on <code>ready</code> atomic. The explicit release
+store publishes preceding writes; an acquire observation of that stored value
+orders subsequent reads. The
+<a href="https://eel.is/c++draft/atomics.order">release/acquire rule</a> supplies the edge:</p>
+<div class="math-input" data-display="true">\text{write payload}
+\prec \text{store true, release}
+\rightarrow_{\mathrm{sync}} \text{observe true, acquire}
+\prec \text{copy payload}.</div>
+<p><code>ready.wait(false, acquire)</code> checks the atomic value and waits while it still
+compares equal to <code>false</code>. Its return follows observation of a different value;
+our only other value is the single published <code>true</code>. <code>notify_one</code> wakes a waiter
+to check; it is not publication by itself. If the store happens first, the
+wait observes the changed value without needing a remembered notification. See
+<a href="https://eel.is/c++draft/atomics.types.operations">atomic wait and notification operations</a>.</p>
+<p>Notice that <code>observed</code> is copied <strong>before</strong> joining the writer. The acquire is
+therefore doing real work. Joining first would make this a poor demonstration
+because join would independently order the payload read. The check that can
+throw still occurs after join, keeping the reference captures alive safely.</p>
+<p>Replacing acquire/release with relaxed operations would leave the non-atomic
+payload without this publication relationship. Resetting the flag and reusing
+the payload would introduce a different protocol: the writer could overwrite
+fields while a previous reader uses them. This example is deliberately not a
+reusable mailbox or an engine-generation publication algorithm.</p>
+<p>This small program can be compiled before finishing the rest of the chapter:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>build/chapter-18
+xcrun<span class="w"> </span>clang++<span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-pthread<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>exercises/chapter-18/visibility.cpp<span class="w"> </span>-o<span class="w"> </span>build/chapter-18/visibility
+build/chapter-18/visibility
+</code></pre></figure>
+<p>Expected output:</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>joined=42, ledger=(10000,20000), published=(3,42)
+</code></pre></figure>
+<p>Use the equivalent native compiler command for an already configured LLVM
+toolchain. A missing atomic-wait feature is a standard-library/toolchain issue,
+not a reason to remove synchronization or substitute sleeps.</p>
+<h2 id="define-ownership-before-defining-the-ring">Define ownership before defining the ring</h2>
+<p>We now transfer <code>unique_ptr&lt;Job&gt;</code> objects through a bounded queue. A successful
+push empties the caller's handle. A rejected push leaves that exact handle and
+job intact. Pop transfers ownership to one consumer. Empty jobs are forbidden,
+so an empty pop result can mean that this queue will deliver no further work.</p>
+<p>The caller must exclusively own its handle during <code>push</code>; the queue's mutex
+cannot protect some other thread concurrently resetting that same caller handle.
+The job's bytes are initialized before submission and become consumer-owned after
+pop. No participant keeps a mutable alias and continues writing after transfer.</p>
+<p>The queue has three states:</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>New pushes</th>
+<th>Existing queued jobs</th>
+<th>Empty pop</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>open</code></td>
+<td>Wait for a free slot, then transfer</td>
+<td>Available to consumers</td>
+<td>Wait for state or work</td>
+</tr>
+<tr>
+<td><code>draining</code></td>
+<td>Reject without moving</td>
+<td>Still available</td>
+<td>Return empty after drain</td>
+</tr>
+<tr>
+<td><code>canceled</code></td>
+<td>Reject without moving</td>
+<td>Discard outside the mutex</td>
+<td>Return empty</td>
+</tr>
+</tbody>
+</table>
+<p>Close means stop admitting and <strong>drain</strong>. Cancel means stop admitting and discard
+jobs not yet removed. Neither action joins a thread, and neither can revoke a
+job that a worker already owns. Calling close after cancel cannot reopen or
+restore the queue. Repeated close or cancel is permitted.</p>
+<p>Create the beginning of <code>job_queue.hpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_EXERCISES_CHAPTER_18_JOB_QUEUE_HPP</span>
+<span class="cp">#define STRATA_EXERCISES_CHAPTER_18_JOB_QUEUE_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;atomic&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;condition_variable&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;mutex&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">foundation18</span><span class="w"> </span><span class="p">{</span>
+
+<span class="c1">// Exercise-only lifetime counter, not a memory budget.</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">Job</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">Job</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">value</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">fail</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="o">~</span><span class="n">Job</span><span class="p">();</span>
+<span class="w">    </span><span class="n">Job</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Job</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Job</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Job</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">fail</span><span class="p">;</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">live</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="kr">inline</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">live_</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+<span class="p">};</span>
+
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">QueueState</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">open</span><span class="p">,</span><span class="w"> </span><span class="n">draining</span><span class="p">,</span><span class="w"> </span><span class="n">canceled</span><span class="w"> </span><span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">QueueProbe</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">QueueState</span><span class="w"> </span><span class="n">state</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">queued</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">producers</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">consumers</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">predicate_checks</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>The job's <code>fail</code> field is a deterministic processing failure used in Part 2.
+<code>Job</code> itself is not copied or moved; its <code>unique_ptr</code> is moved. <code>inline static</code>
+gives the exercise one shared counter definition across translation units.
+Atomic relaxed increments/decrements count live jobs without claiming to publish
+their contents. We check final zero after all owner scopes and joins have ended.
+This is not the engine's allocation accounting.</p>
+<p><code>QueueProbe</code> is a copy of observable queue state. <code>producers</code> and <code>consumers</code>
+count operations registered in a predicate wait; <code>predicate_checks</code> lets a test
+establish that a false condition was checked again after an extra notification.
+These are exercise diagnostics, not a scheduling interface.</p>
+<p>Complete the header:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">JobQueue</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">JobQueue</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">);</span>
+<span class="w">    </span><span class="n">JobQueue</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">JobQueue</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">JobQueue</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">JobQueue</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Rejection never consumes job. The caller exclusively owns its handle.</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">push</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">job</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="w"> </span><span class="n">pop</span><span class="p">();</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">close</span><span class="p">();</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">cancel</span><span class="p">();</span>
+
+<span class="w">    </span><span class="c1">// Observability for deterministic exercises, not a production queue API.</span>
+<span class="w">    </span><span class="n">QueueProbe</span><span class="w"> </span><span class="nf">probe</span><span class="p">();</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">await_waiters</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">producers</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">consumers</span><span class="p">,</span>
+<span class="w">                       </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">minimum_checks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">notify_without_change</span><span class="p">();</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">checked_capacity</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">advance</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">wait_for_space</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">lock</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">wait_for_item</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">lock</span><span class="p">);</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="w"> </span><span class="n">mutex_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">condition_variable</span><span class="w"> </span><span class="n">space_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">condition_variable</span><span class="w"> </span><span class="n">item_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">condition_variable</span><span class="w"> </span><span class="n">observed_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">slots_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">read_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">write_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">QueueState</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">open</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">producers_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">consumers_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">checks_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w"> </span><span class="c1">// namespace foundation18</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p><code>std::unique_lock&lt;std::mutex&gt;</code> is an owning lock wrapper that also permits
+explicit unlocking and relocking. A condition-variable wait needs that ability:
+it must let another thread acquire the mutex and change the condition. A
+<code>lock_guard</code> deliberately has no such interface and suits shorter, non-waiting
+critical sections.</p>
+<p>The mutex protects <strong>all</strong> ring slots, indices, count, state, and probe counters.
+The fixed capacity never changes. The condition variables do not separately own
+the state. <code>space_</code> serves producers, <code>item_</code> serves consumers, and <code>observed_</code>
+serves the test's state rendezvous. No queue operation recursively takes the
+mutex; helpers receive an already-held lock.</p>
+<p>For capacity <span class="math-input" data-display="false">C</span>, queued count <span class="math-input" data-display="false">N</span>, next read slot <span class="math-input" data-display="false">R</span>, and next write slot <span class="math-input" data-display="false">W</span>,
+the live ring obeys</p>
+<div class="math-input" data-display="true">0 \le N \le C,\qquad 0 \le R &lt; C,\qquad 0 \le W &lt; C.</div>
+<p>The <span class="math-input" data-display="false">N</span> slots reached from <span class="math-input" data-display="false">R</span> by wrapped increments own jobs; the others are
+empty. Equal read/write indices alone cannot distinguish empty from full, so we
+keep the count. In the canceled state the representation is intentionally
+simpler: the slot vector is empty, <span class="math-input" data-display="false">N=0</span>, and every operation checks cancellation
+before touching a slot.</p>
+<p>With capacity two, follow the actual indices:</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Slots afterward</th>
+<th style="text-align:right">Read</th>
+<th style="text-align:right">Write</th>
+<th style="text-align:right">Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Start</td>
+<td>empty, empty</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+</tr>
+<tr>
+<td>Push 10</td>
+<td>10, empty</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">1</td>
+</tr>
+<tr>
+<td>Push 20</td>
+<td>10, 20</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">2</td>
+</tr>
+<tr>
+<td>Pop</td>
+<td>empty, 20</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">1</td>
+</tr>
+<tr>
+<td>Push 12</td>
+<td>12, 20</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">2</td>
+</tr>
+<tr>
+<td>Close</td>
+<td>12, 20</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">2</td>
+</tr>
+<tr>
+<td>Pop</td>
+<td>12, empty</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">1</td>
+</tr>
+<tr>
+<td>Pop</td>
+<td>empty, empty</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">0</td>
+</tr>
+</tbody>
+</table>
+<p>The pop order is 10, 20, 12, even though the final physical slots held 12 before
+20. Closing changes permission to submit, not the order of accepted jobs.</p>
+<h2 id="allocate-before-concurrent-transfer-begins">Allocate before concurrent transfer begins</h2>
+<p>Create the start of <code>job_queue.cpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"job_queue.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;chrono&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">foundation18</span><span class="w"> </span><span class="p">{</span>
+
+<span class="n">Job</span><span class="o">::</span><span class="n">Job</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">should_fail</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">value</span><span class="p">(</span><span class="n">input</span><span class="p">),</span><span class="w"> </span><span class="n">fail</span><span class="p">(</span><span class="n">should_fail</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">live_</span><span class="p">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="n">Job</span><span class="o">::~</span><span class="n">Job</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">live_</span><span class="p">.</span><span class="n">fetch_sub</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">Job</span><span class="o">::</span><span class="n">live</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">live_</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">JobQueue</span><span class="o">::</span><span class="n">checked_capacity</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">capacity</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"queue capacity must be positive"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">capacity</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="n">JobQueue</span><span class="o">::</span><span class="n">JobQueue</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">capacity_</span><span class="p">(</span><span class="n">checked_capacity</span><span class="p">(</span><span class="n">capacity</span><span class="p">)),</span><span class="w"> </span><span class="n">slots_</span><span class="p">(</span><span class="n">capacity_</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">JobQueue</span><span class="o">::</span><span class="n">advance</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">capacity_</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The capacity check runs before constructing the vector of empty handles.
+Allocation failure occurs before the queue can be shared. There is no vector
+growth during transfer. <code>advance</code> increments only a valid index below capacity;
+the conditional wraps the last index to zero without needing remainder or an
+unbounded monotonically growing position.</p>
+<p><code>fetch_add(1, relaxed)</code> and <code>fetch_sub(1, relaxed)</code> are indivisible updates of the
+counter; their returned previous values are unused. They do not authorize access
+to a job or prove it is safe to destroy a queue. After joining all participants,
+the fixture may read the final count; until then any reported count is only a
+momentary observation. Atomicity of the counter is not synchronization of all
+other memory.</p>
+<h2 id="a-notification-is-a-reason-to-inspect-state">A notification is a reason to inspect state</h2>
+<p>A full producer needs the condition “there is space <strong>or</strong> the queue no longer
+accepts work.” A consumer needs “there is an item <strong>or</strong> the state will not
+produce another one.” Waiting solely for space or an item would strand threads
+when shutdown changes only the queue state.</p>
+<p>Append the producer wait helper:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">JobQueue::wait_for_space</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">lock</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="o">++</span><span class="n">producers_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">observed_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">space_</span><span class="p">.</span><span class="n">wait</span><span class="p">(</span><span class="n">lock</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="k">this</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="o">++</span><span class="n">checks_</span><span class="p">;</span>
+<span class="w">            </span><span class="n">observed_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">open</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">count_</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">capacity_</span><span class="p">;</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="o">--</span><span class="n">producers_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">observed_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="o">--</span><span class="n">producers_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">observed_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The predicate form of <code>wait</code> repeats the condition check under the mutex. The
+underlying wait releases the mutex and blocks as one operation, then reacquires
+before continuing. This avoids a window in which a producer checks “full,” misses
+a notification, and only afterward begins to sleep. The same mutex must protect
+the condition's changes. A wake may be spurious, or another producer may take the
+slot first; notification therefore cannot be treated as a permit. See the
+<a href="https://eel.is/c++draft/thread.condition.condvar">condition-variable contract</a>.</p>
+<p>Registration happens while holding <code>mutex_</code>. An observer acquiring this mutex
+and seeing a producer registered knows the operation reached the predicate-wait
+protocol. It does <strong>not</strong> know whether an operating-system thread is physically
+asleep at that exact instant. That distinction is harmless: the queue cannot
+complete this full-state push until space or state changes. The catch restores
+diagnostic bookkeeping before propagating a catchable error; a failure to
+reacquire the mutex is a library termination case, not a recovery promise.</p>
+<p>Append the analogous consumer helper:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">JobQueue::wait_for_item</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">lock</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="o">++</span><span class="n">consumers_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">observed_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">item_</span><span class="p">.</span><span class="n">wait</span><span class="p">(</span><span class="n">lock</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="k">this</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="o">++</span><span class="n">checks_</span><span class="p">;</span>
+<span class="w">            </span><span class="n">observed_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">open</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">count_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="o">--</span><span class="n">consumers_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">observed_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="o">--</span><span class="n">consumers_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">observed_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Here the meaningful resource is a queued job, not a free slot. In both helpers
+<code>observed_.notify_all()</code> lets the controller inspect already-protected counters.
+Notifying while holding the mutex is allowed; an awakened observer acquires it
+before reading. The normal queue notifications below occur after unlocking,
+avoiding an immediate attempt to acquire a still-held lock. Neither placement
+replaces the predicate or the state transition.</p>
+<h2 id="move-only-at-the-acceptance-point">Move only at the acceptance point</h2>
+<p>Append the complete push:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">JobQueue::push</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">job</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">job</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"cannot enqueue an empty job"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">mutex_</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">open</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">count_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">capacity_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">wait_for_space</span><span class="p">(</span><span class="n">lock</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">open</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">slots_</span><span class="p">[</span><span class="n">write_</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">job</span><span class="p">);</span>
+<span class="w">    </span><span class="n">write_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">advance</span><span class="p">(</span><span class="n">write_</span><span class="p">);</span>
+<span class="w">    </span><span class="o">++</span><span class="n">count_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">lock</span><span class="p">.</span><span class="n">unlock</span><span class="p">();</span>
+<span class="w">    </span><span class="n">item_</span><span class="p">.</span><span class="n">notify_one</span><span class="p">();</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The <code>if</code> outside the helper is a fast-path test. It is not an unsafe one-time
+replacement for the wait loop: the helper itself performs a predicate wait.
+After waiting, we examine state again while holding the same lock. If close won
+the race, the function returns without touching <code>job</code>. If admission won, pointer
+move, index update, and count update all occur before unlocking. No observer can
+see the intermediate ring representation.</p>
+<p>Consider close racing a push into a nonfull queue. Whichever takes the mutex and
+performs its transition first determines the result. A push accepted just before
+close remains accepted; close does not retrospectively reject it. The successful
+ring update is the operation's <em>linearization point</em>: we can reason about it as
+one event in an order consistent with these protected transitions.</p>
+<p>Append the complete pop:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="w"> </span><span class="n">JobQueue</span><span class="o">::</span><span class="n">pop</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="w"> </span><span class="nf">lock</span><span class="p">(</span><span class="n">mutex_</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">open</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">count_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">wait_for_item</span><span class="p">(</span><span class="n">lock</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">canceled</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">count_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">slots_</span><span class="p">[</span><span class="n">read_</span><span class="p">]);</span>
+<span class="w">    </span><span class="n">read_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">advance</span><span class="p">(</span><span class="n">read_</span><span class="p">);</span>
+<span class="w">    </span><span class="o">--</span><span class="n">count_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">lock</span><span class="p">.</span><span class="n">unlock</span><span class="p">();</span>
+<span class="w">    </span><span class="n">space_</span><span class="p">.</span><span class="n">notify_one</span><span class="p">();</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>An open queue with zero count has already waited. The return-empty branch is
+therefore cancellation or a drained closed queue, not temporary lack of work.
+The local <code>result</code> becomes the sole owner before the slot is reused. Destruction
+of a consumer-owned job happens in the consumer, not inside this critical section.</p>
+<p>The condition deliberately does <strong>not</strong> say “return empty whenever the queue is
+not open.” Such code would protect memory correctly but discard the promised
+drain semantics. Part 2 changes exactly that condition as a diagnostic mutation.
+A race detector cannot determine that the wrong shutdown policy was implemented.</p>
+<h2 id="stop-admission-then-decide-what-remains-owned">Stop admission, then decide what remains owned</h2>
+<p>Append close:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">JobQueue::close</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">mutex_</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">open</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">draining</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">space_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="n">item_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>We wake both classes of waiter. A full producer must discover rejection; an
+empty consumer must discover completion. Every waiting thread may need to exit,
+so <code>notify_one</code> is not enough for shutdown. A worker still holding a job can
+finish it and then observe the draining state on its next pop.</p>
+<p>Append cancellation:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">JobQueue::cancel</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">abandoned</span><span class="p">;</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">mutex_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">canceled</span><span class="p">;</span>
+<span class="w">        </span><span class="n">abandoned</span><span class="p">.</span><span class="n">swap</span><span class="p">(</span><span class="n">slots_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">count_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="n">read_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="n">write_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">space_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="n">item_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="c1">// abandoned and its jobs are destroyed here, outside the queue mutex.</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Swapping with a local, initially empty vector transfers ownership of all queued
+jobs without allocating new slots. The empty member vector is valid because
+canceled operations never index it. After unlocking, we wake waiters and destroy
+the abandoned jobs outside the mutex. A more complex job destructor could
+release other resources; keeping it out of the lock avoids turning cleanup into
+an unplanned nested critical section. This exercise's destructor only updates
+an atomic counter.</p>
+<p>If a worker popped job 10 immediately before cancellation, that job is no longer
+in <code>slots_</code>. The abandoned vector cannot contain it. The worker may finish job 10
+even after cancel returns. Cancellation is not rollback, forced termination, or
+proof that all users have stopped. The eventual owner must join them before
+destroying the queue. Concurrent cancellation calls are safe: after the first
+swap, the member vector is empty and later swaps have no queued owners to take.</p>
+<h2 id="bound-the-backlog-without-pretending-to-bound-a-process">Bound the backlog without pretending to bound a process</h2>
+<p>Let <span class="math-input" data-display="false">C</span> be queue capacity, <span class="math-input" data-display="false">W</span> the number of workers, and <span class="math-input" data-display="false">P</span> the number of
+producers. Suppose each worker owns at most one removed job and each producer
+allocates at most one pending job before blocking in <code>push</code>. During ordinary
+processing, the participating jobs satisfy</p>
+<div class="math-input" data-display="true">J \le C + W + P.</div>
+<p>The three terms are distinct owners: queued, running, and waiting to submit.
+For the Part 2 stress fixture, <span class="math-input" data-display="false">C=3</span>, <span class="math-input" data-display="false">W=3</span>, and <span class="math-input" data-display="false">P=3</span>, giving at most nine such
+jobs despite 600 total transfers. A bound of three would forget both workers
+and blocked producers. Cancellation temporarily moves queued ownership to the
+canceling caller for destruction; it does not create another copy of a job.</p>
+<p>This bound says nothing about jobs retained independently by callers, thread
+stacks, allocator metadata, vector capacity overhead, exceptions, or process
+resident memory. It is not Strata's charged query-memory admission policy.
+Blocking admission can also deadlock when the producer holds a resource needed
+by a consumer. The queue itself cannot diagnose that larger dependency cycle.
+We keep its critical sections short and hold no application mutex across push.</p>
+<h2 id="observe-waiting-without-using-time-as-evidence">Observe waiting without using time as evidence</h2>
+<p>Complete <code>job_queue.cpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/job_queue.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">QueueProbe</span><span class="w"> </span><span class="nf">JobQueue::probe</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">mutex_</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">state_</span><span class="p">,</span><span class="w"> </span><span class="n">count_</span><span class="p">,</span><span class="w"> </span><span class="n">producers_</span><span class="p">,</span><span class="w"> </span><span class="n">consumers_</span><span class="p">,</span><span class="w"> </span><span class="n">checks_</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">JobQueue::await_waiters</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">producers</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">consumers</span><span class="p">,</span>
+<span class="w">                            </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">minimum_checks</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_lock</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">mutex_</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">reached</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">observed_</span><span class="p">.</span><span class="n">wait_for</span><span class="p">(</span><span class="n">lock</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">seconds</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">producers_</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">producers</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">consumers_</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">consumers</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">checks_</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">minimum_checks</span><span class="p">;</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">reached</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="p">(</span><span class="s">"queue rendezvous watchdog expired"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">JobQueue::notify_without_change</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">space_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="n">item_</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w"> </span><span class="c1">// namespace foundation18</span>
+</code></pre></figure>
+<p><code>await_waiters</code> uses a protected predicate to establish a rendezvous. Its
+five-second timeout is only a watchdog reporting a broken test or an unusually
+stalled environment; waiting five seconds is never evidence that the desired
+state occurred. The predicate must actually be true. Part 2 also gives the whole
+test process a CTest timeout so a missing shutdown wakeup does not hang forever.</p>
+<p><code>notify_without_change</code> sends an extra notification without changing the queue.
+Tests wait for a later predicate evaluation and confirm that a full producer or
+empty consumer remains registered. This models tolerating a wakeup without
+permission. It does not claim to force a particular operating-system spurious
+wakeup or prove which notification caused a check.</p>
+<p>The observation counters belong to this exercise. They add a condition variable
+and notifications that a production queue need not carry. They are used only at
+the fixture's modest operation counts, not as an unbounded telemetry API. Sharing
+the queue mutex prevents the tests from adding a race while observing one.</p>
+<h2 id="what-must-survive-a-shutdown-request">What must survive a shutdown request</h2>
+<p>The queue now knows how to change state and wake callers. It still cannot own
+their threads. Destroying it while a blocked push, pop, or notification uses its
+mutex and condition variables would violate its lifetime contract. A destructor
+that merely called close would not solve that problem: the waiters would be
+awake, not necessarily finished.</p>
+<p><a href="https://25d-228.github.io/cplusplus-learning/chapter-18-part-2.html">Part 2 — Join before destroying shared state</a>
+provides the thread owner and verifies that references, exception slots, queue
+storage, and mutexes survive through the final join.</p>
+<h3 id="references-for-this-part">References for this part</h3>
+<p>The links above identify the mechanisms used here, not missing implementation.
+The C++ working draft is a live document; this chapter uses only the C++20 subset
+exercised by the code, not newer declarations visible on those pages. Relevant
+sections are data races, thread construction and joining, mutex requirements,
+condition-variable waiting, exception propagation, shared-pointer operations,
+and atomic ordering/waiting. Technical pages were consulted on November 6, 2026.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-17-part-3.html"><small>Previous · Chapter 17 · Part 3</small><span>Boundary, failure, and two-sort checks</span></a><a href="chapter-18-part-2.html"><small>Next · Chapter 18 · Part 2</small><span>Join before destroying shared state</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 18 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-visibility-and-bounded-ownership-transfer">Part 1 — Visibility and bounded ownership transfer</a></li><li class="toc-h2"><a href="#a-thread-is-not-a-delayed-function-call">A thread is not a delayed function call</a></li><li class="toc-h2"><a href="#protect-the-relationship-between-fields">Protect the relationship between fields</a></li><li class="toc-h2"><a href="#a-one-shot-flag-can-publish-immutable-data">A one-shot flag can publish immutable data</a></li><li class="toc-h2"><a href="#define-ownership-before-defining-the-ring">Define ownership before defining the ring</a></li><li class="toc-h2"><a href="#allocate-before-concurrent-transfer-begins">Allocate before concurrent transfer begins</a></li><li class="toc-h2"><a href="#a-notification-is-a-reason-to-inspect-state">A notification is a reason to inspect state</a></li><li class="toc-h2"><a href="#move-only-at-the-acceptance-point">Move only at the acceptance point</a></li><li class="toc-h2"><a href="#stop-admission-then-decide-what-remains-owned">Stop admission, then decide what remains owned</a></li><li class="toc-h2"><a href="#bound-the-backlog-without-pretending-to-bound-a-process">Bound the backlog without pretending to bound a process</a></li><li class="toc-h2"><a href="#observe-waiting-without-using-time-as-evidence">Observe waiting without using time as evidence</a></li><li class="toc-h2"><a href="#what-must-survive-a-shutdown-request">What must survive a shutdown request</a></li><li class="toc-h3"><a href="#references-for-this-part">References for this part</a></li></ul></aside>
+</div></body></html>

@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 12 · Part 1 — Immutable snapshots and merged reads · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-12.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html" aria-current="page"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 12 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/23">Read on GitHub</a><a href="source/chapter-12.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-own-a-complete-read-boundary">Part 1 — Own a complete read boundary</a></li><li class="toc-h2"><a href="#what-the-view-promises">What the view promises</a></li><li class="toc-h2"><a href="#draw-every-ownership-edge-including-the-ledger">Draw every ownership edge, including the ledger</a></li><li class="toc-h2"><a href="#let-the-allocator-retain-its-budget">Let the allocator retain its budget</a></li><li class="toc-h2"><a href="#a-source-set-has-a-fixed-shape">A source set has a fixed shape</a></li><li class="toc-h2"><a href="#separate-a-repeatable-view-from-a-mutable-cursor">Separate a repeatable view from a mutable cursor</a></li><li class="toc-h2"><a href="#count-the-union-not-the-number-of-pointer-copies">Count the union, not the number of pointer copies</a></li><li class="toc-h2"><a href="#move-the-directory-and-cache-into-the-shared-context">Move the directory and cache into the shared context</a></li><li class="toc-h2"><a href="#capture-before-the-effectful-rotation-publish-after-it">Capture before the effectful rotation, publish after it</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-12-immutable-snapshots-and-merged-reads">Chapter 12 — Immutable snapshots and merged reads</h1>
+<h2 id="part-1-own-a-complete-read-boundary">Part 1 — Own a complete read boundary</h2>
+<p>An atomic write batch prevents half of a batch from becoming visible. It does
+not make two separate current-state reads repeatable. Read account 10, commit a
+batch, then read event 101: Chapter 11's <code>Database::get</code> can legally combine the
+old account with the new event. Each call is individually correct; their combined
+answer belongs to no single committed state.</p>
+<p>A read view changes that contract. It captures one sequence and the exact owners
+needed to answer all reads at that sequence. Later writes use a different active
+memtable. A later flush can change the database's serving set without replacing
+anything inside an existing view.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Build ownership that survives database destruction; distinguish shared ownership
+from frozen contents; admit a bounded immutable source set before rotation;
+implement ordered point and range reads with a hand-written heap; and make
+failed cursor advancement terminal rather than silently skipping data.</p>
+</blockquote>
+<p><strong>Prerequisites:</strong> the completed Chapters 7–11, including Chapter 9's charged
+constructors and pinned table reader, and Chapter 11's sealed-log checks and
+manifest installation. Keep the language-foundation programs and all existing
+tests. This chapter has <strong>4.5 implementation hours across its three parts</strong>:
+1.25 for ownership/capture, 2.0 for merged lookup/scan, and 1.25 for retention and
+visibility tests. Reading is not included. Nothing in this chapter starts threads.</p>
+<p><a href="https://25d-228.github.io/cplusplus-learning/chapter-12-part-2.html">Part 2</a>
+implements the merge. <a href="https://25d-228.github.io/cplusplus-learning/chapter-12-part-3.html">Part 3</a>
+supplies the runnable checks and build changes. Finish all three parts before
+building the new executable. They form one chapter, not three separate projects.</p>
+<h2 id="what-the-view-promises">What the view promises</h2>
+<p>Use the roadmap's batch. Account 10 changes from region 1 to region 3, event 101
+changes from 250 to 900 cents, and event 102 is deleted. The changes share sequence 2.</p>
+<table>
+<thead>
+<tr>
+<th>Read boundary</th>
+<th style="text-align:right">Account 10</th>
+<th style="text-align:right">Event 101</th>
+<th>Event 102</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>View captured at sequence 1</td>
+<td style="text-align:right">Region 1</td>
+<td style="text-align:right">250 cents</td>
+<td>Present</td>
+</tr>
+<tr>
+<td>View captured at sequence 2</td>
+<td style="text-align:right">Region 3</td>
+<td style="text-align:right">900 cents</td>
+<td>Absent</td>
+</tr>
+<tr>
+<td>Sequence-1 view after both generations are flushed</td>
+<td style="text-align:right">Region 1</td>
+<td style="text-align:right">250 cents</td>
+<td>Present</td>
+</tr>
+</tbody>
+</table>
+<p>A view returns owning point results and creates independent range cursors. A cursor
+keeps the view alive even after its original handle is reset. Both may outlive the
+<code>Database</code> facade. They cannot be used concurrently yet: the cache, counters,
+budget, source readers, and capture protocol remain synchronous and nonreentrant.
+Reference counting is not a replacement for the synchronization chapter.</p>
+<p>There is no arbitrary <code>snapshot_at(old_sequence)</code> API and no read-write
+transaction. Capturing freezes the currently published boundary; retaining that
+handle preserves it. The distinction between committed visibility and a stable
+read snapshot also appears in SQLite's <a href="https://www.sqlite.org/isolation.html">isolation explanation</a>.
+Here the implementation is our own immutable-generation protocol, not SQLite's
+page/WAL mechanism.</p>
+<h2 id="draw-every-ownership-edge-including-the-ledger">Draw every ownership edge, including the ledger</h2>
+<p>Chapter 11's table reader owns its descriptor and metadata, but borrows its cache
+and budget. Keeping only a <code>shared_ptr&lt;TableReader&gt;</code> after destroying the database
+would therefore leave two dangling dependencies. Keeping an arena's node address
+is even less sufficient: an address does not retain its allocation.</p>
+<p>The new lifetime graph is:</p>
+<figure class="code-block"><figcaption><span class="code-title">Owning edges; borrowed edges are described below</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>Database ---------&gt; Context ---------&gt; Budget
+   |                   |                 ^
+   |                   +-&gt; Directory     |
+   |                   |   and LOCK      |
+   |                   +-&gt; BlockCache    |
+   +-&gt; current WAL/table owners          |
+                                         |
+ReadView ---------&gt; const State ----------+
+                         |                |
+                         +-&gt; Context      |
+                         +-&gt; sealed WAL/table owners
+
+ReadCursor ------&gt; Scan ------&gt; const State
+                     +-&gt; per-source positions and frame pins
+                     +-&gt; one inline owning output row
+
+SharedAllocator copies in owner control storage ------&gt; Budget
+</code></pre></figure>
+<p>The last line matters during destruction. <code>State</code> can be the last owner of its
+context. Destroying its members may destroy that context; only afterward does the
+shared-pointer implementation finish releasing storage for the state itself. An
+allocator that merely borrowed <code>Budget*</code> would not, by itself, keep that final
+deallocation safe. We give the allocator its own shared budget owner.</p>
+<p>There is no cycle: neither <code>Budget</code> nor <code>Context</code> owns a view or a scan. The retention
+registry stores identities and counts, not owning pointers back to states.
+Table-reader borrows remain valid because the state retains the context, and a
+scan destroys positions and pins before dropping its state.</p>
+<p>The directory lock also belongs to the context. Destroying the database while a
+view exists does <strong>not</strong> release the lock. This intentionally prevents another
+cooperating process from reopening and modifying files while escaped readers are
+still using them. Release the final view/cursor before reopening that directory.
+This conservative lifecycle is part of the interface, not a surprising leak.</p>
+<h2 id="let-the-allocator-retain-its-budget">Let the allocator retain its budget</h2>
+<p><code>std::shared_ptr&lt;T&gt;</code> copies an ownership handle; it does not copy <code>T</code>. A
+<code>shared_ptr&lt;const T&gt;</code> denies mutation through that access path, but cannot stop a
+separate mutable alias from changing the same object. We will combine const
+state ownership with actual sealing. See the standard draft's
+<a href="https://eel.is/c++draft/util.smartptr.shared.const">shared-pointer constructors</a>
+for ownership-sharing conversions; do not manufacture a second independent
+shared pointer from an existing owner's raw pointer.</p>
+<p>Create <code>include/strata/memory/shared_allocator.hpp</code>. The new allocator delegates
+allocation sizes, failure injection, and ledger updates to Chapter 9's allocator.
+It changes only <strong>who retains the ledger</strong>. The complete file is:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/shared_allocator.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_MEMORY_SHARED_ALLOCATOR_HPP</span>
+<span class="cp">#define STRATA_MEMORY_SHARED_ALLOCATOR_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/memory/budget.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;type_traits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">memory</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SharedAllocator</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">value_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">propagate_on_container_copy_assignment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">true_type</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">propagate_on_container_move_assignment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">true_type</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">propagate_on_container_swap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">true_type</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">is_always_equal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">false_type</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">SharedAllocator</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">owner_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">owner</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">owner_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"missing budget owner"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">U</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="n">SharedAllocator</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">owner_</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">owner</span><span class="p">())</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">Budget</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">owner</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">owner_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">[[</span><span class="na">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">allocate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">{</span><span class="o">*</span><span class="n">owner_</span><span class="p">}.</span><span class="n">allocate</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">deallocate</span><span class="p">(</span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">pointer</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">{</span><span class="o">*</span><span class="n">owner_</span><span class="p">}.</span><span class="n">deallocate</span><span class="p">(</span><span class="n">pointer</span><span class="p">,</span><span class="w"> </span><span class="n">count</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">U</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">owner_</span><span class="p">.</span><span class="n">get</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">owner</span><span class="p">().</span><span class="n">get</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner_</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::memory</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The converting constructor permits rebinding from <code>SharedAllocator&lt;T&gt;</code> to
+<code>SharedAllocator&lt;U&gt;</code> while retaining the same ledger. <code>allocate_shared</code> may
+allocate an implementation-defined control/object type rather than exactly <code>T</code>;
+its <a href="https://eel.is/c++draft/util.smartptr.shared.create">creation requirements</a>
+use a copied, rebound allocator. Consequently the ledger records the real request,
+not a guessed <code>sizeof(T)</code> plus an invented control-block constant.</p>
+<p>Copying the allocator copies a shared pointer without allocating another budget.
+<code>deallocate</code> still has a live <code>owner_</code> when it returns storage and subtracts the
+charge. Only afterward can releasing the allocator's own copy destroy the budget.
+The null-owner check prevents constructing a context with an unusable ledger.</p>
+<p>The caller creates the small root ledger with <code>std::make_shared&lt;Budget&gt;(limit)</code>.
+That bootstrap object/control storage is outside its own accounting. Context,
+view, scan, source-owner controls, metadata, cache frames, and arena chunks are
+charged. Call-stack space, filesystem caches, allocator overhead outside recorded
+requests, and fixture containers are still outside the ledger. It remains an
+engine allocation budget, not a process-resident-memory limit.</p>
+<p>Lower-level <code>MemTable</code>, <code>TableReader</code>, and <code>BlockPin</code> APIs retain their Chapter 9
+borrowed-budget contracts. Only the database-level lifetime boundary is changing;
+we are not adding a hidden global budget or duplicating the accounting algorithm.</p>
+<h2 id="a-source-set-has-a-fixed-shape">A source set has a fixed shape</h2>
+<p>Create <code>include/strata/storage/read_view.hpp</code>. Append its following blocks in order.
+The source cap is the manifest's existing table-plus-log cap, not an unbounded
+vector of every file ever created. A source contains exactly one owning pointer:
+a sealed WAL/memtable owner or an immutable table reader.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/read_view.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_STORAGE_READ_VIEW_HPP</span>
+<span class="cp">#define STRATA_STORAGE_READ_VIEW_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/io/directory.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/memory/shared_allocator.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/manifest.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/wal.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">ReadLimits</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">snapshots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">16</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">retained_sources</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">ReadRetention</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">snapshots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">sources</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">read_detail</span><span class="w"> </span><span class="p">{</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_sources</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_logs</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_snapshots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_retained</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">128</span><span class="p">;</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Source</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">WalMemTable</span><span class="o">&gt;</span><span class="w"> </span><span class="n">memory</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="w"> </span><span class="n">disk</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="nf">identity</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">memory</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="kt">void</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">memory</span><span class="p">.</span><span class="n">get</span><span class="p">())</span>
+<span class="w">                      </span><span class="o">:</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="kt">void</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">disk</span><span class="p">.</span><span class="n">get</span><span class="p">());</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>Source::identity()</code> is an in-process complete-object identity used only while
+that object is retained. It is neither the durable file ID nor the cache binding
+ID. Once its final registry reference disappears, that address may be reused.
+We never carry the raw identity across reopening or use it to locate a file.</p>
+<p>The memtable path is <code>shared_ptr&lt;const WalMemTable&gt;</code>: read code cannot call its
+writer methods. The disk path remains <code>shared_ptr&lt;TableReader&gt;</code> because reading
+updates block-read counters and cache state. Its underlying table bytes are
+immutable even though its bookkeeping is not. Constness is not transitive through
+a pointer member; the sealed-owner invariant is what protects stored rows.</p>
+<p>Append the context and state declarations:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/read_view.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">Context</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">Context</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">directory_name</span><span class="p">,</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_slots</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">ReadLimits</span><span class="w"> </span><span class="n">limits</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">check_admission</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">retain</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">release</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadRetention</span><span class="w"> </span><span class="nf">retention</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">counts_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">;</span>
+<span class="w">    </span><span class="n">io</span><span class="o">::</span><span class="n">Directory</span><span class="w"> </span><span class="n">directory</span><span class="p">;</span>
+<span class="w">    </span><span class="n">BlockCache</span><span class="w"> </span><span class="n">cache</span><span class="p">;</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">struct</span><span class="w"> </span><span class="nc">Slot</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">identity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">references</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">slot_for</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">identity</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadLimits</span><span class="w"> </span><span class="n">limits_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadRetention</span><span class="w"> </span><span class="n">counts_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">Slot</span><span class="p">,</span><span class="w"> </span><span class="n">max_retained</span><span class="o">&gt;</span><span class="w"> </span><span class="n">slots_</span><span class="p">{};</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">State</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">State</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">Context</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">visible</span><span class="p">,</span>
+<span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">);</span>
+<span class="w">    </span><span class="o">~</span><span class="n">State</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">State</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">State</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">State</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">State</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">activate</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">held</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">count</span><span class="p">};</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">Context</span><span class="o">&gt;</span><span class="w"> </span><span class="n">context</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">Source</span><span class="p">,</span><span class="w"> </span><span class="n">max_sources</span><span class="o">&gt;</span><span class="w"> </span><span class="n">held</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">Scan</span><span class="p">;</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace read_detail</span>
+</code></pre></figure>
+<p><code>Context</code> owns its budget before constructing the directory and cache. The
+member declaration order makes cache destruction precede directory/lock release,
+which in turn precedes releasing the budget member. <code>State</code> declares the context
+before its held sources, so source destruction happens first. These are concrete
+uses of <a href="https://eel.is/c++draft/class.dtor">reverse member destruction order</a>.
+The owning allocator separately protects the later control-storage deallocation.</p>
+<p>A state is prepared privately with <code>active == false</code>. It is not admitted to the
+registry until the freeze/install step succeeds. Destruction of an unactivated
+candidate releases its source copies without decrementing counters that were
+never incremented. An activated state unregisters once, when its final shared
+owner disappears—not once for every copied <code>ReadView</code> handle.</p>
+<p>The array has 20 slots with the current manifest caps. Its unused shared pointers
+are empty. The actual <code>count</code> bounds every traversal. No state stores a borrowed
+span into the caller's source array; the constructor copies the owning handles.</p>
+<h2 id="separate-a-repeatable-view-from-a-mutable-cursor">Separate a repeatable view from a mutable cursor</h2>
+<p>Finish the header with the public handles:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/read_view.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">ReadCursor</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">ReadCursor</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadCursor</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ReadCursor</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadCursor</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ReadCursor</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadCursor</span><span class="p">(</span><span class="n">ReadCursor</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadCursor</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">ReadCursor</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">valid</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EntryView</span><span class="w"> </span><span class="nf">entry</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EntryView</span><span class="w"> </span><span class="nf">entry</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">next</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">reset</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">scan_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">friend</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">ReadView</span><span class="p">;</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">ReadCursor</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Scan</span><span class="o">&gt;</span><span class="w"> </span><span class="n">scan</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">scan_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">scan</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Scan</span><span class="o">&gt;</span><span class="w"> </span><span class="n">scan_</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ReadView</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">ReadView</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">valid</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="p">(</span><span class="n">state_</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">reset</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">state_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">sequence</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">source_count</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadRetention</span><span class="w"> </span><span class="nf">retention</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">OwnedEntry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">get</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadCursor</span><span class="w"> </span><span class="nf">scan</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">lower</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Key</span><span class="o">&gt;</span><span class="w"> </span><span class="n">upper</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">friend</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Database</span><span class="p">;</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">ReadView</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">read_detail</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="w"> </span><span class="n">state</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">state_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">state</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">require_valid</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">read_detail</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="w"> </span><span class="n">state_</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::storage</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>A default or moved-from view is empty. Copying a view intentionally shares one
+state and one admission slot. <code>reset()</code> releases that handle; another copy or
+cursor can keep the state alive. <code>get</code> returns a small owning <code>OwnedEntry</code>, so it
+needs no rvalue restriction. <code>scan</code> also owns what it needs, allowing a temporary
+view to create a longer-lived cursor.</p>
+<p>A cursor has one mutable position and is move-only. Its internal <code>shared_ptr</code> is
+used for the allocator-backed factory and lifetime cleanup; the public API does
+not let clients copy the traversal position. The forward declaration of <code>Scan</code>
+keeps the heap/position layout in the implementation file. Shared-pointer handles
+can be declared with an incomplete pointee type; the allocation is performed
+later where that type is complete.</p>
+<p><code>entry()</code> returns a borrow into the cursor's owning row. The reference-qualified
+accessor rejects a direct borrow from a temporary cursor. A previously returned
+span must still not outlive the cursor or a call that advances/resets/replaces it.
+Qualifier restrictions are useful, not a complete lifetime proof.</p>
+<h2 id="count-the-union-not-the-number-of-pointer-copies">Count the union, not the number of pointer copies</h2>
+<p>Let <span class="math-input" data-display="false">V</span> be the number of admitted state objects, <span class="math-input" data-display="false">S_i</span> the set of source identities
+held by state <span class="math-input" data-display="false">i</span>, and <span class="math-input" data-display="false">R</span> the number of distinct retained source identities.
+The limits apply to:</p>
+<div class="math-input" data-display="true">V \leq V_{\max}, \qquad R = \left|\bigcup_{i=1}^{V} S_i\right| \leq R_{\max}.</div>
+<p>Copies of a view do not add another <span class="math-input" data-display="false">S_i</span>. Capturing a fresh view over the same
+sources adds one state but no new source identity. A cursor retains its state's
+slot even after reaching end-of-range; <code>reset</code> or destruction ends that retention.</p>
+<p>Suppose view A holds memtable M1. The database flushes M1 into table T1, then
+writes M2. A new view would hold T1 and M2, while A still owns M1. With a retained
+source cap of two, the union would contain three identities, so capture must fail.
+After A's final owner disappears, capturing T1 and M2 fits. Replacing A's source
+with T1 behind its back would hide retention rather than implement it.</p>
+<p>The registry has at most 128 slots. Checking admission scans this bounded array;
+it does not allocate a map. Its cost is bounded by the small configured source
+caps, and it is not advertised as constant-time hashing.</p>
+<p>Create <code>src/storage/read_view.cpp</code>. Start with complete headers and helpers:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/read_view.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/read_view.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;exception&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+<span class="k">namespace</span><span class="w"> </span><span class="p">{</span>
+<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">checked_owner</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">owner</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"missing budget owner"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">owner</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">valid_key</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"unknown read relation"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+<span class="n">OwnedEntry</span><span class="w"> </span><span class="nf">own</span><span class="p">(</span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">OwnedEntry</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="n">result</span><span class="p">.</span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">;</span>
+<span class="w">    </span><span class="n">result</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">kind</span><span class="p">;</span>
+<span class="w">    </span><span class="n">result</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">bytes</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"oversized read row"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">bytes</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace</span>
+</code></pre></figure>
+<p><code>checked_owner</code> returns an owning handle after checking it, rather than returning
+a reference to a nullable pointer's target. <code>own</code> copies at most the 30-byte event
+payload into an inline result. It is also the lifetime boundary used later when
+a cursor is about to advance and invalidate its source span.</p>
+<p>Open the internal namespace and implement admission:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/read_view.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">namespace</span><span class="w"> </span><span class="nn">read_detail</span><span class="w"> </span><span class="p">{</span>
+<span class="n">Context</span><span class="o">::</span><span class="n">Context</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">directory_name</span><span class="p">,</span>
+<span class="w">                 </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_slots</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">ReadLimits</span><span class="w"> </span><span class="n">limits</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">budget</span><span class="p">(</span><span class="n">checked_owner</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">owner</span><span class="p">))),</span>
+<span class="w">      </span><span class="n">directory</span><span class="p">(</span><span class="n">directory_name</span><span class="p">),</span><span class="w"> </span><span class="n">cache</span><span class="p">(</span><span class="o">*</span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">cache_slots</span><span class="p">,</span><span class="w"> </span><span class="n">cache_bytes</span><span class="p">),</span><span class="w"> </span><span class="n">limits_</span><span class="p">(</span><span class="n">limits</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">limits</span><span class="p">.</span><span class="n">snapshots</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">limits</span><span class="p">.</span><span class="n">snapshots</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_snapshots</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">limits</span><span class="p">.</span><span class="n">retained_sources</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">limits</span><span class="p">.</span><span class="n">retained_sources</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_retained</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid snapshot retention limits"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+<span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">Context</span><span class="o">::</span><span class="n">slot_for</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">identity</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">slots_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">slots_</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">identity</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">identity</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">slots_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+<span class="p">}</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">Context</span><span class="o">::</span><span class="n">check_admission</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">sources</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_sources</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"too many view sources"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">counts_</span><span class="p">.</span><span class="n">snapshots</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">limits_</span><span class="p">.</span><span class="n">snapshots</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"snapshot states exhausted"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">added</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">sources</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sources</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="p">(</span><span class="n">source</span><span class="p">.</span><span class="n">memory</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="p">(</span><span class="n">source</span><span class="p">.</span><span class="n">disk</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"source must own exactly one generation"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">sources</span><span class="p">[</span><span class="n">j</span><span class="p">].</span><span class="n">identity</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">source</span><span class="p">.</span><span class="n">identity</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"duplicate source in view"</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">slot_for</span><span class="p">(</span><span class="n">source</span><span class="p">.</span><span class="n">identity</span><span class="p">())</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">slots_</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">++</span><span class="n">added</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">added</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">limits_</span><span class="p">.</span><span class="n">retained_sources</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">counts_</span><span class="p">.</span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"retained source slots exhausted"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Each source must select exactly one alternative. A null/null source or a
+memory/disk pair is a programming error; duplicate source identities inside one
+state are also rejected. That makes the registration loop's reference counts
+unambiguous. <code>added</code> counts only identities absent from the existing union.</p>
+<p>The subtraction test avoids unchecked addition. Existing invariants guarantee
+<code>counts_.sources &lt;= limits_.retained_sources</code>, so comparing <code>added</code> with the
+remaining slots cannot underflow. Capacity rejection performs no allocation,
+file operation, source freeze, identifier consumption, or serving publication.</p>
+<p>A raw pointer comparison here tests identity only; it does not dereference a
+stale address. The state still owns every source while the registry contains its
+identity. There is no weak-pointer polling or <code>use_count()</code>-based synchronization.</p>
+<p>Append registration, release, and state construction:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/read_view.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">Context::retain</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">slot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slot_for</span><span class="p">(</span><span class="n">source</span><span class="p">.</span><span class="n">identity</span><span class="p">());</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">slot</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">slots_</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">slot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slot_for</span><span class="p">(</span><span class="nb">nullptr</span><span class="p">);</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">slot</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">slots_</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">            </span><span class="n">slots_</span><span class="p">[</span><span class="n">slot</span><span class="p">].</span><span class="n">identity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">source</span><span class="p">.</span><span class="n">identity</span><span class="p">();</span>
+<span class="w">            </span><span class="o">++</span><span class="n">counts_</span><span class="p">.</span><span class="n">sources</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="o">++</span><span class="n">slots_</span><span class="p">[</span><span class="n">slot</span><span class="p">].</span><span class="n">references</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="o">++</span><span class="n">counts_</span><span class="p">.</span><span class="n">snapshots</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">Context::release</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">slot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slot_for</span><span class="p">(</span><span class="n">source</span><span class="p">.</span><span class="n">identity</span><span class="p">());</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">slot</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">slots_</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">slots_</span><span class="p">[</span><span class="n">slot</span><span class="p">].</span><span class="n">references</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">--</span><span class="n">slots_</span><span class="p">[</span><span class="n">slot</span><span class="p">].</span><span class="n">references</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">slots_</span><span class="p">[</span><span class="n">slot</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{};</span>
+<span class="w">            </span><span class="o">--</span><span class="n">counts_</span><span class="p">.</span><span class="n">sources</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">counts_</span><span class="p">.</span><span class="n">snapshots</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="o">--</span><span class="n">counts_</span><span class="p">.</span><span class="n">snapshots</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="n">State</span><span class="o">::</span><span class="n">State</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">Context</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">visible</span><span class="p">,</span>
+<span class="w">             </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">context</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">owner</span><span class="p">)),</span><span class="w"> </span><span class="n">sequence</span><span class="p">(</span><span class="n">visible</span><span class="p">),</span><span class="w"> </span><span class="n">count</span><span class="p">(</span><span class="n">sources</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">held</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"view source bound"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">sources</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">sources</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">held</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="p">}</span>
+<span class="n">State</span><span class="o">::~</span><span class="n">State</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">context</span><span class="o">-&gt;</span><span class="n">release</span><span class="p">(</span><span class="n">sources</span><span class="p">());</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">State</span><span class="o">::</span><span class="n">activate</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">sources</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">source</span><span class="p">.</span><span class="n">memory</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">source</span><span class="p">.</span><span class="n">memory</span><span class="o">-&gt;</span><span class="n">table</span><span class="p">().</span><span class="n">frozen</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">context</span><span class="o">-&gt;</span><span class="n">retain</span><span class="p">(</span><span class="n">sources</span><span class="p">());</span>
+<span class="w">    </span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>retain</code> runs only after a successful preflight and with no intervening reentrant
+operation. Therefore a free registry slot is guaranteed. Its termination guards
+mark internal invariant failures, not ordinary admission errors; ordinary pressure
+was already reported by <code>check_admission</code>. The maximum reference count for a
+source is the maximum admitted state count, 32, not the number of handle copies.</p>
+<p><code>activate</code> additionally verifies that every captured memtable is actually frozen.
+A conversion to <code>shared_ptr&lt;const WalMemTable&gt;</code> did not freeze it. This guard catches
+a capture implementation that forgets to rotate before publication.</p>
+<p>A state's destructor unregisters while it still owns its sources and context.
+The member destructors then release those owners. Because no callback or thread
+can observe this intermediate cleanup, counters and ownership change as one
+synchronous operation from the caller's perspective. The cache may retain its own
+blocks after a source dies; those blocks remain charged under the context.</p>
+<p>Leave <code>namespace read_detail</code> open here: Part 2 appends <code>Position</code>, <code>Scan</code>, and
+all remaining definitions to this same file. Do not add a closing namespace yet.</p>
+<h2 id="move-the-directory-and-cache-into-the-shared-context">Move the directory and cache into the shared context</h2>
+<p>Replace <code>include/strata/storage/database.hpp</code> in its entirety with the following
+blocks. Existing write, rotation, flush, manifest, and diagnostic contracts remain.
+The constructor now takes <code>shared_ptr&lt;Budget&gt;</code> rather than <code>Budget&amp;</code>. There is no
+borrowed overload that would pretend a stack ledger has acquired shared ownership.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/database.hpp — replace entire header</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_STORAGE_DATABASE_HPP</span>
+<span class="cp">#define STRATA_STORAGE_DATABASE_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/io/directory.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/manifest.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/wal.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/read_view.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string_view&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">DatabaseOpen</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">create</span><span class="p">,</span><span class="w"> </span><span class="n">recover</span><span class="w"> </span><span class="p">};</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">DatabaseOptions</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">arena_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_slots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">512</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+<span class="w">    </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">table</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">io</span><span class="o">::</span><span class="n">SyncMode</span><span class="w"> </span><span class="n">sync_mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">SyncMode</span><span class="o">::</span><span class="n">file</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadLimits</span><span class="w"> </span><span class="n">reads</span><span class="p">{};</span>
+<span class="p">};</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">InstallHook</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">Function</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="p">);</span>
+<span class="w">    </span><span class="n">Function</span><span class="w"> </span><span class="n">function</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">context</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="w"> </span><span class="n">stage</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">function</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">function</span><span class="p">(</span><span class="n">context</span><span class="p">,</span><span class="w"> </span><span class="n">stage</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>ReadLimits</code> is appended to the existing options. Defaults admit 16 distinct
+states and 64 retained source identities. These are independent of the four-log
+and sixteen-table serving caps. A request can fail any of these bounds; a source
+slot is not a byte reservation and cannot override the shared memory budget.</p>
+<p>The database now owns <code>context_</code> instead of owning its directory/cache directly:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/database.hpp — replace entire header</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">Database</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">Database</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">directory</span><span class="p">,</span>
+<span class="w">             </span><span class="n">DatabaseOpen</span><span class="w"> </span><span class="n">mode</span><span class="p">,</span><span class="w"> </span><span class="n">DatabaseOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{},</span><span class="w"> </span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{});</span>
+<span class="w">    </span><span class="n">Database</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Database</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Database</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Database</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Database</span><span class="p">(</span><span class="n">Database</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Database</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">Database</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="p">[[</span><span class="na">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">WriteResult</span><span class="w"> </span><span class="n">write</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">changes</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">OwnedEntry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">get</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadView</span><span class="w"> </span><span class="nf">snapshot</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadRetention</span><span class="w"> </span><span class="nf">retention</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">retention</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">rotate</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">flush_oldest</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">sequence</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">poisoned</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">poisoned_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">Manifest</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">manifest</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">manifest_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">Manifest</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">manifest</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">orphans_at_open</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">orphans_at_open_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">require_healthy</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">take_id</span><span class="p">();</span>
+<span class="w">    </span><span class="n">Manifest</span><span class="w"> </span><span class="nf">next_manifest</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">install</span><span class="p">(</span><span class="n">Manifest</span><span class="w"> </span><span class="n">candidate</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">create</span><span class="p">();</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">recover</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">WalMemTable</span><span class="o">&gt;</span><span class="w"> </span><span class="n">open_log</span><span class="p">(</span><span class="n">LogRecord</span><span class="w"> </span><span class="n">record</span><span class="p">,</span><span class="w"> </span><span class="n">WalOpen</span><span class="w"> </span><span class="n">mode</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="w"> </span><span class="n">open_table</span><span class="p">(</span><span class="n">TableRecord</span><span class="w"> </span><span class="n">record</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Context</span><span class="o">&gt;</span><span class="w"> </span><span class="n">context_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">DatabaseOptions</span><span class="w"> </span><span class="n">options_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Manifest</span><span class="w"> </span><span class="n">manifest_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">WalMemTable</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_logs</span><span class="o">&gt;</span><span class="w"> </span><span class="n">logs_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="o">&gt;</span><span class="w"> </span><span class="n">tables_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">next_id_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">orphans_at_open_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">poisoned_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::storage</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The <code>budget_</code> reference is convenient for unchanged lower-level calls. It now
+borrows from <code>context_-&gt;budget</code>, and <code>context_</code> is declared first. The database
+cannot outlive its own context owner, including during member cleanup.</p>
+<p>In <code>src/storage/database.cpp</code>, replace the <strong>complete constructor</strong> with:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/database.cpp — replace constructor</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">Database</span><span class="o">::</span><span class="n">Database</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">directory</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">DatabaseOpen</span><span class="w"> </span><span class="n">mode</span><span class="p">,</span><span class="w"> </span><span class="n">DatabaseOptions</span><span class="w"> </span><span class="n">options</span><span class="p">,</span><span class="w"> </span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">context_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Context</span><span class="o">&gt;</span><span class="p">(</span>
+<span class="w">          </span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Context</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">},</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">directory</span><span class="p">,</span>
+<span class="w">          </span><span class="n">options</span><span class="p">.</span><span class="n">cache_slots</span><span class="p">,</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">cache_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">reads</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">budget_</span><span class="p">(</span><span class="o">*</span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">budget</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">(</span><span class="n">options</span><span class="p">),</span><span class="w"> </span><span class="n">hook_</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">arena_bytes</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">memory</span><span class="o">::</span><span class="n">Arena</span><span class="o">::</span><span class="n">chunk_charge</span><span class="p">()</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">sync_mode</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">SyncMode</span><span class="o">::</span><span class="n">file</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">sync_mode</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">SyncMode</span><span class="o">::</span><span class="n">full_device</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid database options"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">inventory</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">directory</span><span class="p">.</span><span class="n">inventory</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">inventory</span><span class="p">.</span><span class="n">largest_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">overflow_error</span><span class="p">(</span><span class="s">"observed file identity exhausts namespace"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">next_id_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">inventory</span><span class="p">.</span><span class="n">largest_id</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">mode</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">DatabaseOpen</span><span class="o">::</span><span class="no">create</span><span class="p">:</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">inventory</span><span class="p">.</span><span class="n">manifest</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">inventory</span><span class="p">.</span><span class="n">numbered_files</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"create requires no existing engine files"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">create</span><span class="p">();</span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">DatabaseOpen</span><span class="o">::</span><span class="no">recover</span><span class="p">:</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">inventory</span><span class="p">.</span><span class="n">manifest</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"authoritative MANIFEST missing"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">recover</span><span class="p">();</span>
+<span class="w">        </span><span class="n">orphans_at_open_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">inventory</span><span class="p">.</span><span class="n">numbered_files</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">manifest_</span><span class="p">.</span><span class="n">table_count</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">manifest_</span><span class="p">.</span><span class="n">log_count</span><span class="p">;</span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">default</span><span class="o">:</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid database open mode"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Both the allocator and constructor arguments receive copies of the same budget
+handle. Do not pass <code>std::move(budget)</code> to one argument while another argument
+still needs to copy it: argument evaluation order would make that brittle.
+Inventory, create/recover policy, namespace high-water, and orphan accounting
+are unchanged. Only their owning context moved.</p>
+<p>Replace the complete <code>open_log</code> definition with:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/database.cpp — replace open_log</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">WalMemTable</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Database</span><span class="o">::</span><span class="n">open_log</span><span class="p">(</span><span class="n">LogRecord</span><span class="w"> </span><span class="n">record</span><span class="p">,</span><span class="w"> </span><span class="n">WalOpen</span><span class="w"> </span><span class="n">mode</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">file_name</span><span class="p">(</span><span class="n">record</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">FileKind</span><span class="o">::</span><span class="n">log</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">opened</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">directory</span><span class="p">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">mode</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">WalOpen</span><span class="o">::</span><span class="n">create</span>
+<span class="w">        </span><span class="o">?</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">OpenMode</span><span class="o">::</span><span class="n">create_new</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">OpenMode</span><span class="o">::</span><span class="n">read_write</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">opened</span><span class="p">.</span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">wal_format</span><span class="o">::</span><span class="n">max_log_bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"WAL file cap"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">WalMemTable</span><span class="o">&gt;</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">WalMemTable</span><span class="o">&gt;</span><span class="p">{</span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">budget</span><span class="p">},</span>
+<span class="w">        </span><span class="n">budget_</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">opened</span><span class="p">.</span><span class="n">file</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">arena_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">mode</span><span class="p">,</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">sync_mode</span><span class="p">,</span>
+<span class="w">        </span><span class="n">record</span><span class="p">.</span><span class="n">base</span><span class="p">,</span><span class="w"> </span><span class="n">mode</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">WalOpen</span><span class="o">::</span><span class="n">recover_sealed</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">end</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The WAL object's control storage retains the budget; its internal memtable still
+borrows the same ledger. The file is still opened in its manifest-prescribed role.
+Sealed replay still requires the exact end from Chapter 11—snapshot lifetime does
+not relax persistence validation.</p>
+<p>Replace the complete <code>open_table</code> definition with:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/database.cpp — replace open_table</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Database</span><span class="o">::</span><span class="n">open_table</span><span class="p">(</span><span class="n">TableRecord</span><span class="w"> </span><span class="n">record</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">file_name</span><span class="p">(</span><span class="n">record</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">FileKind</span><span class="o">::</span><span class="n">table</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">opened</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">directory</span><span class="p">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">OpenMode</span><span class="o">::</span><span class="n">read_only</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">opened</span><span class="p">.</span><span class="n">bytes</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"table length differs from manifest"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// Durable IDs name files. Cache IDs name bindings inside this cache instance.</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">cache_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">cache</span><span class="p">.</span><span class="n">new_file_id</span><span class="p">();</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">reader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="p">{</span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">budget</span><span class="p">},</span>
+<span class="w">        </span><span class="n">budget_</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">opened</span><span class="p">.</span><span class="n">file</span><span class="p">),</span><span class="w"> </span><span class="n">opened</span><span class="p">.</span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">cache</span><span class="p">,</span><span class="w"> </span><span class="n">cache_id</span><span class="p">);</span>
+<span class="w">    </span><span class="n">reader</span><span class="o">-&gt;</span><span class="n">verify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">smallest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">largest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">reader</span><span class="o">-&gt;</span><span class="n">begin</span><span class="p">();</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">valid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">sequence</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">entry</span><span class="p">().</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">sequence</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">base</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">sequence</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">end</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"table sequence outside manifest interval"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">smallest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">smallest</span><span class="p">,</span><span class="w"> </span><span class="n">sequence</span><span class="p">);</span>
+<span class="w">        </span><span class="n">largest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">max</span><span class="p">(</span><span class="n">largest</span><span class="p">,</span><span class="w"> </span><span class="n">sequence</span><span class="p">);</span>
+<span class="w">        </span><span class="n">cursor</span><span class="p">.</span><span class="n">next</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">record</span><span class="p">.</span><span class="n">end</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">base</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">smallest</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">largest</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">end</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"table interval endpoints missing"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">reader</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The reader borrows the context's cache, while its containing read state retains
+that context. File IDs and cache IDs remain different domains. Full verification,
+interval endpoints, and sequence membership are unchanged; this is not permission
+to adopt a convenient orphan table.</p>
+<p>In all <strong>remaining definitions</strong> in <code>src/storage/database.cpp</code>, replace each
+<code>directory_.</code> member access with <code>context_-&gt;directory.</code>. This updates <code>install</code>,
+<code>create</code>, <code>recover</code>, and flush output creation without changing their ordering.
+The three replacement functions above already use the new spelling. This exact
+mechanical edit is safe to repeat:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — redirect the remaining directory accesses</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>python3<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'PYEDIT'</span>
+<span class="s">from pathlib import Path</span>
+<span class="s">path = Path("src/storage/database.cpp")</span>
+<span class="s">source = path.read_text()</span>
+<span class="s">source = source.replace("directory_.", "context_-&gt;directory.")</span>
+<span class="s">path.write_text(source)</span>
+<span class="s">PYEDIT</span>
+</code></pre></figure>
+<p>Do not change <code>install</code>'s synchronization barriers, <code>rotate</code>'s poison handling,
+or <code>flush_oldest</code>'s ordered source retirement. All other definitions stay as in
+Chapter 11. The old cache field had references only in the constructor and
+<code>open_table</code>, both fully replaced above.</p>
+<h2 id="capture-before-the-effectful-rotation-publish-after-it">Capture before the effectful rotation, publish after it</h2>
+<p>Add the following complete method immediately before the closing
+<code>strata::storage</code> namespace in <code>src/storage/database.cpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/database.cpp — add snapshot</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">ReadView</span><span class="w"> </span><span class="nf">Database::snapshot</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_healthy</span><span class="p">();</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">manifest_</span><span class="p">.</span><span class="n">log_count</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">freeze</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">logs_</span><span class="p">[</span><span class="n">active</span><span class="p">]</span><span class="o">-&gt;</span><span class="n">table</span><span class="p">().</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">freeze</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">manifest_</span><span class="p">.</span><span class="n">log_count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_logs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"sealed-log slots exhausted"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Source</span><span class="p">,</span><span class="w"> </span><span class="n">read_detail</span><span class="o">::</span><span class="n">max_sources</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">manifest_</span><span class="p">.</span><span class="n">table_count</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">sources</span><span class="p">[</span><span class="n">count</span><span class="o">++</span><span class="p">].</span><span class="n">disk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tables_</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">manifest_</span><span class="p">.</span><span class="n">log_count</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">active</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">freeze</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">sources</span><span class="p">[</span><span class="n">count</span><span class="o">++</span><span class="p">].</span><span class="n">memory</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">logs_</span><span class="p">[</span><span class="n">i</span><span class="p">];</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">captured</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">read_detail</span><span class="o">::</span><span class="n">Source</span><span class="o">&gt;</span><span class="p">{</span><span class="n">sources</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">count</span><span class="p">};</span>
+<span class="w">    </span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">check_admission</span><span class="p">(</span><span class="n">captured</span><span class="p">);</span><span class="w">  </span><span class="c1">// No allocation, I/O, sealing, or ID consumption.</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">(</span>
+<span class="w">        </span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">{</span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">budget</span><span class="p">},</span>
+<span class="w">        </span><span class="n">context_</span><span class="p">,</span><span class="w"> </span><span class="n">sequence</span><span class="p">(),</span><span class="w"> </span><span class="n">captured</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">freeze</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">rotate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1">// Prepare replacement writer before sealing/publication.</span>
+<span class="w">    </span><span class="n">state</span><span class="o">-&gt;</span><span class="n">activate</span><span class="p">();</span><span class="w">              </span><span class="c1">// No allocation and no user callback after rotation.</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ReadView</span><span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">state</span><span class="p">)};</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>First inspect the active table. An empty active table contributes no records and
+need not be rotated or captured. Every sealed predecessor is retained. If the
+active table is nonempty, the pending state includes that owner but remains
+private until rotation has made it immutable.</p>
+<p>The fixed array copies owning handles on the stack. It does not copy row payloads.
+Preflight counts the union before allocating a state; the state itself is then
+allocated and populated <strong>before</strong> rotation. Chapter 11's <code>rotate</code> prepares the
+replacement WAL/memtable owner before sealing the old one, synchronizes the
+required files, installs authority, and publishes the replacement by nonthrowing
+owner moves. The data sequence does not change during this maintenance.</p>
+<p>The replacement owner is prepared, not a promise of unlimited future write
+capacity. Its empty arena allocates chunks lazily; a subsequent batch can still
+be definitely rejected for lack of charged memory. This distinction keeps
+&quot;prepared replacement&quot; separate from an invented guarantee about future loads.</p>
+<p>After <code>rotate</code> succeeds, <code>activate</code> and the conversion/move into <code>ReadView</code> need
+no allocation, I/O, or user callback. Thus there is no late state-allocation failure
+after a successfully installed freeze boundary. Part 3 arms the next allocation
+at <code>manifest-closed</code> to check that property directly.</p>
+<table>
+<thead>
+<tr>
+<th>Failure location</th>
+<th>Returned view</th>
+<th>Database behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Retention cap or no spare log slot</td>
+<td>None</td>
+<td>No change; remains usable</td>
+</tr>
+<tr>
+<td>State allocation before rotation</td>
+<td>None</td>
+<td>No change; remains usable</td>
+</tr>
+<tr>
+<td>Rotation after entering its effectful region</td>
+<td>None</td>
+<td>Poisoned; destroy and reopen</td>
+</tr>
+<tr>
+<td>Successful rotation and activation</td>
+<td>Complete immutable view</td>
+<td>New active writer is usable</td>
+</tr>
+</tbody>
+</table>
+<p>An existing view remains readable when a later database operation is poisoned:
+it owns an earlier sealed source set. It is not allowed to consult that database's
+possibly stale current owner arrays. If a view still holds the directory lock,
+release it before reopening. An error does not implicitly revoke another caller's
+read handle.</p>
+<p>This capture operation may perform durable log rotation and therefore is not an
+O(1), allocation-free snapshot promise. Repeated captures without intervening
+writes avoid rotation but still allocate distinct states and consume view slots.
+Batching read requests or reusing a view can amortize that explicit cost later.</p>
+<p>The full on-disk formats are unchanged. No obsolete file is deleted here, no
+concurrent reader/writer safety is claimed, and no new power-loss guarantee is
+inferred from ownership. Continue with the actual merge in
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-12-part-2.html">Part 2</a>.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-11-part-3.html"><small>Previous · Chapter 11 · Part 3</small><span>Failure cases across process lifetimes</span></a><a href="chapter-12-part-2.html"><small>Next · Chapter 12 · Part 2</small><span>Merge versions without borrowing dead bytes</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 12 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-own-a-complete-read-boundary">Part 1 — Own a complete read boundary</a></li><li class="toc-h2"><a href="#what-the-view-promises">What the view promises</a></li><li class="toc-h2"><a href="#draw-every-ownership-edge-including-the-ledger">Draw every ownership edge, including the ledger</a></li><li class="toc-h2"><a href="#let-the-allocator-retain-its-budget">Let the allocator retain its budget</a></li><li class="toc-h2"><a href="#a-source-set-has-a-fixed-shape">A source set has a fixed shape</a></li><li class="toc-h2"><a href="#separate-a-repeatable-view-from-a-mutable-cursor">Separate a repeatable view from a mutable cursor</a></li><li class="toc-h2"><a href="#count-the-union-not-the-number-of-pointer-copies">Count the union, not the number of pointer copies</a></li><li class="toc-h2"><a href="#move-the-directory-and-cache-into-the-shared-context">Move the directory and cache into the shared context</a></li><li class="toc-h2"><a href="#capture-before-the-effectful-rotation-publish-after-it">Capture before the effectful rotation, publish after it</a></li></ul></aside>
+</div></body></html>

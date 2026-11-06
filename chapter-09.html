@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 9 · Part 1 — Memory budgets and a pinned block cache · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-09.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html" aria-current="page"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 9 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/14">Read on GitHub</a><a href="source/chapter-09.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-charge-allocation-not-logical-contents">Part 1 — Charge allocation, not logical contents</a></li><li class="toc-h2"><a href="#decide-exactly-what-a-byte-limit-promises">Decide exactly what a byte limit promises</a></li><li class="toc-h2"><a href="#teach-the-ledger-to-own-a-reservation">Teach the ledger to own a reservation</a></li><li class="toc-h2"><a href="#put-the-accounting-boundary-where-capacity-is-chosen">Put the accounting boundary where capacity is chosen</a></li><li class="toc-h2"><a href="#charge-an-arena-chunk-once-including-its-header">Charge an arena chunk once, including its header</a></li><li class="toc-h2"><a href="#pass-the-ledger-through-memtables-and-builders">Pass the ledger through memtables and builders</a></li><li class="toc-h2"><a href="#predict-the-next-allocation-before-running-it">Predict the next allocation before running it</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-9-memory-budgets-and-a-pinned-block-cache">Chapter 9 — Memory budgets and a pinned block cache</h1>
+<h2 id="part-1-charge-allocation-not-logical-contents">Part 1 — Charge allocation, not logical contents</h2>
+<p>A block size limit does not bound a process. Chapter 8 limits each table cursor,
+but a hundred cursors can still allocate a hundred buffers. A cache introduces
+another distinction: the cache may stop retaining a block while a reader still
+needs its bytes. Eviction policy and allocation lifetime cannot be the same thing.</p>
+<p>We will give the engine's dynamic storage a common byte ledger, then build a
+synchronous cache whose readers share immutable blocks. A full cache is not an
+I/O error. It may return a separately charged block without retaining it. A full
+<strong>memory budget</strong>, however, must reject an allocation; bypass is not permission
+to allocate outside the ledger.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Reserve before allocating; charge vector capacity and allocation-control storage;
+implement a stateful standard-library allocator; share immutable buffers through
+owning pins; maintain explicit recency links; evict only unpinned entries; connect
+cache misses to the real table validator; diagnose logical and memory failures
+separately.</p>
+</blockquote>
+<p><strong>Prerequisites:</strong> all code through the three parts of
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-08.html">Chapter 8</a>, especially
+its <code>TableReader::Cursor::load</code>, and the ownership, exception-safety, and template
+material in Chapters 3–5. Keep the eleven passing CTest entries. The code remains
+in the same <code>work/strata</code> tree. There is no log, database manifest, or thread pool
+in this chapter.</p>
+<p><strong>Implementation allocation: 3.5 hours for all three parts together.</strong> Allocate
+1.0 hour to the ledger, allocator, and existing allocation boundaries; 1.5 to
+pins, recency, admission, and reader integration; and 1.0 to pressure tests,
+debugging, and the deliberately incorrect recency variation. Reading is separate.</p>
+<p>Part 1 implements the ledger and charges arenas/builders. Part 2 implements the
+cache. <a href="https://25d-228.github.io/cplusplus-learning/chapter-09-part-3.html">Part 3</a>
+updates the table reader and supplies the complete test program and CMake changes.
+Finish all three parts before rebuilding: the API migration is deliberately
+explicit rather than preserving a silent, uncharged compatibility overload.</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — new memory and cache files</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>include/strata/memory<span class="w"> </span>include/strata/storage<span class="w"> </span>src/memory<span class="w"> </span>src/storage<span class="w"> </span>tests
+</code></pre></figure>
+<p>Create <code>include/strata/memory/budget.hpp</code>, <code>src/memory/budget.cpp</code>,
+<code>include/strata/storage/block_cache.hpp</code>, <code>src/storage/block_cache.cpp</code>,
+<code>tests/cache_file_ops.hpp</code>, and <code>tests/block_cache.cpp</code>. Repeated filename-labelled
+blocks for these <strong>new files</strong> append in reading order. Edits to the existing
+arena, memtable, and table files are separately labelled as replacements. Do not
+append a second definition of an existing function.</p>
+<h2 id="decide-exactly-what-a-byte-limit-promises">Decide exactly what a byte limit promises</h2>
+<p>Let <span class="math-input" data-display="false">L</span> be the ledger limit in bytes, <span class="math-input" data-display="false">R</span> the bytes reserved but not yet allocated,
+and <span class="math-input" data-display="false">A</span> the bytes charged to live allocations. Define admitted usage <span class="math-input" data-display="false">U</span> by</p>
+<div class="math-input" data-display="true">U = R + A, \qquad 0 \le U \le L.</div>
+<p>An allocation request of <span class="math-input" data-display="false">n</span> bytes is admitted only when <span class="math-input" data-display="false">n \le L-U</span>. Test that
+subtraction, rather than computing an unchecked <span class="math-input" data-display="false">U+n</span> first. Once admission
+succeeds, adding <span class="math-input" data-display="false">n</span> is safe because the result is at most the representable limit
+<span class="math-input" data-display="false">L</span>.</p>
+<p>A <strong>lease</strong> owns a reservation. Its destructor returns that reservation unless the
+allocator has converted it into an allocation charge. A lease is move-only: there
+must not be two destructors returning the same reserved bytes. An allocator-owned
+charge instead lives until the matching <code>deallocate</code> call.</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th style="text-align:right">Reserved bytes</th>
+<th style="text-align:right">Allocated bytes</th>
+<th style="text-align:right">Admitted usage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Start, with a 16-byte limit</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+</tr>
+<tr>
+<td>Reserve 12</td>
+<td style="text-align:right">12</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">12</td>
+</tr>
+<tr>
+<td>Attempt to reserve 5</td>
+<td style="text-align:right">12</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">12; rejected</td>
+</tr>
+<tr>
+<td>Allocate the admitted 12 successfully</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">12</td>
+<td style="text-align:right">12</td>
+</tr>
+<tr>
+<td>Deallocate those 12</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+</tr>
+</tbody>
+</table>
+<p>If the underlying allocation throws, the lease returns the 12 reserved bytes.
+No allocation charge was installed. The high-water mark records <strong>admitted usage</strong>,
+including such temporary reservations, not merely successfully allocated memory.</p>
+<p>The accounting domain is specific. We will charge every allocation made through
+our allocator: full arena chunks, builder workspaces, reader metadata, cached and
+bypass frame capacity, cache slot storage, and the storage requested for each shared
+block's object/control state. A node inside an already charged arena chunk is not
+charged again. A second pin to an existing block is not another block allocation.</p>
+<p>This is <strong>not</strong> a cap on the operating system's process-memory measurement.
+Allocator bookkeeping and size-class rounding outside requested object storage,
+fixed stack objects, file-system/error-message internals, runtime libraries,
+and the operating system's file cache are outside this ledger. Test fixtures and
+caller-owned input arrays are outside it too. Later subsystems must join the
+ledger explicitly; a naked allocation does not become charged by proximity.
+Leave headroom for excluded storage and measure process memory separately.</p>
+<h2 id="teach-the-ledger-to-own-a-reservation">Teach the ledger to own a reservation</h2>
+<p>A budget outlives every lease and allocation that refers to it. It is neither
+copyable nor movable: copied limits would create competing ledgers, and moving
+its address would invalidate allocator pointers. Put a budget before its users
+in an enclosing scope so reverse destruction releases their allocations first.</p>
+<p>The error type below derives from <code>std::bad_alloc</code>, the allocation-failure family
+introduced in Chapter 4. Its <code>what()</code> returns a fixed string; constructing this
+particular error does not need a dynamically allocated explanatory message.
+A caller may catch <code>BudgetExceeded</code> specifically, or catch <code>std::bad_alloc</code> to
+handle both admission refusal and underlying allocation failure.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/budget.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_MEMORY_BUDGET_HPP</span>
+<span class="cp">#define STRATA_MEMORY_BUDGET_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;exception&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;new&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;type_traits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">memory</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Allocator</span><span class="p">;</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">BudgetExceeded</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">what</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s">"memory budget exhausted"</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>Lease</code> is nested to keep its relationship to the ledger explicit. Its default
+state owns nothing. <code>friend class Budget</code> permits the budget to create a nonempty
+lease, while the template friend permits an allocator specialization to commit
+one. Neither operation is public to an arbitrary caller. Friendship grants
+access; it does not extend an object's lifetime.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/budget.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">Budget</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">class</span><span class="w"> </span><span class="nc">Lease</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">public</span><span class="o">:</span>
+<span class="w">        </span><span class="n">Lease</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">        </span><span class="o">~</span><span class="n">Lease</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">Lease</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Lease</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Lease</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Lease</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Lease</span><span class="p">(</span><span class="n">Lease</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Lease</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">Lease</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">        </span><span class="kt">void</span><span class="w"> </span><span class="nf">reset</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">bytes_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">private</span><span class="o">:</span>
+<span class="w">        </span><span class="k">friend</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Budget</span><span class="p">;</span>
+<span class="w">        </span><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span><span class="w"> </span><span class="k">friend</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Allocator</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Lease</span><span class="p">(</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">owner</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">            </span><span class="o">:</span><span class="w"> </span><span class="n">owner_</span><span class="p">(</span><span class="o">&amp;</span><span class="n">owner</span><span class="p">),</span><span class="w"> </span><span class="n">bytes_</span><span class="p">(</span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">        </span><span class="kt">void</span><span class="w"> </span><span class="n">commit_allocation</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Budget</span><span class="o">*</span><span class="w"> </span><span class="n">owner_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">Budget</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">limit</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">limit_</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="o">~</span><span class="n">Budget</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Budget</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Budget</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Budget</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Budget</span><span class="p">(</span><span class="n">Budget</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">Budget</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="p">[[</span><span class="na">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">Lease</span><span class="w"> </span><span class="n">reserve</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">limit</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">limit_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">reserved</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">reserved_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">allocated</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">allocated_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">used</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">reserved_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">allocated_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">peak</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">peak_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">fail_allocation_on</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">ordinal</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">clear_failure</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">fail_after_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span><span class="w"> </span><span class="k">friend</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Allocator</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">before_allocate</span><span class="p">();</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">release_allocation</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">limit_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">reserved_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">allocated_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">peak_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fail_after_</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>There are two different release paths. <code>Lease::reset</code> subtracts from <code>reserved_</code>;
+<code>release_allocation</code> subtracts from <code>allocated_</code>. Mixing them would make a
+plausible total briefly hide an invalid state. Invariant failures in nonthrowing
+cleanup terminate instead of underflowing a counter or throwing a second exception.</p>
+<p>Start the source file with the complete lease implementation:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/budget.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/memory/budget.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">memory</span><span class="w"> </span><span class="p">{</span>
+
+<span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">::</span><span class="n">Lease</span><span class="p">(</span><span class="n">Lease</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">owner_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">owner_</span><span class="p">,</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">bytes_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">bytes_</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">&amp;</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">::</span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">Lease</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="k">this</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="n">owner_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">owner_</span><span class="p">,</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">);</span>
+<span class="w">        </span><span class="n">bytes_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">bytes_</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">::</span><span class="n">reset</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">owner_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes_</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">reserved_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">reserved_</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="n">bytes_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">owner_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="n">bytes_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">::</span><span class="n">commit_allocation</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">owner_</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">bytes_</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">reserved_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">reserved_</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="n">bytes_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">allocated_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">bytes_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">owner_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="n">bytes_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Moving transfers both the owner pointer and the byte count with <code>std::exchange</code>.
+Move assignment first returns the destination's old reservation. Its self-move
+guard preserves the one lease rather than returning and then trying to reclaim
+its own bytes.</p>
+<p><code>commit_allocation</code> changes the classification of bytes, not their total. Since
+the amount is already part of the reservation, adding it to <code>allocated_</code> cannot
+exceed <span class="math-input" data-display="false">L</span>. It then empties the lease. The allocation, rather than that stack
+object, is now responsible for eventual release.</p>
+<p>Complete the source file:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/budget.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">Budget</span><span class="o">::~</span><span class="n">Budget</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">used</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">reserve</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">limit_</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">used</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">BudgetExceeded</span><span class="p">{};</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="p">{};</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">reserved_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span>
+<span class="w">    </span><span class="n">peak_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">max</span><span class="p">(</span><span class="n">peak_</span><span class="p">,</span><span class="w"> </span><span class="n">used</span><span class="p">());</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">Lease</span><span class="p">{</span><span class="o">*</span><span class="k">this</span><span class="p">,</span><span class="w"> </span><span class="n">bytes</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">release_allocation</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">allocated_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">allocated_</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">fail_allocation_on</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">ordinal</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ordinal</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"allocation ordinal is zero"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">fail_after_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ordinal</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">before_allocate</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">fail_after_</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">--*</span><span class="n">fail_after_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">fail_after_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::memory</span>
+</code></pre></figure>
+<p>The failure seam is deliberately small. <code>fail_allocation_on(2)</code> rejects the second
+nonempty, successfully admitted allocator request after arming. Rejected budget
+reservations and zero-size requests do not consume an ordinal. The injected
+failure clears itself, and <code>clear_failure()</code> also cancels an unconsumed ordinal.
+This counts our allocator calls, not all allocations performed by a process.</p>
+<p>A budget destructor with outstanding usage is a lifetime error. It cannot safely
+&quot;fix&quot; the situation by freeing other objects' memory. The explicit termination
+check catches that incorrect destruction order before later deallocators follow
+a dangling budget pointer.</p>
+<p>A manually held lease is <strong>not</strong> a credit automatically consumed by a vector.
+The allocator below reserves for its own request. Holding another lease while
+allocating the same planned bytes would count both reservations. Manual leases
+can hold headroom for a separate operation or, as in our tests, create pressure;
+only the allocator's private commit transfers its lease into its allocation.</p>
+<h2 id="put-the-accounting-boundary-where-capacity-is-chosen">Put the accounting boundary where capacity is chosen</h2>
+<p>Suppose a vector has two elements but capacity ten. Charging two elements misses
+eight allocated slots. Worse, charging before calling <code>reserve(10)</code> with an
+assumed growth policy can disagree with the implementation's actual allocation
+request. A stateful allocator intercepts that request instead.</p>
+<p>An <strong>allocator</strong> is a small object describing how to acquire and return typed
+storage. <code>Allocator&lt;T&gt;::allocate(n)</code> returns storage for <code>n</code> objects of type <code>T</code>;
+it does not call their constructors. Containers perform construction separately.
+<code>deallocate(pointer,n)</code> must use an allocator equal to the one that allocated the
+storage and the matching count. These are caller/container contracts, not bounds
+the deallocator can reconstruct from an arbitrary pointer. See the C++20 draft's
+<a href="https://timsong-cpp.github.io/cppwp/n4861/allocator.requirements">allocator requirements</a>.</p>
+<p>Our state is one borrowed <code>Budget*</code>. The converting constructor accepts
+<code>Allocator&lt;U&gt;</code> and preserves that pointer when the library needs a different
+internal storage type. The <code>value_type</code> alias identifies the requested element
+type. <code>std::allocator_traits</code> supplies standard defaults, including rebinding
+<code>Allocator&lt;T&gt;</code> to <code>Allocator&lt;U&gt;</code>; we do not specialize a standard-library template.</p>
+<p>The <code>propagate_on_container_*</code> aliases are compile-time Boolean types.
+<code>std::true_type</code> has a static <code>value</code> equal to <code>true</code>. They tell a container to
+move/copy/swap allocator state along with the allocation ownership when the named
+operation needs that state. <code>is_always_equal</code> is false because two different
+budgets cannot deallocate each other's charges. Equality compares budget identity,
+not the numeric limits. The relevant rules are in
+<a href="https://timsong-cpp.github.io/cppwp/n4861/allocator.traits.types">allocator traits</a>
+and the <a href="https://timsong-cpp.github.io/cppwp/n4861/container.requirements.general">allocator-aware container requirements</a>.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/budget.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Allocator</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">value_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">propagate_on_container_copy_assignment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">true_type</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">propagate_on_container_move_assignment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">true_type</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">propagate_on_container_swap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">true_type</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">is_always_equal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">false_type</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">Allocator</span><span class="p">(</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">budget_</span><span class="p">(</span><span class="o">&amp;</span><span class="n">budget</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">U</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="n">Allocator</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">budget_</span><span class="p">(</span><span class="o">&amp;</span><span class="n">other</span><span class="p">.</span><span class="n">budget</span><span class="p">())</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="w">    </span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="n">budget_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">[[</span><span class="na">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">allocate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">()</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_array_new_length</span><span class="p">{};</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">lease</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">budget_</span><span class="o">-&gt;</span><span class="n">reserve</span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">));</span>
+<span class="w">        </span><span class="n">budget_</span><span class="o">-&gt;</span><span class="n">before_allocate</span><span class="p">();</span>
+<span class="w">        </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">allocator</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">{}.</span><span class="n">allocate</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<span class="w">        </span><span class="n">lease</span><span class="p">.</span><span class="n">commit_allocation</span><span class="p">();</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">deallocate</span><span class="p">(</span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">pointer</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">allocator</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">{}.</span><span class="n">deallocate</span><span class="p">(</span><span class="n">pointer</span><span class="p">,</span><span class="w"> </span><span class="n">count</span><span class="p">);</span>
+<span class="w">        </span><span class="n">budget_</span><span class="o">-&gt;</span><span class="n">release_allocation</span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">));</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">U</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">budget_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">&amp;</span><span class="n">other</span><span class="p">.</span><span class="n">budget</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">Budget</span><span class="o">*</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<span class="k">using</span><span class="w"> </span><span class="n">Vector</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::memory</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The allocation sequence has four steps. First, reject an overflowing
+<code>count * sizeof(T)</code>. Second, reserve the checked byte count. Third, run the
+failure seam and ask <code>std::allocator&lt;T&gt;</code> for suitably aligned storage. Finally,
+commit the reservation and return the pointer. If either operation in the third
+step throws, stack unwinding returns the reservation. There is no effect to undo
+in the container because it never received a pointer.</p>
+<p>The wrapper delegates raw storage acquisition, not budget policy, to the standard
+allocator. This also avoids accidentally losing support for over-aligned types
+by calling a mismatched raw <code>operator new</code>/<code>operator delete</code> pair. The standard
+allocator's <a href="https://timsong-cpp.github.io/cppwp/n4861/allocator.members">allocation interface</a>
+specifies storage for its element type; the test uses an <code>alignas(64)</code> object.</p>
+<p><code>Vector&lt;T&gt;</code> is only an alias for a standard vector with this allocator. It does
+not implement a second vector. Construct one by passing its ledger explicitly:</p>
+<figure class="code-block"><figcaption><span class="code-title">Usage fragment — charged vector</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">strata</span><span class="o">::</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="w"> </span><span class="n">budget</span><span class="p">{</span><span class="mi">4096</span><span class="p">};</span>
+<span class="n">strata</span><span class="o">::</span><span class="n">memory</span><span class="o">::</span><span class="n">Vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">values</span><span class="p">{</span>
+<span class="w">    </span><span class="n">strata</span><span class="o">::</span><span class="n">memory</span><span class="o">::</span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">}};</span>
+<span class="n">values</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="mi">10</span><span class="p">);</span>
+<span class="n">values</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="mi">7</span><span class="p">);</span>
+<span class="n">values</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="mi">9</span><span class="p">);</span>
+</code></pre></figure>
+<p>For observed capacity <span class="math-input" data-display="false">c</span> and element size <span class="math-input" data-display="false">s=\operatorname{sizeof}(T)</span>, the
+retained element-storage charge is <span class="math-input" data-display="false">c s</span>, not <code>values.size() * s</code>. While a vector
+grows, its old allocation and candidate allocation may coexist; both are charged.
+Clearing elements does not itself release that capacity. The standard's
+<a href="https://timsong-cpp.github.io/cppwp/n4861/vector.capacity">vector capacity rules</a>
+distinguish size, reserve, and reallocation; the implementation must not rely on a
+particular growth factor.</p>
+<p>There is intentionally no default <code>Allocator()</code> constructor. A default-created
+charged vector without an explicit allocator therefore fails to compile. This is
+useful friction: a new engine buffer should choose its budget, not escape it.</p>
+<h2 id="charge-an-arena-chunk-once-including-its-header">Charge an arena chunk once, including its header</h2>
+<p>Chapter 7 already limits an individual arena by <code>sizeof(Chunk)</code>. That protects
+one memtable, not the sum of two memtables and a table builder. Preserve that local
+cap and add the common ledger. <code>Arena::reserved_bytes()</code> keeps its existing name:
+it measures acquired chunk storage, which belongs to <strong>allocated</strong> bytes in the
+new ledger, not to <code>Budget::reserved()</code>.</p>
+<p>In <code>include/strata/memory/arena.hpp</code>, add
+<code>#include &quot;strata/memory/budget.hpp&quot;</code>. Replace the old inline constructor with:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/arena.hpp — replace constructor</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">Arena</span><span class="p">(</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">byte_cap</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">budget_</span><span class="p">(</span><span class="n">budget</span><span class="p">),</span><span class="w"> </span><span class="n">cap_</span><span class="p">(</span><span class="n">byte_cap</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+</code></pre></figure>
+<p>Add <code>Budget&amp; budget_;</code> in the private data members immediately before
+<code>Chunk* head_ = nullptr;</code>. Keep <code>Chunk</code>, the transaction interface, and all other
+members unchanged. The reference does not own the ledger.</p>
+<p>In <code>src/memory/arena.cpp</code>, add explicit <code>&lt;memory&gt;</code> and <code>&lt;type_traits&gt;</code> includes.
+Replace <code>drop_head</code> with this complete function:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/arena.cpp — replace drop_head</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">Arena::drop_head</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Chunk</span><span class="o">*</span><span class="w"> </span><span class="n">old</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">head_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">head_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">old</span><span class="o">-&gt;</span><span class="n">previous</span><span class="p">;</span>
+<span class="w">    </span><span class="n">reserved_</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">Chunk</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">destroy_at</span><span class="p">(</span><span class="n">old</span><span class="p">);</span>
+<span class="w">    </span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">Chunk</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget_</span><span class="p">}.</span><span class="n">deallocate</span><span class="p">(</span><span class="n">old</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Destruction ends the <code>Chunk</code> object's lifetime; deallocation returns its typed
+storage and charge. The old <code>delete old</code> cannot remain: an allocation obtained
+through the allocator must return through that same allocation model.</p>
+<p>Replace the complete <code>Arena::allocate</code> function as follows. The search for space,
+alignment padding, local-cap check, and existing chunk-failure seam are unchanged.
+The new allocation boundary is at the bottom:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/arena.cpp — replace allocate</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="nf">Arena::allocate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">alignment</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">alignment</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">(</span><span class="n">alignment</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">alignment</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">alignment</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="k">alignof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">max_align_t</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"unsupported arena alignment"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">chunk_payload</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"arena request must fit one nonempty chunk"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">try_chunk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="k">this</span><span class="p">,</span><span class="w"> </span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">alignment</span><span class="p">]()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">head_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">padding</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">alignment</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">alignment</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">alignment</span><span class="p">;</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">available</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">chunk_payload</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">padding</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">available</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">available</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">padding</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">auto</span><span class="o">*</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">padding</span><span class="p">;</span>
+<span class="w">        </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">padding</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span>
+<span class="w">        </span><span class="n">used_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">padding</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_chunk</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">Chunk</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">cap_</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">reserved_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">ArenaFull</span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">fail_after_</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">--*</span><span class="n">fail_after_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">fail_after_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_nothrow_default_constructible_v</span><span class="o">&lt;</span><span class="n">Chunk</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="o">*</span><span class="w"> </span><span class="n">fresh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">Chunk</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget_</span><span class="p">}.</span><span class="n">allocate</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">construct_at</span><span class="p">(</span><span class="n">fresh</span><span class="p">);</span>
+<span class="w">    </span><span class="n">fresh</span><span class="o">-&gt;</span><span class="n">previous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">head_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">head_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fresh</span><span class="p">;</span>
+<span class="w">    </span><span class="n">reserved_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">Chunk</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">try_chunk</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>std::construct_at(fresh)</code> starts the object lifetime in acquired storage. Here
+construction is statically known not to throw. That fact justifies the absence of
+a catch/deallocate path between allocation and linking. A future throwing <code>Chunk</code>
+constructor would require such a guard; simply removing the <code>static_assert</code> would
+not be an equivalent change. Construction/destruction are separate from allocation,
+as specified by <a href="https://timsong-cpp.github.io/cppwp/n4861/specialized.construct">construct_at</a>
+and <a href="https://timsong-cpp.github.io/cppwp/n4861/specialized.destroy">destroy_at</a>.</p>
+<p>The chunk is linked only after storage acquisition and construction succeed.
+A failed common-budget admission therefore leaves the list, local counters, and
+transaction checkpoint unchanged. Existing transaction rollback uses <code>drop_head</code>,
+so abandoning a prepared batch now returns both chunk storage and its ledger
+charge. Restoring the bump offset inside a retained chunk does <strong>not</strong> return
+that chunk's charge: the allocation still exists.</p>
+<p>For example, give two arenas local caps of two chunks each but a shared budget
+of one chunk. Once the first arena acquires a chunk, the second must fail before
+linking one, despite being below its own local cap. No count of logical nodes
+would capture that aggregate constraint correctly.</p>
+<h2 id="pass-the-ledger-through-memtables-and-builders">Pass the ledger through memtables and builders</h2>
+<p>In <code>include/strata/storage/memtable.hpp</code>, replace only the constructor declaration:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/memtable.hpp — replace declaration</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">MemTable</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">byte_cap</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">seed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">         </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fixed_height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+</code></pre></figure>
+<p>Replace the complete constructor definition in <code>src/storage/memtable.cpp</code>.
+The node layout, search, preparation, publication, and destruction algorithms stay
+unchanged:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/memtable.cpp — replace constructor</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">MemTable</span><span class="o">::</span><span class="n">MemTable</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">byte_cap</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">seed</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fixed_height</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">arena_</span><span class="p">(</span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">byte_cap</span><span class="p">),</span><span class="w"> </span><span class="n">seed_</span><span class="p">(</span><span class="n">seed</span><span class="p">),</span><span class="w"> </span><span class="n">fixed_height_</span><span class="p">(</span><span class="n">fixed_height</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="k">alignof</span><span class="p">(</span><span class="n">Node</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="k">alignof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">max_align_t</span><span class="p">));</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">Node</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">memory</span><span class="o">::</span><span class="n">Arena</span><span class="o">::</span><span class="n">chunk_payload</span><span class="p">);</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_nothrow_default_constructible_v</span><span class="o">&lt;</span><span class="n">Node</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_trivially_destructible_v</span><span class="o">&lt;</span><span class="n">Node</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">seed</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">fixed_height</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_height</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid height generator configuration"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The table builder has two dynamic workspaces. In <code>include/strata/storage/table.hpp</code>,
+add <code>#include &quot;strata/storage/block_cache.hpp&quot;</code>; Part 2 supplies that header and
+it includes the budget definitions. Change <code>block_</code> and <code>metadata_</code> <strong>inside
+TableBuilder</strong> from <code>std::vector&lt;std::byte&gt;</code> to <code>memory::Vector&lt;std::byte&gt;</code>.
+Change the constructor and free-function declarations to:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/table.hpp — replace builder declarations</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="c1">// Inside TableBuilder's public section:</span>
+<span class="n">TableBuilder</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{});</span>
+
+<span class="c1">// At namespace scope, where write_table was already declared:</span>
+<span class="n">TableInfo</span><span class="w"> </span><span class="nf">write_table</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="n">table</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{});</span>
+</code></pre></figure>
+<p>Replace the constructor in <code>src/storage/table.cpp</code> with the following complete
+function. Both workspace allocations precede the first write to the output file.
+Failure during the second allocation destroys the first vector automatically:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp — replace builder constructor</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">TableBuilder</span><span class="o">::</span><span class="n">TableBuilder</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">file_</span><span class="p">(</span><span class="n">file</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">(</span><span class="n">validate_options</span><span class="p">(</span><span class="n">options</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">block_</span><span class="p">(</span><span class="n">options_</span><span class="p">.</span><span class="n">block_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">memory</span><span class="o">::</span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">}),</span>
+<span class="w">      </span><span class="n">metadata_</span><span class="p">(</span><span class="n">metadata_size</span><span class="p">(</span><span class="n">options_</span><span class="p">.</span><span class="n">block_limit</span><span class="p">,</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">),</span>
+<span class="w">                </span><span class="n">memory</span><span class="o">::</span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">})</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="o">&gt;</span><span class="w"> </span><span class="n">probe</span><span class="p">{};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">file_</span><span class="p">.</span><span class="n">read_up_to</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"builder requires a new empty file"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">header_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">header</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">header_magic</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">header_magic</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">header</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">block_bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">last</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="mi">20</span><span class="p">)));</span>
+<span class="w">    </span><span class="n">file_</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">header</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Finally replace the <code>write_table</code> definition. It still traverses the frozen
+memtable directly; the new argument changes allocation ownership, not the format
+or streaming algorithm:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp — replace write_table</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">TableInfo</span><span class="w"> </span><span class="nf">write_table</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span>
+<span class="w">                      </span><span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="n">table</span><span class="p">,</span><span class="w"> </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">table</span><span class="p">.</span><span class="n">frozen</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"flush input must be frozen"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">TableBuilder</span><span class="w"> </span><span class="n">builder</span><span class="p">{</span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">options</span><span class="p">};</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">table</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">valid</span><span class="p">();</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">next</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">builder</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">entry</span><span class="p">());</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>These changes do not alter table bytes. The existing independent Python decoder
+will continue to check the same format. A successful <code>finish</code> still does not
+install a table durably or release the builder's workspaces early; they remain
+owned until the builder is destroyed.</p>
+<p>The important API decision is the first argument. A caller constructs one ledger
+for the intended engine domain and passes it to memtables, builders, readers, and
+the cache. There is no process-global fallback and no &quot;unlimited if omitted&quot;
+mode. The fixture-only migration in Part 3 supplies a shared ledger to the older
+tests without changing their assertions.</p>
+<h2 id="predict-the-next-allocation-before-running-it">Predict the next allocation before running it</h2>
+<p>Consider a vector that owns 80 charged bytes under a 100-byte ledger. It needs a
+new 160-byte allocation to grow. The request fails: there are only 20 admitted
+bytes available, and preserving the old allocation requires coexistence during
+preparation. Even an eventual 90-byte replacement would fail under these exact
+conditions. A final state that fits does not prove that its transition fits.</p>
+<p>A cache has the same issue. Evicting first could free enough space, but then a
+read or validation failure would have already discarded useful data. In Part 2
+we deliberately choose <strong>prepare before eviction</strong>, account for that peak, and
+make failure preserve the old cache contents.</p>
+<p>Continue with <a href="https://25d-228.github.io/cplusplus-learning/chapter-09-part-2.html">Part 2 — Recency, pins, and admission</a>.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-08-part-3.html"><small>Previous · Chapter 8 · Part 3</small><span>Verification and native checks</span></a><a href="chapter-09-part-2.html"><small>Next · Chapter 9 · Part 2</small><span>Recency, pins, and admission</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 9 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-charge-allocation-not-logical-contents">Part 1 — Charge allocation, not logical contents</a></li><li class="toc-h2"><a href="#decide-exactly-what-a-byte-limit-promises">Decide exactly what a byte limit promises</a></li><li class="toc-h2"><a href="#teach-the-ledger-to-own-a-reservation">Teach the ledger to own a reservation</a></li><li class="toc-h2"><a href="#put-the-accounting-boundary-where-capacity-is-chosen">Put the accounting boundary where capacity is chosen</a></li><li class="toc-h2"><a href="#charge-an-arena-chunk-once-including-its-header">Charge an arena chunk once, including its header</a></li><li class="toc-h2"><a href="#pass-the-ledger-through-memtables-and-builders">Pass the ledger through memtables and builders</a></li><li class="toc-h2"><a href="#predict-the-next-allocation-before-running-it">Predict the next allocation before running it</a></li></ul></aside>
+</div></body></html>

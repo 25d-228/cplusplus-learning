@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 8 · Part 1 — Indexed immutable tables · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-08.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html" aria-current="page"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 8 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/11">Read on GitHub</a><a href="source/chapter-08.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-a-bounded-format-and-a-streaming-builder">Part 1 — A bounded format and a streaming builder</a></li><li class="toc-h3"><a href="#the-interface-we-already-have">The interface we already have</a></li><li class="toc-h2"><a href="#specify-bytes-before-writing-a-class">Specify bytes before writing a class</a></li><li class="toc-h2"><a href="#put-a-ceiling-on-every-file-controlled-count">Put a ceiling on every file-controlled count</a></li><li class="toc-h2"><a href="#own-buffers-borrow-the-output-file">Own buffers, borrow the output file</a></li><li class="toc-h2"><a href="#a-checksum-is-an-implemented-recurrence">A checksum is an implemented recurrence</a></li><li class="toc-h2"><a href="#hash-the-user-key-not-its-current-version">Hash the user key, not its current version</a></li><li class="toc-h3"><a href="#estimate-selectivity-without-turning-it-into-a-guarantee">Estimate selectivity without turning it into a guarantee</a></li><li class="toc-h2"><a href="#decode-internal-keys-before-comparing-them">Decode internal keys before comparing them</a></li><li class="toc-h2"><a href="#frame-writes-without-concatenating-buffers">Frame writes without concatenating buffers</a></li><li class="toc-h2"><a href="#check-configuration-before-allocating-workspaces">Check configuration before allocating workspaces</a></li><li class="toc-h2"><a href="#flush-a-block-only-after-its-last-entry-is-known">Flush a block only after its last entry is known</a></li><li class="toc-h2"><a href="#finish-the-directory-before-writing-the-footer">Finish the directory before writing the footer</a></li><li class="toc-h2"><a href="#connect-the-frozen-memtable-without-collecting-its-rows">Connect the frozen memtable without collecting its rows</a></li><li class="toc-h3"><a href="#count-working-storage-honestly">Count working storage honestly</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-8-indexed-immutable-tables">Chapter 8 — Indexed immutable tables</h1>
+<h2 id="part-1-a-bounded-format-and-a-streaming-builder">Part 1 — A bounded format and a streaming builder</h2>
+<p>A frozen memtable contains an ordered history, but its nodes and pointers disappear
+with the process. Writing those nodes to a file would preserve neither their
+meaning nor their ownership. We need a different representation: explicitly encoded
+entries, grouped into independently checked blocks, with enough index information
+to find one block without reading all the others.</p>
+<p>The result is an <strong>immutable sorted table</strong>, sometimes called an SSTable. Here,
+“immutable” is a protocol: finish a new file once, then never alter its contents
+while a reader uses it. The operating system does not enforce that protocol for us.
+This chapter builds and reads standalone tables. It does not yet decide which
+files belong to a database, install a flush durably, or recover a write-ahead log.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Encode a versioned table without copying C++ object representations; implement
+CRC-32 and a deterministic Bloom filter; build bounded data blocks from ordered
+entries; seek using a sparse directory; preserve old versions and tombstones;
+distinguish safe parsing, checksum detection, and full structural verification.</p>
+</blockquote>
+<p><strong>Prerequisites:</strong> the completed code from
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-06.html">Chapter 6</a>, including
+its second part, and both parts of
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-07.html">Chapter 7</a>.
+Keep the five language-foundation programs and all nine existing CTest entries.
+The code below extends the same <code>work/strata</code> source tree.</p>
+<p><strong>Implementation allocation: 5.0 hours for all three parts together.</strong> Allow 1.75 hours
+for the format and builder, 2.0 for the directory/filter/reader, and 1.25 for
+boundary tests, corruption experiments, and diagnosis. Reading is separate. The
+small limits used in tests are deliberate: boundary behavior should not require
+gigabytes of data or a long benchmark.</p>
+<h3 id="the-interface-we-already-have">The interface we already have</h3>
+<p>Chapter 6 supplies <code>Key {relation, primary}</code>, explicit 30-byte event and 14-byte
+account codecs, <code>put_le&lt;4/8&gt;</code>, <code>get_le&lt;4/8&gt;</code>, and checked arithmetic.
+<code>File::write_all(offset, bytes)</code> handles partial writes and interruptions;
+<code>read_exact(offset, bytes)</code> either fills the range or throws. <code>FormatError</code>
+represents malformed bytes or unexpected end of file; <code>IoError</code> represents an
+operating-system/backend error. A thrown write can leave a prefix in the file.</p>
+<p>Chapter 7 supplies <code>EntryView {key, kind, value}</code>. Its <code>InternalKey</code> contains a
+user key and a positive sequence. <code>InternalLess</code> orders relation and primary key
+ascending, then sequence <strong>descending</strong>. <code>EntryKind::erase</code> is a tombstone with
+no value. <code>MemTable::begin()</code> returns a cursor with <code>valid()</code>, <code>entry()</code>, and
+<code>next()</code>. Entry values borrow the memtable arena; the table must outlive traversal.
+<code>freeze()</code> forbids new preparations but does not create a thread-safety mechanism.</p>
+<p>The writer copies each supplied entry before returning from <code>append</code>. It never
+retains the caller's span. The convenience <code>write_table</code> requires a frozen
+memtable. Both that traversal and all table operations in this chapter execute
+on one thread, without another actor changing their input or file.</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — add the table files</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>include/strata/storage<span class="w"> </span>src/storage<span class="w"> </span>tests<span class="w"> </span>scripts
+</code></pre></figure>
+<p>Create <code>include/strata/storage/table.hpp</code>, <code>src/storage/table.cpp</code>,
+<code>tests/table.cpp</code>, and <code>scripts/check_table_fixture.py</code>. Append the final CMake
+block to the existing <code>CMakeLists.txt</code>; do not replace the earlier targets.
+Repeated filename-labelled listings append in order. Part 1 leaves the header
+and source namespace open; Part 2 completes them. Part 3 supplies the complete
+tests, independent byte checker, and build integration. Write all three parts
+before building. No listing requires an unwritten later chapter.</p>
+<h2 id="specify-bytes-before-writing-a-class">Specify bytes before writing a class</h2>
+<p>Every multibyte integer below uses the Chapter 6 <strong>little-endian</strong> encoding.
+Offsets count bytes from the beginning of the file. Lengths are encoded counts,
+not <code>sizeof</code> a C++ structure. Padding, alignment, pointers, and host endianness
+never appear in the format.</p>
+<figure class="code-block"><figcaption><span class="code-title">Table version 1 — physical order</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>24-byte header
+zero or more data frames, contiguous and ordered
+one metadata frame: directory plus Bloom filter
+40-byte footer, at the end of the file
+</code></pre></figure>
+<p>The header establishes the version and the data-block payload bound:</p>
+<table>
+<thead>
+<tr>
+<th>Byte offset</th>
+<th style="text-align:right">Width</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td style="text-align:right">8</td>
+<td>ASCII bytes <code>STRATABL</code></td>
+</tr>
+<tr>
+<td>8</td>
+<td style="text-align:right">4</td>
+<td>Format version, exactly 1</td>
+</tr>
+<tr>
+<td>12</td>
+<td style="text-align:right">4</td>
+<td>Maximum data payload bytes, from 64 through 65,536</td>
+</tr>
+<tr>
+<td>16</td>
+<td style="text-align:right">4</td>
+<td>Reserved, must be zero</td>
+</tr>
+<tr>
+<td>20</td>
+<td style="text-align:right">4</td>
+<td>CRC-32 of header bytes <code>[0,20)</code></td>
+</tr>
+</tbody>
+</table>
+<p>A frame is <code>payload_length:u32</code>, <code>tag:u32</code>, payload bytes, then <code>crc:u32</code>.
+The tag is 1 for data and 2 for metadata. The CRC covers the <strong>eight-byte frame
+header and payload</strong>, not its own trailing four bytes. A payload of <span class="math-input" data-display="false">P</span> bytes
+therefore occupies <span class="math-input" data-display="false">P+12</span> file bytes. Protecting the length and tag as well as
+the data detects ordinary damage to the framing information; we still check
+those fields independently before trusting their meaning.</p>
+<p>A data payload starts with a four-byte entry count. Each entry has this layout:</p>
+<table>
+<thead>
+<tr>
+<th>Entry-relative offset</th>
+<th style="text-align:right">Width</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td style="text-align:right">1</td>
+<td>Relation tag: events = 1, accounts = 2</td>
+</tr>
+<tr>
+<td>1</td>
+<td style="text-align:right">8</td>
+<td>Numeric primary key</td>
+</tr>
+<tr>
+<td>9</td>
+<td style="text-align:right">8</td>
+<td>Positive sequence</td>
+</tr>
+<tr>
+<td>17</td>
+<td style="text-align:right">1</td>
+<td>Kind: put = 1, erase = 2</td>
+</tr>
+<tr>
+<td>18</td>
+<td style="text-align:right">4</td>
+<td>Value byte count</td>
+</tr>
+<tr>
+<td>22</td>
+<td style="text-align:right">Variable</td>
+<td>Encoded row, or no bytes for a tombstone</td>
+</tr>
+</tbody>
+</table>
+<p>Thus a put event costs <span class="math-input" data-display="false">22+30=52</span> bytes, a put account costs <span class="math-input" data-display="false">22+14=36</span>,
+and a tombstone costs 22. A value keeps its own Chapter 6 version/relation/key
+fields. This small duplication lets validation catch disagreement between an
+index key and its encoded row. We do not strip those fields and invent a second
+row codec here.</p>
+<p>A <strong>directory entry</strong> is 46 bytes: first internal key (17), last internal key
+(17), data-frame offset (8), and complete frame length (4). Both endpoints are
+stored so a reader can validate separation between blocks and later compare
+an actual block with its advertised range. This is sparse: one entry per block,
+not one per row.</p>
+<p>The metadata payload is <code>block_count:u32</code>, <code>filter_bytes:u32</code>,
+<code>probe_count:u32</code>, followed by the 46-byte directory entries and the filter.
+There is no alignment padding. For <span class="math-input" data-display="false">D</span> data blocks and <span class="math-input" data-display="false">F</span> filter bytes, its
+payload length <span class="math-input" data-display="false">M</span> is</p>
+<div class="math-input" data-display="true">M = 12 + 46D + F.</div>
+<p>The footer locates that bounded metadata without first scanning the data:</p>
+<table>
+<thead>
+<tr>
+<th>Footer-relative offset</th>
+<th style="text-align:right">Width</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td style="text-align:right">8</td>
+<td>ASCII bytes <code>STRATEND</code></td>
+</tr>
+<tr>
+<td>8</td>
+<td style="text-align:right">8</td>
+<td>Metadata frame offset</td>
+</tr>
+<tr>
+<td>16</td>
+<td style="text-align:right">4</td>
+<td>Complete metadata frame length</td>
+</tr>
+<tr>
+<td>20</td>
+<td style="text-align:right">8</td>
+<td>Number of stored versions, including tombstones</td>
+</tr>
+<tr>
+<td>28</td>
+<td style="text-align:right">8</td>
+<td>Total file byte count, including this footer</td>
+</tr>
+<tr>
+<td>36</td>
+<td style="text-align:right">4</td>
+<td>CRC-32 of footer bytes <code>[0,36)</code></td>
+</tr>
+</tbody>
+</table>
+<p>For an empty table with a 32-byte filter, <span class="math-input" data-display="false">D=0</span>, <span class="math-input" data-display="false">M=44</span>, and the file occupies
+<span class="math-input" data-display="false">24+(44+12)+40=120</span> bytes. There are no empty data frames. The metadata and footer
+still exist, so “empty table” is not confused with “unfinished empty file.”</p>
+<p>These are Strata's version-1 choices, not an existing database's file format.
+Explicit file headers, versions, and byte offsets are also visible in the
+<a href="https://www.sqlite.org/fileformat.html#the_database_header">SQLite file-format specification, section 1.3</a>;
+we do not reuse its page or record layout.</p>
+<h2 id="put-a-ceiling-on-every-file-controlled-count">Put a ceiling on every file-controlled count</h2>
+<p>Start the header. The standard headers are explicit even where a prerequisite
+header happens to include one of them transitively.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/table.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_STORAGE_TABLE_HPP</span>
+<span class="cp">#define STRATA_STORAGE_TABLE_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/io/file.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/memtable.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+</code></pre></figure>
+<p>The hard ceilings belong to this format implementation. A caller may choose
+smaller writer limits, never larger ones. One table may occupy at most 64 MiB;
+this is not a limit on a later database containing many tables. A filter has
+8–65,536 bytes, a power of two, and always uses six probes. Metadata has a
+256 KiB payload ceiling, and there are at most 4,096 directory entries.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/table.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">namespace</span><span class="w"> </span><span class="nn">table_format</span><span class="w"> </span><span class="p">{</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">header_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">24</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">footer_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">40</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">frame_overhead</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">12</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">directory_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">46</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_block_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_blocks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4096</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_filter_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_metadata_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">max_file_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">bloom_probes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">6</span><span class="p">;</span>
+
+<span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="nf">crc32</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">bloom_add</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bits</span><span class="p">,</span><span class="w"> </span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">);</span>
+<span class="kt">bool</span><span class="w"> </span><span class="nf">bloom_may_contain</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bits</span><span class="p">,</span><span class="w"> </span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">);</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace table_format</span>
+</code></pre></figure>
+<p>For the largest accepted directory and filter, <span class="math-input" data-display="false">M=12+46(4096)+65536=253964</span>,
+which is below 262,144. The count checks make subsequent directory arithmetic
+bounded; the reader must perform them <strong>before</strong> computing an untrusted layout.
+The <code>crc32</code> argument <code>previous = 0</code> permits both whole-buffer and incremental
+checksums. The Bloom functions operate on borrowed bit arrays rather than
+allocating their own storage.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/table.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">TableOptions</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">block_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4096</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">block_limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">table_format</span><span class="o">::</span><span class="n">max_blocks</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">filter_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8192</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">file_limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">table_format</span><span class="o">::</span><span class="n">max_file_bytes</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">TableInfo</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">file_bytes</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">entries</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">blocks</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>TableInfo</code> is returned only after the footer write finishes. It records completed
+logical structure, not synchronization, database installation, or power-loss
+survival. A default-constructed <code>TableInfo{}</code> in a test is just zeroed test state;
+it is not an open or valid table.</p>
+<h2 id="own-buffers-borrow-the-output-file">Own buffers, borrow the output file</h2>
+<p>The builder owns two vectors: a fixed-size data payload buffer and a fixed-size
+metadata workspace. It borrows the <code>File</code>. The file and its backend must outlive
+the builder and remain exclusively available to it. The constructor requires a
+new empty file; it never overwrites a completed table in place.</p>
+<p>A builder is not movable: moving a partly written operation would complicate its
+borrow and state without benefiting this synchronous interface. The destructor
+is the ordinary member destructor; it frees buffers and <strong>does not call
+<code>finish</code></strong>. Successful finalization is an explicit, fallible operation.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/table.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">TableBuilder</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">TableBuilder</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{});</span>
+<span class="w">    </span><span class="n">TableBuilder</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">TableBuilder</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">TableBuilder</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">TableBuilder</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">TableBuilder</span><span class="p">(</span><span class="n">TableBuilder</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">TableBuilder</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">TableBuilder</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">append</span><span class="p">(</span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">);</span>
+<span class="w">    </span><span class="n">TableInfo</span><span class="w"> </span><span class="nf">finish</span><span class="p">();</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">State</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">open</span><span class="p">,</span><span class="w"> </span><span class="n">finished</span><span class="p">,</span><span class="w"> </span><span class="n">failed</span><span class="w"> </span><span class="p">};</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">require_open</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">flush</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">filter</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">block_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">metadata_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">used_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">rows_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">blocks_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">table_format</span><span class="o">::</span><span class="n">header_bytes</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">entries_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">InternalKey</span><span class="o">&gt;</span><span class="w"> </span><span class="n">previous_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">InternalKey</span><span class="w"> </span><span class="n">first_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">State</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">State</span><span class="o">::</span><span class="n">open</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="n">TableInfo</span><span class="w"> </span><span class="nf">write_table</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="n">table</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{});</span>
+</code></pre></figure>
+<p><code>previous_</code> contains the last accepted internal key; it is absent before the first
+entry. <code>first_</code> is meaningful only while the current block contains rows.
+<code>used_</code> begins at four to reserve the block's entry-count prefix. The three
+states make an important policy visible: any exception during <code>append</code> or
+<code>finish</code> makes that builder unusable. Retrying a partly written frame at an
+uncertain offset is not permitted.</p>
+<p>The declaration uses only the language already developed: member initialization,
+borrowed references, optional values, noncopyable owners, private helpers, and an
+enumeration. We now implement every helper, starting with the byte primitives.</p>
+<h2 id="a-checksum-is-an-implemented-recurrence">A checksum is an implemented recurrence</h2>
+<p>Begin the source file:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/table.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/checked.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstring&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+<span class="k">namespace</span><span class="w"> </span><span class="nn">table_format</span><span class="w"> </span><span class="p">{</span>
+</code></pre></figure>
+<p>We use the reflected CRC-32 convention with polynomial constant <code>0xedb88320</code>,
+initial internal state <code>0xffffffff</code>, and final XOR <code>0xffffffff</code>. The recurrence
+uses shifts and XOR, not a dependency or an instruction specific to one CPU.
+The polynomial and conditioning agree with
+<a href="https://www.rfc-editor.org/rfc/rfc1952.html#section-8">RFC 1952, Appendix 8</a>.
+The implementation below processes bits directly rather than copying its
+lookup-table implementation.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="nf">crc32</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">previous</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="mh">0xffffffffU</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="kt">byte</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">input</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">state</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">to_integer</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="kt">byte</span><span class="p">);</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="n">bit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">bit</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">bit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">low</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mi">1U</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">            </span><span class="n">state</span><span class="w"> </span><span class="o">&gt;&gt;=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">low</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="mh">0xedb88320U</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="mh">0xffffffffU</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>For each byte, XOR that byte into the low eight bits, then perform eight reduction
+steps. When the low bit is set, the shift is followed by XOR with the reflected
+polynomial. For the ASCII byte <code>1</code>, <code>0xffffffff ^ 0x31 = 0xffffffce</code>.
+The first reduction yields <code>0x7fffffe7</code>; the second shifts and XORs, yielding
+<code>0xd2477cd3</code>. Continuing all eight steps, and then the remaining bytes, gives
+<code>crc32(&quot;123456789&quot;) = 0xcbf43926</code>. The test uses that fixed known answer.</p>
+<p><code>previous</code> is an already finalized CRC. XORing it with <code>0xffffffff</code> recovers the
+internal state before extending it. Therefore <code>crc32(payload, crc32(header))</code>
+checks the concatenation without constructing a third buffer. Empty input with
+previous zero returns zero.</p>
+<p>A CRC is not authentication. Different byte strings can have the same CRC,
+and someone who edits data can recompute its CRC. Checksums detect many accidental
+changes; validators must still reject wrong lengths, tags, order, and row shapes.
+No test in this chapter proves resistance to hostile file forgery.</p>
+<h2 id="hash-the-user-key-not-its-current-version">Hash the user key, not its current version</h2>
+<p>A Bloom filter starts with zero bits. Inserting a key sets several positions;
+querying an absent bit proves that the key was not inserted into that correctly
+constructed, unchanged filter. All positions being set means only “continue to
+the table.” Versions and kinds do not belong in the hashed key: a lookup starts
+with a user key and a visibility sequence, not a known stored sequence.</p>
+<p>We feed exactly nine bytes to an FNV-1a accumulation: the relation byte followed
+by the primary key's eight little-endian bytes. The multiplication and XOR order
+and 64-bit constants follow <a href="https://www.rfc-editor.org/rfc/rfc9923.html#section-2">RFC 9923, sections 2 and 5</a>.
+Two mixed results then produce a start and an odd step. <code>mix</code> uses the output
+mixing steps of <a href="https://prng.di.unimi.it/splitmix.c">Vigna's public-domain SplitMix implementation</a>,
+not its evolving generator state. These are fixed format choices, not random seeds.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">namespace</span><span class="w"> </span><span class="p">{</span>
+<span class="kt">bool</span><span class="w"> </span><span class="nf">valid_filter_size</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">8</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">max_filter_bytes</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">size</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">mix</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="mi">30</span><span class="p">;</span>
+<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mh">0xbf58476d1ce4e5b9ULL</span><span class="p">;</span>
+<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="mi">27</span><span class="p">;</span>
+<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mh">0x94d049bb133111ebULL</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="mi">31</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">hashes</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">14695981039346656037ULL</span><span class="p">;</span>
+<span class="w">    </span><span class="n">hash</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="p">);</span>
+<span class="w">    </span><span class="n">hash</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mi">1099511628211ULL</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">hash</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="p">(</span><span class="n">key</span><span class="p">.</span><span class="n">primary</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">(</span><span class="mi">8</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">i</span><span class="p">))</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xffU</span><span class="p">;</span>
+<span class="w">        </span><span class="n">hash</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mi">1099511628211ULL</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">mix</span><span class="p">(</span><span class="n">hash</span><span class="p">),</span><span class="w"> </span><span class="n">mix</span><span class="p">(</span><span class="n">hash</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="mh">0x9e3779b97f4a7c15ULL</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="mi">1ULL</span><span class="p">};</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace</span>
+</code></pre></figure>
+<p>The unnamed namespace keeps these helpers private to this translation unit.
+<code>valid_filter_size</code> checks the range before evaluating the power-of-two test.
+For a positive integer, <code>size &amp; (size - 1)</code> clears its least significant set bit;
+it becomes zero exactly when there was just one set bit.</p>
+<p>The multiplications intentionally wrap modulo <span class="math-input" data-display="false">2^{64}</span>; the types and suffixes
+are unsigned. That is defined arithmetic, unlike overflowing signed arithmetic;
+see the <a href="https://eel.is/c++draft/basic.fundamental">C++ unsigned-integer rules</a>.
+Do not replace these variables with signed <code>long</code>. The mixing steps distribute
+input-bit influence; they do not make the results cryptographically strong or
+prove that our two results are independent random hashes.</p>
+<p>Let <span class="math-input" data-display="false">m=8F</span> be the bit count, <span class="math-input" data-display="false">a</span> the first hash, <span class="math-input" data-display="false">b</span> the odd step, and <span class="math-input" data-display="false">i</span> a probe
+number from 0 through 5. We use</p>
+<div class="math-input" data-display="true">p_i = (a+ib)\bmod m.</div>
+<p>Because <span class="math-input" data-display="false">m</span> is a power of two, reducing with <code>&amp; (m - 1)</code> is equivalent to the
+modulo operation. Also, <span class="math-input" data-display="false">m</span> divides <span class="math-input" data-display="false">2^{64}</span>, so the intermediate unsigned wrap
+does not change the final position. An odd step is relatively prime to this
+<span class="math-input" data-display="false">m</span> and walks all positions before repeating. This prevents the six probes from
+collapsing onto a shorter even-step cycle; it does not prevent collisions between
+<em>different</em> keys.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">bloom_add</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bits</span><span class="p">,</span><span class="w"> </span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">valid_filter_size</span><span class="p">(</span><span class="n">bits</span><span class="p">.</span><span class="n">size</span><span class="p">()))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid Bloom byte count"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hashes</span><span class="p">(</span><span class="n">key</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bits</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">8</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">bloom_probes</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">position</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">hash</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">mask</span><span class="p">);</span>
+<span class="w">        </span><span class="n">bits</span><span class="p">[</span><span class="n">position</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">8</span><span class="p">]</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">1U</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="p">(</span><span class="n">position</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">8</span><span class="p">));</span>
+<span class="w">        </span><span class="n">hash</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">hash</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>A position <span class="math-input" data-display="false">p</span> belongs to byte <span class="math-input" data-display="false">\lfloor p/8\rfloor</span> and bit <span class="math-input" data-display="false">p\bmod 8</span>.
+<code>|=</code> sets that bit without clearing any existing one. Inserting the same user key
+again is harmless. Importantly, inserting a tombstone sets bits too: a table
+containing a deletion must not be skipped when looking up that key.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">bloom_may_contain</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bits</span><span class="p">,</span><span class="w"> </span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">valid_filter_size</span><span class="p">(</span><span class="n">bits</span><span class="p">.</span><span class="n">size</span><span class="p">()))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"invalid Bloom byte count"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">hash</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hashes</span><span class="p">(</span><span class="n">key</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bits</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">8</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">bloom_probes</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">position</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">hash</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">mask</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">bit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">1U</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="p">(</span><span class="n">position</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">8</span><span class="p">));</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">((</span><span class="n">bits</span><span class="p">[</span><span class="n">position</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">8</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">bit</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">0</span><span class="p">})</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">hash</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">hash</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace table_format</span>
+</code></pre></figure>
+<p>For events key 42 with eight filter bytes, the low six start bits give 15 and
+the low six step bits give 27. The positions are 15, 42, 5, 32, 59, and 22.
+The resulting bytes are <code>20 80 40 00 01 04 00 08</code> in hexadecimal. The first probe
+sets byte 1, bit 7; the second sets byte 5, bit 2. The known-answer test freezes
+this mapping so a later “harmless” hash change cannot silently break old tables.
+Changing these constants, input encoding, or probe rules requires a format change.</p>
+<h3 id="estimate-selectivity-without-turning-it-into-a-guarantee">Estimate selectivity without turning it into a guarantee</h3>
+<p>Under an ideal independent uniform-probe model, one insertion probe misses a
+chosen bit with probability <span class="math-input" data-display="false">1-1/m</span>. After <span class="math-input" data-display="false">kn</span> probes for <span class="math-input" data-display="false">n</span> distinct keys and
+<span class="math-input" data-display="false">k</span> positions per key, the probability of that bit remaining zero is</p>
+<div class="math-input" data-display="true">q_0 = (1-1/m)^{kn} \approx e^{-kn/m}.</div>
+<p>Approximating the query positions as independent then gives a false-positive
+probability <span class="math-input" data-display="false">p_{\mathrm{fp}}\approx(1-e^{-kn/m})^k</span>. For <span class="math-input" data-display="false">m=1024</span>, <span class="math-input" data-display="false">n=100</span>,
+<span class="math-input" data-display="false">k=6</span>, it is about 0.76%. Repeated versions do not increase <span class="math-input" data-display="false">n</span>. This calculation
+is a sizing guide, not an exact prediction for our deterministic mixer or one
+finite workload. <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf">Kirsch and Mitzenmacher, sections 1–2</a>
+explain double hashing and the standard approximation; their random-hash analysis
+is not a proof of our chosen constants. The test checks every inserted key and
+reports absent-key positives without asserting a random-looking exact count.</p>
+<h2 id="decode-internal-keys-before-comparing-them">Decode internal keys before comparing them</h2>
+<p>Continue the source with file-local constants and validation helpers:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">namespace</span><span class="w"> </span><span class="p">{</span>
+<span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">table_format</span><span class="p">;</span>
+<span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">&gt;</span><span class="w"> </span><span class="n">header_magic</span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'S'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'T'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'R'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'A'</span><span class="p">},</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'T'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'A'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'B'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'L'</span><span class="p">}};</span>
+<span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">&gt;</span><span class="w"> </span><span class="n">footer_magic</span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'S'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'T'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'R'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'A'</span><span class="p">},</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'T'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'E'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'N'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'D'</span><span class="p">}};</span>
+<span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">data_tag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">metadata_tag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">require</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">condition</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="n">message</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">valid_key</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">,</span>
+<span class="w">            </span><span class="s">"unknown table relation"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>using namespace table_format</code> is confined to this source file's unnamed namespace;
+it does not leak names into a public header. The local <code>require</code> throws
+<code>FormatError</code> and remains active in Release builds.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">put_key</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="n">InternalKey</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">17</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"internal key width"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">(</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">.</span><span class="n">relation</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">.</span><span class="n">primary</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">InternalKey</span><span class="w"> </span><span class="nf">get_key</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">in</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">17</span><span class="p">,</span><span class="w"> </span><span class="s">"internal key width"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">InternalKey</span><span class="w"> </span><span class="n">key</span><span class="p">{{</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">Relation</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">to_integer</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">in</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span>
+<span class="w">                     </span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">in</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">))},</span><span class="w"> </span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">in</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">))};</span>
+<span class="w">    </span><span class="n">valid_key</span><span class="p">(</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s">"stored sequence is zero"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">key</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Numeric little-endian bytes are <strong>not</strong> lexicographically sorted key bytes.
+For example, primary 255 begins <code>ff 00</code>, while 256 begins <code>00 01</code>. Comparing
+those byte strings would put 256 first. Decoding and calling <code>InternalLess</code>
+restores the relation/primary/descending-sequence order. A stored sequence of zero
+is rejected; a search at visibility zero will be allowed later, meaning “before
+all stored versions.”</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">validate_entry</span><span class="p">(</span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">valid_key</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s">"stored sequence is zero"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">erase</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">empty</span><span class="p">(),</span><span class="w"> </span><span class="s">"tombstone has a payload"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">put</span><span class="p">,</span><span class="w"> </span><span class="s">"unknown entry kind"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span>
+<span class="w">            </span><span class="o">?</span><span class="w"> </span><span class="n">key_of</span><span class="p">(</span><span class="n">decode_event</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">))</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">key_of</span><span class="p">(</span><span class="n">decode_account</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">));</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">key</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="s">"row key disagrees with entry key"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The put path uses the exact Chapter 6 decoder for the indicated relation, including
+its size and record-version checks. It then compares the decoded user key with
+the entry key. Erase never calls a row decoder and must have no payload.
+<code>validate_entry</code> also checks caller-supplied builder input, so invalid data is
+rejected before becoming a valid table image.</p>
+<p>The block decoder advances an index only after validating one complete entry:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">EntryView</span><span class="w"> </span><span class="nf">read_entry</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">payload</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">at</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">at</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">payload</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">payload</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">at</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">22</span><span class="p">,</span>
+<span class="w">            </span><span class="s">"truncated entry header"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">payload</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="n">at</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_key</span><span class="p">(</span><span class="n">in</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="mi">17</span><span class="p">));</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">EntryKind</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">to_integer</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">in</span><span class="p">[</span><span class="mi">17</span><span class="p">]));</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">in</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">18</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)));</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">size</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">event_bytes</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">in</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">22</span><span class="p">,</span><span class="w"> </span><span class="s">"invalid entry length"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">{</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">kind</span><span class="p">,</span><span class="w"> </span><span class="n">in</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">22</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">)};</span>
+<span class="w">    </span><span class="n">validate_entry</span><span class="p">(</span><span class="n">entry</span><span class="p">);</span>
+<span class="w">    </span><span class="n">at</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">22</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">size</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">entry</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The condition checks <code>at &lt;= payload.size()</code> before subtracting. Once 22 bytes
+remain, reading the length field is safe; the length must then fit both the
+largest row encoding and the actual suffix. Only after those checks do we create
+the value subspan. <code>at += 22 + size</code> is bounded by the already checked payload.
+A parsed <code>EntryView</code> owns its numeric fields but <strong>borrows its value bytes</strong>.
+The reader must keep the block alive, which Part 2 makes explicit.</p>
+<h2 id="frame-writes-without-concatenating-buffers">Frame writes without concatenating buffers</h2>
+<p><code>write_frame</code> checks the final extent before any write in that frame. It constructs
+only an eight-byte header and four-byte CRC trailer. The caller's payload stays
+in its existing buffer.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">write_frame</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span>
+<span class="w">                          </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">tag</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">payload</span><span class="p">,</span>
+<span class="w">                          </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">limit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">checked_size_add</span><span class="p">(</span><span class="n">payload</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="n">frame_overhead</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">end</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">checked_file_end</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">end</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">limit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"table file cap"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">&gt;</span><span class="w"> </span><span class="n">header</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">payload</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">tag</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">&gt;</span><span class="w"> </span><span class="n">trailer</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">trailer</span><span class="p">,</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">header</span><span class="p">)));</span>
+<span class="w">    </span><span class="n">file</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">header</span><span class="p">);</span>
+<span class="w">    </span><span class="n">file</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="n">offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="n">payload</span><span class="p">);</span>
+<span class="w">    </span><span class="n">file</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="n">end</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="n">trailer</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">end</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>There are three <code>write_all</code> calls, not three assumed atomic writes. If the second
+one fails after ten payload bytes, the header and those bytes can already exist.
+The returned offset is available only after all three calls succeed. The
+builder will treat any error as terminal instead of guessing how much to retry.
+A later failure can leave earlier <strong>complete</strong> blocks too; those are not an
+installed table just because their checksums are correct.</p>
+<p>We also provide the bounded inverse now. Its <code>size</code> comes from an already
+validated extent, never from an unchecked allocation request in the frame itself.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">read_frame</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span>
+<span class="w">                                     </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">tag</span><span class="p">,</span>
+<span class="w">                                     </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">buffer</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">size</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">frame_overhead</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">buffer</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="s">"frame size bound"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">frame</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">buffer</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="n">size</span><span class="p">);</span>
+<span class="w">    </span><span class="n">file</span><span class="p">.</span><span class="n">read_exact</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">frame</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">frame</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">frame_overhead</span><span class="p">,</span>
+<span class="w">            </span><span class="s">"frame length mismatch"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">frame</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">tag</span><span class="p">,</span><span class="w"> </span><span class="s">"frame tag mismatch"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">frame</span><span class="p">.</span><span class="n">last</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">frame</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="n">size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">4</span><span class="p">)),</span>
+<span class="w">            </span><span class="s">"frame checksum mismatch"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">frame</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">frame_overhead</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The on-disk length must agree with that extent. A maliciously huge length field
+does not trigger a huge allocation: <code>read_frame</code> reads only into the supplied
+bounded buffer, then rejects the mismatch. The returned span excludes both frame
+header and CRC. Its lifetime is the caller's buffer lifetime, not a new allocation.</p>
+<h2 id="check-configuration-before-allocating-workspaces">Check configuration before allocating workspaces</h2>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">metadata_size</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">blocks</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">filter_bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">checked_size_add</span><span class="p">(</span><span class="n">checked_size_add</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span>
+<span class="w">        </span><span class="n">checked_size_mul</span><span class="p">(</span><span class="n">blocks</span><span class="p">,</span><span class="w"> </span><span class="n">directory_bytes</span><span class="p">)),</span><span class="w"> </span><span class="n">filter_bytes</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">TableOptions</span><span class="w"> </span><span class="nf">validate_options</span><span class="p">(</span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">block_bytes</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">64</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">block_bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_block_bytes</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">options</span><span class="p">.</span><span class="n">block_limit</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">block_limit</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_blocks</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">table_format</span><span class="o">::</span><span class="n">valid_filter_size</span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">options</span><span class="p">.</span><span class="n">file_limit</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">header_bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">footer_bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">frame_overhead</span><span class="w"> </span><span class="o">+</span>
+<span class="w">                                 </span><span class="n">metadata_size</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">options</span><span class="p">.</span><span class="n">file_limit</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_file_bytes</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">metadata_size</span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">block_limit</span><span class="p">,</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_metadata_bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid table options"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">options</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace</span>
+</code></pre></figure>
+<p>The order of the <code>||</code> tests matters. Invalid block/filter counts short-circuit
+before layout calculations. <code>metadata_size</code> still uses checked multiplication
+and addition, rather than relying on an informal bound in every caller.
+The minimum allowed file limit fits the empty table for the configured filter.
+It need not fit any nonempty table: that distinction is useful for testing cap
+exhaustion.</p>
+<p>Start the builder after closing the unnamed namespace:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">TableBuilder</span><span class="o">::</span><span class="n">TableBuilder</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">file_</span><span class="p">(</span><span class="n">file</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">(</span><span class="n">validate_options</span><span class="p">(</span><span class="n">options</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">block_</span><span class="p">(</span><span class="n">options_</span><span class="p">.</span><span class="n">block_bytes</span><span class="p">),</span>
+<span class="w">      </span><span class="n">metadata_</span><span class="p">(</span><span class="n">metadata_size</span><span class="p">(</span><span class="n">options_</span><span class="p">.</span><span class="n">block_limit</span><span class="p">,</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="o">&gt;</span><span class="w"> </span><span class="n">probe</span><span class="p">{};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">file_</span><span class="p">.</span><span class="n">read_up_to</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"builder requires a new empty file"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">header_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">header</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">header_magic</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">header_magic</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">header</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">block_bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">last</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">header</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="mi">20</span><span class="p">)));</span>
+<span class="w">    </span><span class="n">file_</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">header</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">TableBuilder</span><span class="o">::</span><span class="n">require_open</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">State</span><span class="o">::</span><span class="n">open</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"table builder is not open"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">TableBuilder</span><span class="o">::</span><span class="n">filter</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">metadata_</span><span class="p">}.</span><span class="n">last</span><span class="p">(</span><span class="n">options_</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Members initialize in declaration order. <code>options_</code> is validated before its
+values size either vector. Both vectors are created once; appending records does
+not grow them. The zero-initialized metadata tail is the Bloom filter workspace.
+Only after allocation succeeds do we probe the file and write the header.
+If construction throws, vector members are destroyed and the borrowed file is
+still the caller's responsibility. The probe is not a lock: no other writer may
+race this operation.</p>
+<p><code>require_open</code> guards both public operations. The filter accessor selects the
+fixed tail of the maximum metadata workspace while building. Until finalization,
+unused directory space lies between the live directory prefix and that tail.</p>
+<h2 id="flush-a-block-only-after-its-last-entry-is-known">Flush a block only after its last entry is known</h2>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">TableBuilder::flush</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rows_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">blocks_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">block_limit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"table block cap"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">block_</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">rows_</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">end</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">write_frame</span><span class="p">(</span><span class="n">file_</span><span class="p">,</span><span class="w"> </span><span class="n">offset_</span><span class="p">,</span><span class="w"> </span><span class="n">data_tag</span><span class="p">,</span>
+<span class="w">                                 </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">block_</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="n">used_</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">file_limit</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">metadata_</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">12</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">blocks_</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">directory_bytes</span><span class="p">,</span>
+<span class="w">                                             </span><span class="n">directory_bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_key</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="mi">17</span><span class="p">),</span><span class="w"> </span><span class="n">first_</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_key</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">17</span><span class="p">,</span><span class="w"> </span><span class="mi">17</span><span class="p">),</span><span class="w"> </span><span class="o">*</span><span class="n">previous_</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">34</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">offset_</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">used_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">frame_overhead</span><span class="p">);</span>
+<span class="w">    </span><span class="n">offset_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">end</span><span class="p">;</span>
+<span class="w">    </span><span class="o">++</span><span class="n">blocks_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">rows_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">used_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>A successful flush writes the current payload and then records its endpoints
+and extent in memory. Those directory writes use already validated fixed-width
+fields and reserved space. <code>previous_</code> must exist because <code>rows_ != 0</code>.
+The payload count is stored just before writing, so it matches the finalized
+block. We reset only the logical prefix length and row count; stale buffer bytes
+beyond <code>used_</code> are never serialized.</p>
+<p>At a 64-byte payload limit, an event put needs 52 entry bytes plus the four-byte
+count, so one event fits and two do not. A tombstone takes 22, but a tombstone and
+an event put need <span class="math-input" data-display="false">4+22+52=78</span>, so they also separate. The deliberately small
+fixture therefore forces three versions of events key 10 into different blocks.
+Nothing in the format requires all versions of one user key to share a block.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">TableBuilder::append</span><span class="p">(</span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_open</span><span class="p">();</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">validate_entry</span><span class="p">(</span><span class="n">entry</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">previous_</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">InternalLess</span><span class="p">{}(</span><span class="o">*</span><span class="n">previous_</span><span class="p">,</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"table input is not strictly increasing"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">22</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">block_</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">used_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">flush</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">blocks_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">block_limit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"table block cap"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rows_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">first_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">block_</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="n">used_</span><span class="p">,</span><span class="w"> </span><span class="n">length</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_key</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="mi">17</span><span class="p">),</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">);</span>
+<span class="w">        </span><span class="n">out</span><span class="p">[</span><span class="mi">17</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">kind</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">18</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">out</span><span class="p">.</span><span class="n">begin</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">22</span><span class="p">);</span>
+<span class="w">        </span><span class="n">bloom_add</span><span class="p">(</span><span class="n">filter</span><span class="p">(),</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">);</span>
+<span class="w">        </span><span class="n">used_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">length</span><span class="p">;</span>
+<span class="w">        </span><span class="o">++</span><span class="n">rows_</span><span class="p">;</span>
+<span class="w">        </span><span class="o">++</span><span class="n">entries_</span><span class="p">;</span><span class="w">  </span><span class="c1">// Bounded by block_limit * (block_bytes - 4) / 22.</span>
+<span class="w">        </span><span class="n">previous_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">State</span><span class="o">::</span><span class="n">failed</span><span class="p">;</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Order is checked against the last accepted key <strong>before</strong> a possible flush.
+Duplicates of an entire internal key are invalid; two versions of the same user
+key are valid only in descending sequence order. A new row that would overflow
+the current payload first flushes that payload, then starts the next block.
+The smallest payload limit, 64, can hold the largest one-entry payload, 56.
+Therefore <code>subspan(used_, length)</code> is safe after this decision without a special
+oversized-row path.</p>
+<p>The caller may change or destroy its input after <code>append</code> returns: key and value
+bytes have been copied. The filter receives the user key regardless of kind.
+The version count cannot approach <code>uint64_t</code> overflow: even a maximal all-tombstone
+table is bounded by <span class="math-input" data-display="false">4096\lfloor(65536-4)/22\rfloor</span> entries. Physical file limits
+can reject the table earlier.</p>
+<p>The catch-all marks the builder failed and rethrows the original exception.
+This includes malformed input and an ordering error, even if those checks happened
+before I/O. The deliberately simple policy prevents a caller from continuing a
+stream whose ordering or physical state it no longer understands. It does not
+claim to roll back bytes.</p>
+<h2 id="finish-the-directory-before-writing-the-footer">Finish the directory before writing the footer</h2>
+<p>During construction, the filter sits after space for the maximum directory. The
+completed file should contain only actual entries. Finalization moves the filter
+down to follow the used directory prefix.</p>
+<p>The source and destination ranges may overlap. <code>std::memmove</code> is specifically for
+that situation, unlike an overlapping <code>memcpy</code>. Both ranges here contain live
+<code>std::byte</code> elements, not C++ owner objects. This operation changes positions
+inside a fixed vector; it does not change the vector's allocation or capacity.
+The C++ <a href="https://eel.is/c++draft/cstring.syn">cstring synopsis</a> gives the corresponding
+standard-library byte-operation interface.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">TableInfo</span><span class="w"> </span><span class="nf">TableBuilder::finish</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_open</span><span class="p">();</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">flush</span><span class="p">();</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">metadata_size</span><span class="p">(</span><span class="n">blocks_</span><span class="p">,</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">frame_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">frame_overhead</span><span class="p">;</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">checked_file_end</span><span class="p">(</span><span class="n">offset_</span><span class="p">,</span><span class="w"> </span><span class="n">frame_bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">footer_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">total</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">file_limit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"table file cap"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">filter_offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">12</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">blocks_</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">directory_bytes</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">memmove</span><span class="p">(</span><span class="n">metadata_</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">filter_offset</span><span class="p">,</span><span class="w"> </span><span class="n">filter</span><span class="p">().</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">metadata_</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">blocks_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">metadata_</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">filter_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">metadata_</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">bloom_probes</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">footer_at</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">write_frame</span><span class="p">(</span><span class="n">file_</span><span class="p">,</span><span class="w"> </span><span class="n">offset_</span><span class="p">,</span><span class="w"> </span><span class="n">metadata_tag</span><span class="p">,</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">metadata_</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="n">size</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">file_limit</span><span class="p">);</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">footer_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">footer</span><span class="p">{};</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">footer_magic</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">footer_magic</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">footer</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">footer</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">offset_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">footer</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">frame_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">footer</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">entries_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">footer</span><span class="p">}.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">28</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">total</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">footer</span><span class="p">}.</span><span class="n">last</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">footer</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="mi">36</span><span class="p">)));</span>
+<span class="w">        </span><span class="n">file_</span><span class="p">.</span><span class="n">write_all</span><span class="p">(</span><span class="n">footer_at</span><span class="p">,</span><span class="w"> </span><span class="n">footer</span><span class="p">);</span>
+<span class="w">        </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">State</span><span class="o">::</span><span class="n">finished</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">total</span><span class="p">,</span><span class="w"> </span><span class="n">entries_</span><span class="p">,</span><span class="w"> </span><span class="n">blocks_</span><span class="p">};</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">State</span><span class="o">::</span><span class="n">failed</span><span class="p">;</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The total-file cap includes metadata framing and the footer, not just data blocks.
+<code>flush()</code> can have written a last complete block before that final cap check fails;
+the failed builder still cannot be resumed. After the filter moves, no further
+append is permitted even in principle. Success installs <code>State::finished</code>; any
+exception installs <code>State::failed</code>.</p>
+<p>For the eight-version fixture, the first tombstone frame is 38 bytes, five event
+put frames are 68 bytes each, and two account put frames are 52 bytes each.
+The data ends at <span class="math-input" data-display="false">24+38+5(68)+2(52)=506</span>. With eight directory entries and 32
+filter bytes, the metadata payload is <span class="math-input" data-display="false">12+8(46)+32=412</span> bytes. Its frame takes
+424 bytes, followed by 40 footer bytes: the complete file is <strong>970 bytes</strong>.
+These numbers are derived from the format, not from one compiler's structure sizes.</p>
+<p>No synchronization is hidden in <code>finish</code>. The caller can explicitly request
+<code>File::sync</code> and handle its error, as the native fixture does in Part 3. Even a
+successful synchronization does not install a database manifest or establish a
+power-loss protocol. Those are later mechanisms, not missing lines in this builder.</p>
+<h2 id="connect-the-frozen-memtable-without-collecting-its-rows">Connect the frozen memtable without collecting its rows</h2>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">TableInfo</span><span class="w"> </span><span class="nf">write_table</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="n">table</span><span class="p">,</span><span class="w"> </span><span class="n">TableOptions</span><span class="w"> </span><span class="n">options</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">table</span><span class="p">.</span><span class="n">frozen</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"flush input must be frozen"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">TableBuilder</span><span class="w"> </span><span class="n">builder</span><span class="p">{</span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">options</span><span class="p">};</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">table</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">valid</span><span class="p">();</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">next</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">builder</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">entry</span><span class="p">());</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>This loop retains one input view at a time. It neither sorts again nor builds a
+second vector of all entries. <code>append</code> enforces the stream's order independently
+of trusting the memtable. Every historical version and tombstone is written;
+this is not compaction or visible-row materialization.</p>
+<p>An input exception unwinds the builder and frees its two workspaces. The borrowed
+file remains open until its owner closes it; the partial file may remain on disk.
+A path-owning caller must discard a failed temporary output, never advertise it
+as a finished table. Part 3 supplies that cleanup for a native fixture, without
+requiring a future manifest implementation.</p>
+<h3 id="count-working-storage-honestly">Count working storage honestly</h3>
+<p>Let <span class="math-input" data-display="false">B</span> be the configured data payload bytes, <span class="math-input" data-display="false">D_{\max}</span> the writer's directory
+capacity, and <span class="math-input" data-display="false">F</span> the filter bytes. Its vector <strong>requested element storage</strong> is</p>
+<div class="math-input" data-display="true">A_{\mathrm{builder}} = B + 12 + 46D_{\max} + F.</div>
+<p>With defaults, that is <span class="math-input" data-display="false">4096+12+46(4096)+8192=200716</span> bytes. Headers, trailers,
+objects, stack frames, allocator bookkeeping, and the input memtable are additional.
+A standard vector's capacity and allocator overhead are not proved equal to its
+requested size by this equation. The important current guarantee is that allocation
+requests do not grow with an unchecked file or an unbounded row stream. Chapter 9
+will turn reservations and actual capacities into explicit budget charges.</p>
+<p>Continue to <a href="https://25d-228.github.io/cplusplus-learning/chapter-08-part-2.html">Part 2 — Seek, verify, and diagnose</a>
+for the complete reader and its ownership rules, then
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-08-part-3.html">Part 3 — Verification and native checks</a>
+for the runnable tests. All three parts form one chapter and one five-hour
+implementation allocation.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-07-part-2.html"><small>Previous · Chapter 7 · Part 2</small><span>Prepare, publish, and verify</span></a><a href="chapter-08-part-2.html"><small>Next · Chapter 8 · Part 2</small><span>Seek, verify, and diagnose</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 8 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-a-bounded-format-and-a-streaming-builder">Part 1 — A bounded format and a streaming builder</a></li><li class="toc-h3"><a href="#the-interface-we-already-have">The interface we already have</a></li><li class="toc-h2"><a href="#specify-bytes-before-writing-a-class">Specify bytes before writing a class</a></li><li class="toc-h2"><a href="#put-a-ceiling-on-every-file-controlled-count">Put a ceiling on every file-controlled count</a></li><li class="toc-h2"><a href="#own-buffers-borrow-the-output-file">Own buffers, borrow the output file</a></li><li class="toc-h2"><a href="#a-checksum-is-an-implemented-recurrence">A checksum is an implemented recurrence</a></li><li class="toc-h2"><a href="#hash-the-user-key-not-its-current-version">Hash the user key, not its current version</a></li><li class="toc-h3"><a href="#estimate-selectivity-without-turning-it-into-a-guarantee">Estimate selectivity without turning it into a guarantee</a></li><li class="toc-h2"><a href="#decode-internal-keys-before-comparing-them">Decode internal keys before comparing them</a></li><li class="toc-h2"><a href="#frame-writes-without-concatenating-buffers">Frame writes without concatenating buffers</a></li><li class="toc-h2"><a href="#check-configuration-before-allocating-workspaces">Check configuration before allocating workspaces</a></li><li class="toc-h2"><a href="#flush-a-block-only-after-its-last-entry-is-known">Flush a block only after its last entry is known</a></li><li class="toc-h2"><a href="#finish-the-directory-before-writing-the-footer">Finish the directory before writing the footer</a></li><li class="toc-h2"><a href="#connect-the-frozen-memtable-without-collecting-its-rows">Connect the frozen memtable without collecting its rows</a></li><li class="toc-h3"><a href="#count-working-storage-honestly">Count working storage honestly</a></li></ul></aside>
+</div></body></html>

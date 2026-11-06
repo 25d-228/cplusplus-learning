@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 19 · Part 1 — Bounded execution and cooperative cancellation · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-19.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html" aria-current="page"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 19 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/43">Read on GitHub</a><a href="source/chapter-19.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-admit-ownership-before-doing-work">Part 1 — Admit ownership before doing work</a></li><li class="toc-h2"><a href="#one-request-three-different-bounds">One request, three different bounds</a></li><li class="toc-h2"><a href="#immutable-data-is-not-an-immutable-reader">Immutable data is not an immutable reader</a></li><li class="toc-h2"><a href="#retain-the-parent-without-allocating-through-it">Retain the parent without allocating through it</a></li><li class="toc-h2"><a href="#open-once-then-expose-only-isolated-captures">Open once, then expose only isolated captures</a></li><li class="toc-h2"><a href="#cancellation-is-a-request-not-an-asynchronous-destructor">Cancellation is a request, not an asynchronous destructor</a></li><li class="toc-h2"><a href="#place-checks-where-the-work-is-bounded">Place checks where the work is bounded</a></li><li class="toc-h2"><a href="#completion-has-a-point-after-which-cancellation-loses">Completion has a point after which cancellation loses</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-19-bounded-execution-and-cooperative-cancellation">Chapter 19 — Bounded execution and cooperative cancellation</h1>
+<h2 id="part-1-admit-ownership-before-doing-work">Part 1 — Admit ownership before doing work</h2>
+<p>Two individually bounded queries can exceed their shared allowance when they
+start together. A canceled query can retain its spill files while reporting
+that its worker is idle. A third query can wait forever if cancellation changes
+an atomic flag without waking the condition variable on which admission sleeps.
+A worker pool must resolve these problems, not merely call a function on another
+thread.</p>
+<p>We will run the complete two-sort query from Chapter 17 on a prepared immutable
+database. Two workers will overlap, with private read-side caches and budgets,
+while a scheduler reserves each query's entire working allowance and descriptor
+allowance. Queued descriptors will own neither a snapshot nor a materialized
+input. Every accepted descriptor will acquire one terminal outcome, even when
+shutdown, allocation failure, or cancellation interrupts the calculation.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Separate accepted work from admitted work; distinguish immutable data from
+mutable reader bookkeeping; reserve resources before constructing operators;
+wake a canceled resource waiter without a lost notification; transport a worker
+exception without transporting its query owners; and define cancellation on
+both sides of the result-publication boundary.</p>
+</blockquote>
+<p><strong>Prerequisites:</strong> the complete engine through
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-17.html">Chapter 17</a>, including
+its fixed query plan and completion-aware CSV sink, and the synchronization
+exercises in <a href="https://25d-228.github.io/cplusplus-learning/chapter-18.html">Chapter 18</a>.
+Keep the Chapter 9 allocation ledger, Chapter 12 read-view ownership, and Chapter
+15 spill cleanup contracts available. No earlier engine class has silently
+become safe for concurrent mutation.</p>
+<p><strong>Implementation: 4.0 hours across all three parts.</strong> Keep the roadmap split:
+1.25 hours for task states and the pool, 1.25 for admission and cancellation, and
+1.5 for completion, shutdown, and fault checks. Reading is separate. Implement
+and test in small increments; the estimate is not a required minimum.</p>
+<p>Create <code>include/strata/runtime/</code> and <code>src/runtime/</code>. The three parts provide:</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>include/strata/runtime/cancel.hpp
+include/strata/runtime/frozen_inputs.hpp
+include/strata/runtime/task.hpp
+include/strata/runtime/executor.hpp
+src/runtime/frozen_inputs.cpp
+src/runtime/task.cpp
+src/runtime/executor.cpp
+tests/executor.cpp
+scripts/check_executor_fixture.py
+</code></pre></figure>
+<p>We also amend <code>storage/read_view.hpp</code>, <code>storage/read_view.cpp</code>, <code>io/file.cpp</code>,
+<code>query/scan.cpp</code>, <code>query/external_sort.cpp</code>, <code>query/result.hpp</code>, and append CMake
+targets. Every amendment appears below. For new files, concatenate blocks with
+the same filename in reading order, adding a newline between blocks. Unified
+diffs describe edits to the named prerequisite file: retain context lines,
+remove <code>-</code> lines, and insert <code>+</code> lines; the prefixes are not C++ syntax.</p>
+<p><a href="https://25d-228.github.io/cplusplus-learning/chapter-19-part-2.html">Part 2</a> implements
+the task and scheduler. <a href="https://25d-228.github.io/cplusplus-learning/chapter-19-part-3.html">Part 3</a>
+supplies the complete deterministic and native-file checks. This chapter does
+not yet permit concurrent ingestion or maintenance.</p>
+<h2 id="one-request-three-different-bounds">One request, three different bounds</h2>
+<p>An accepted request occupies a queue slot. An admitted request additionally
+owns permission to use working memory and file descriptors. An actually running
+operator has allocated some portion of that permission. Those are three
+separate events.</p>
+<p>Let <span class="math-input" data-display="false">Q</span> be queue capacity, <span class="math-input" data-display="false">W</span> worker count, and <span class="math-input" data-display="false">A_i</span> query <span class="math-input" data-display="false">i</span>'s declared working
+allowance in bytes. Let <span class="math-input" data-display="false">C_i</span> be that query's current charged allocation, and <span class="math-input" data-display="false">P</span>
+the scheduler's pool allowance. Admission maintains</p>
+<div class="math-input" data-display="true">0 \le C_i \le A_i,\qquad \sum_{i\text{ admitted}} A_i \le P.</div>
+<p>The first inequality is enforced by a private Chapter 9 <code>Budget</code>. The second is
+enforced under the scheduler mutex, <em>before</em> that budget or a read view is
+created. Reserving <span class="math-input" data-display="false">A_i</span> is conservative: unused permission is not lent to a
+second query that might later need it simultaneously. We deliberately avoid
+incremental allocation waits inside operators. Otherwise two half-built sorts
+could each hold resources needed for the other's next allocation.</p>
+<p>With two 2 MiB requests and a 4 MiB pool, both can run. With a 2 MiB pool, one
+runs and the other remains a small queued descriptor. A 6 MiB request can never
+fit that pool; submission returns <code>impossible</code> without taking its owner. A
+request whose allowance fits the pool can still fail if that allowance is too
+small for the requested plan. That is a local query failure, not permission to
+exceed the cap.</p>
+<p>The descriptor rule is similarly explicit. Let <span class="math-input" data-display="false">T</span> be the frozen view's table
+source count, and <span class="math-input" data-display="false">F_e,F_g</span> the two sorts' configured descriptor allowances.
+Reserve</p>
+<div class="math-input" data-display="true">F_i=T+F_e+F_g+3.</div>
+<p>The three extra descriptors cover two spill-directory handles and one temporary
+CSV file. Both sorts can coexist, so use their sum rather than their maximum.
+For the one-table fixture with three descriptors per sort, <span class="math-input" data-display="false">F_i=1+3+3+3=10</span>.
+A pool allowance of 20 admits two such queries; an allowance of 10 admits only
+one even when memory is plentiful. Open failures from the operating system
+still become ordinary query failures: these are internal allowances, not a
+reservation granted by the kernel.</p>
+<p>The bounded queue and fixed workers limit executor-owned unfinished descriptors
+to <span class="math-input" data-display="false">Q+W</span>. This does <strong>not</strong> bound arbitrarily many caller-created rejected
+requests or retained completion handles. Thread stacks, standard-library control
+blocks, exception storage, allocator overhead, result bytes, and the fixed
+opening context also have separate costs. The fixture's opening budget is
+64 MiB by default; it is not charged repeatedly to the query pool. The allocation
+ledger is not resident process memory. Spill disk caps remain per sort, not a
+new global disk quota.</p>
+<h2 id="immutable-data-is-not-an-immutable-reader">Immutable data is not an immutable reader</h2>
+<p>The Chapter 12 <code>ReadView</code> retains its files and protects its historical answer.
+It does not make cache recency links, pin counts, allocation totals, or the
+retention registry atomic. Even a method named <code>get</code> can update those structures.
+Sharing its existing <code>TableReader</code> objects across workers would therefore be
+incorrect.</p>
+<p>The reference-count operations of separate <code>shared_ptr</code> objects do not make the
+pointed-to object safe for arbitrary concurrent use. The language library's
+<a href="https://eel.is/c++draft/util.smartptr.shared">shared ownership rules</a> describe
+ownership machinery, not a mutex for our cache. We must choose an access policy
+for each pointed-to object.</p>
+<p>Here the policy is <strong>thread confinement with a frozen parent</strong>:</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>controller: FrozenInputs -&gt; master ReadView -&gt; immutable file identities
+                                      |       directory lock and baseline owners
+                    shared lifetime --+
+                                      |
+worker A: isolated State -&gt; own TableReaders -&gt; own cache -&gt; own Budget
+worker B: isolated State -&gt; own TableReaders -&gt; own cache -&gt; own Budget
+</code></pre></figure>
+<p>The parent is captured before workers start and is never served directly to a
+query. Each worker reopens the same immutable files, allocating its own metadata
+and buffers. It does not copy all rows. The original state anchors filenames and
+the directory lock; the private state does not mutate the parent's retention
+registry. A query's borrowed batches never cross into another worker.</p>
+<p>This costs duplicate metadata and cache contents. It also avoids putting a giant
+mutex around query execution: the two sorts, joins, and aggregations can really
+overlap. The next chapter can build a live capture/maintenance protocol on an
+explicit boundary instead of pretending that an ordinary <code>Database</code> is already
+thread-safe.</p>
+<h2 id="retain-the-parent-without-allocating-through-it">Retain the parent without allocating through it</h2>
+<p>In <code>include/strata/storage/read_view.hpp</code>, add a forward declaration for the
+runtime provider, an isolated read owner, and the alternative state constructor.
+The <code>friend</code> declaration exposes the new capture operation only to that provider,
+not to arbitrary code holding a normal <code>ReadView</code>.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/read_view.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- a/include/strata/storage/read_view.hpp</span>
+<span class="gi">+++ b/include/strata/storage/read_view.hpp</span>
+<span class="gu">@@ -14,6 +14,8 @@</span>
+<span class="w"> </span>#include &lt;span&gt;
+<span class="w"> </span>#include &lt;string&gt;
+<span class="w"> </span>#include &lt;utility&gt;
+<span class="gi">+</span>
+<span class="gi">+namespace strata::runtime { class FrozenInputs; }</span>
+<span class="w"> </span>
+<span class="w"> </span>namespace strata::storage {
+<span class="w"> </span>
+<span class="gu">@@ -66,15 +68,31 @@</span>
+<span class="w"> </span>    std::array&lt;Slot, max_retained&gt; slots_{};
+<span class="w"> </span>};
+<span class="w"> </span>
+<span class="gi">+struct State;</span>
+<span class="gi">+struct IsolatedRead {</span>
+<span class="gi">+    IsolatedRead(std::shared_ptr&lt;const State&gt; parent, std::shared_ptr&lt;memory::Budget&gt; owner,</span>
+<span class="gi">+                 std::size_t slots, std::size_t bytes)</span>
+<span class="gi">+        : anchor(std::move(parent)), budget(std::move(owner)), cache(*budget, slots, bytes) {}</span>
+<span class="gi">+    std::shared_ptr&lt;const State&gt; anchor;</span>
+<span class="gi">+    std::shared_ptr&lt;memory::Budget&gt; budget;</span>
+<span class="gi">+    BlockCache cache;</span>
+<span class="gi">+};</span>
+<span class="gi">+</span>
+<span class="w"> </span>struct State {
+<span class="w"> </span>    State(std::shared_ptr&lt;Context&gt; owner, std::uint64_t visible,
+<span class="w"> </span>          std::span&lt;const Source&gt; sources);
+<span class="gi">+    State(std::shared_ptr&lt;IsolatedRead&gt; owner, std::uint64_t visible,</span>
+<span class="gi">+          std::span&lt;const Source&gt; sources);</span>
+<span class="gi">+    std::shared_ptr&lt;memory::Budget&gt; budget_owner() const noexcept {</span>
+<span class="gi">+        return isolated ? isolated-&gt;budget : context-&gt;budget;</span>
+<span class="gi">+    }</span>
+<span class="w"> </span>    ~State() noexcept;
+<span class="w"> </span>    State(const State&amp;) = delete;
+<span class="w"> </span>    State&amp; operator=(const State&amp;) = delete;
+<span class="w"> </span>    void activate() noexcept;
+<span class="w"> </span>    std::span&lt;const Source&gt; sources() const noexcept { return {held.data(), count}; }
+<span class="w"> </span>    std::shared_ptr&lt;Context&gt; context;
+<span class="gi">+    std::shared_ptr&lt;IsolatedRead&gt; isolated;</span>
+<span class="w"> </span>    std::uint64_t sequence;
+<span class="w"> </span>    std::array&lt;Source, max_sources&gt; held{};
+<span class="w"> </span>    std::size_t count;
+<span class="gu">@@ -115,6 +133,9 @@</span>
+<span class="w"> </span>    ReadCursor scan(Key lower, std::optional&lt;Key&gt; upper = std::nullopt) const;
+<span class="w"> </span>private:
+<span class="w"> </span>    friend class Database;
+<span class="gi">+    friend class strata::runtime::FrozenInputs;</span>
+<span class="gi">+    ReadView isolate_disk(std::shared_ptr&lt;memory::Budget&gt; budget,</span>
+<span class="gi">+                          std::size_t cache_slots, std::size_t cache_bytes) const;</span>
+<span class="w"> </span>    explicit ReadView(std::shared_ptr&lt;const read_detail::State&gt; state) noexcept
+<span class="w"> </span>        : state_(std::move(state)) {}
+<span class="w"> </span>    void require_valid() const;
+</code></pre></figure>
+<p><code>IsolatedRead</code> has three members in lifetime order. Its <code>anchor</code> retains the
+original state; <code>budget</code> owns the private ledger; <code>cache</code> borrows that ledger.
+Reverse destruction releases the cache before the budget. The <code>State::held</code>
+source array is declared after <code>isolated</code>, so its readers disappear before the
+cache they use. A cursor's owning <code>State</code> keeps the entire chain alive.</p>
+<p>There are now two legal state shapes. An ordinary state has <code>context</code>, and its
+<code>active</code> flag records registration in that context. An isolated state has
+<code>isolated</code>, no <code>context</code>, and stays inactive. Its destructor must not call
+<code>context-&gt;release</code>. The existing conditional destructor already expresses that
+rule. <code>budget_owner()</code> is the one selection point used by cursor allocation.
+An isolated state's <code>retention()</code> reports its own one state and source count,
+not a concurrent reading of the parent's registry.</p>
+<p>The following complete amendment to <code>src/storage/read_view.cpp</code> adds the second
+constructor, switches those selection points, and defines disk isolation.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/read_view.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- a/src/storage/read_view.cpp</span>
+<span class="gi">+++ b/src/storage/read_view.cpp</span>
+<span class="gu">@@ -99,6 +99,12 @@</span>
+<span class="w"> </span>             std::span&lt;const Source&gt; sources)
+<span class="w"> </span>    : context(std::move(owner)), sequence(visible), count(sources.size()) {
+<span class="w"> </span>    if (count &gt; held.size()) { throw std::length_error("view source bound"); }
+<span class="gi">+    std::copy(sources.begin(), sources.end(), held.begin());</span>
+<span class="gi">+}</span>
+<span class="gi">+State::State(std::shared_ptr&lt;IsolatedRead&gt; owner, std::uint64_t visible,</span>
+<span class="gi">+             std::span&lt;const Source&gt; sources)</span>
+<span class="gi">+    : isolated(std::move(owner)), sequence(visible), count(sources.size()) {</span>
+<span class="gi">+    if (count &gt; held.size()) { throw std::length_error("isolated source bound"); }</span>
+<span class="w"> </span>    std::copy(sources.begin(), sources.end(), held.begin());
+<span class="w"> </span>}
+<span class="w"> </span>State::~State() noexcept {
+<span class="gu">@@ -252,7 +258,10 @@</span>
+<span class="w"> </span>}
+<span class="w"> </span>std::uint64_t ReadView::sequence() const { require_valid(); return state_-&gt;sequence; }
+<span class="w"> </span>std::size_t ReadView::source_count() const { require_valid(); return state_-&gt;count; }
+<span class="gd">-ReadRetention ReadView::retention() const { require_valid(); return state_-&gt;context-&gt;retention(); }</span>
+<span class="gi">+ReadRetention ReadView::retention() const {</span>
+<span class="gi">+    require_valid();</span>
+<span class="gi">+    return state_-&gt;isolated ? ReadRetention{1, state_-&gt;count} : state_-&gt;context-&gt;retention();</span>
+<span class="gi">+}</span>
+<span class="w"> </span>std::optional&lt;OwnedEntry&gt; ReadView::get(Key key) const {
+<span class="w"> </span>    require_valid();
+<span class="w"> </span>    valid_key(key);
+<span class="gu">@@ -275,7 +284,7 @@</span>
+<span class="w"> </span>ReadCursor ReadView::scan(Key lower, std::optional&lt;Key&gt; upper) const {
+<span class="w"> </span>    require_valid();
+<span class="w"> </span>    return ReadCursor{std::allocate_shared&lt;read_detail::Scan&gt;(
+<span class="gd">-        memory::SharedAllocator&lt;read_detail::Scan&gt;{state_-&gt;context-&gt;budget}, state_, lower, upper)};</span>
+<span class="gi">+        memory::SharedAllocator&lt;read_detail::Scan&gt;{state_-&gt;budget_owner()}, state_, lower, upper)};</span>
+<span class="w"> </span>}
+<span class="w"> </span>bool ReadCursor::valid() const noexcept { return scan_ &amp;&amp; scan_-&gt;current.has_value(); }
+<span class="w"> </span>EntryView ReadCursor::entry() const &amp; {
+<span class="gu">@@ -288,7 +297,34 @@</span>
+<span class="w"> </span>
+<span class="w"> </span>std::shared_ptr&lt;memory::Budget&gt; ReadView::budget_owner() const {
+<span class="w"> </span>    require_valid();
+<span class="gd">-    return state_-&gt;context-&gt;budget;</span>
+<span class="gi">+    return state_-&gt;budget_owner();</span>
+<span class="gi">+}</span>
+<span class="gi">+</span>
+<span class="gi">+</span>
+<span class="gi">+ReadView ReadView::isolate_disk(std::shared_ptr&lt;memory::Budget&gt; budget,</span>
+<span class="gi">+                               std::size_t cache_slots, std::size_t cache_bytes) const {</span>
+<span class="gi">+    require_valid();</span>
+<span class="gi">+    if (!budget || state_-&gt;isolated) { throw std::invalid_argument("invalid isolated read parent"); }</span>
+<span class="gi">+    for (const auto&amp; source : state_-&gt;sources()) {</span>
+<span class="gi">+        if (source.memory || !source.disk) { throw std::logic_error("fixture must be fully flushed"); }</span>
+<span class="gi">+    }</span>
+<span class="gi">+    auto local = std::allocate_shared&lt;read_detail::IsolatedRead&gt;(</span>
+<span class="gi">+        memory::SharedAllocator&lt;read_detail::IsolatedRead&gt;{budget},</span>
+<span class="gi">+        state_, budget, cache_slots, cache_bytes);</span>
+<span class="gi">+    std::array&lt;read_detail::Source, read_detail::max_sources&gt; sources{};</span>
+<span class="gi">+    for (std::size_t i = 0; i &lt; state_-&gt;count; ++i) {</span>
+<span class="gi">+        const auto id = state_-&gt;held[i].file_id;</span>
+<span class="gi">+        const auto name = io::file_name(id, io::FileKind::table);</span>
+<span class="gi">+        // Read-only open does not change Directory's inventory or shared counters.</span>
+<span class="gi">+        auto opened = state_-&gt;context-&gt;directory.open(name.data(), io::OpenMode::read_only);</span>
+<span class="gi">+        auto reader = std::allocate_shared&lt;TableReader&gt;(memory::SharedAllocator&lt;TableReader&gt;{budget},</span>
+<span class="gi">+            *budget, std::move(opened.file), opened.bytes, &amp;local-&gt;cache, local-&gt;cache.new_file_id());</span>
+<span class="gi">+        sources[i].file_id = id;</span>
+<span class="gi">+        sources[i].disk = std::move(reader);</span>
+<span class="gi">+    }</span>
+<span class="gi">+    auto state = std::allocate_shared&lt;read_detail::State&gt;(memory::SharedAllocator&lt;read_detail::State&gt;{budget},</span>
+<span class="gi">+        std::move(local), state_-&gt;sequence, std::span{sources}.first(state_-&gt;count));</span>
+<span class="gi">+    return ReadView{std::move(state)};  // Not registered in the parent's mutable retention registry.</span>
+<span class="w"> </span>}
+<span class="w"> </span>
+<span class="w"> </span>}  // namespace strata::storage
+</code></pre></figure>
+<p>In <code>isolate_disk</code>, the first loop rejects any memtable source before allocating
+private state. The second loop opens each retained table using the parent's
+directory descriptor. We use only <code>Directory::open(..., read_only)</code>: this branch
+reads the descriptor, performs the relative open and file-size inspection, and
+does not update the directory inventory. No other directory operation runs
+concurrently in this chapter. This is an argument about the actual branch's
+accesses, not a claim that all non-const directory methods are thread-safe.</p>
+<p>A private cache gives each new reader a private cache identity. Reusing the
+parent reader merely because the bytes are immutable would reintroduce shared
+mutable counters and cache state. If the third reader construction fails, the
+local <code>sources</code> array destroys the first two readers before <code>local</code> destroys its
+cache. The returned state's control allocation uses <code>SharedAllocator</code>, retaining
+the private budget through the last control-storage deallocation as in Chapter
+12. Nothing allocates through the parent's unsynchronized ledger.</p>
+<p>The master remains owned by <code>FrozenInputs</code> throughout all worker activity. Its
+retention-registry release and baseline deallocations occur only after joining
+workers and releasing that provider. A normal mutable database handle must not
+escape beside it. The cooperation contract still excludes external processes
+that ignore the directory lock and overwrite table files.</p>
+<h2 id="open-once-then-expose-only-isolated-captures">Open once, then expose only isolated captures</h2>
+<p>Create this provider header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/runtime/frozen_inputs.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_RUNTIME_FROZEN_INPUTS_HPP</span>
+<span class="cp">#define STRATA_RUNTIME_FROZEN_INPUTS_HPP</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/database.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">runtime</span><span class="w"> </span><span class="p">{</span>
+<span class="c1">// Construct before starting workers. No writable Database handle escapes.</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">FrozenInputs</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">FrozenInputs</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="n">storage</span><span class="o">::</span><span class="n">DatabaseOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{},</span>
+<span class="w">                 </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">opening_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">);</span>
+<span class="w">    </span><span class="n">FrozenInputs</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">FrozenInputs</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">FrozenInputs</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">FrozenInputs</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">storage</span><span class="o">::</span><span class="n">ReadView</span><span class="w"> </span><span class="nf">capture</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">source_count</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">view_</span><span class="p">.</span><span class="n">source_count</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">sequence</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">view_</span><span class="p">.</span><span class="n">sequence</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">storage</span><span class="o">::</span><span class="n">ReadView</span><span class="w"> </span><span class="n">view_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_slots_</span><span class="p">,</span><span class="w"> </span><span class="n">cache_bytes_</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::runtime</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The constructor opens the prepared database while the controller is still alone.
+It requires exactly one active WAL whose base equals the recovered visible
+sequence. Thus no unflushed mutation needs to be copied into a query-local
+memtable. Earlier chapters' rotation and flush operations prepare that state.
+An empty database is also legal.</p>
+<p>The setup open uses ordinary database recovery. It can synchronize or repair an
+allowed active-log tail; it is not a promise that startup performs only read-only
+system calls. After construction, the local <code>Database</code> is gone and the provider
+exposes only sequence, source count, and isolated reads. Do not call maintenance
+in this constructor to hide an unprepared fixture.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/runtime/frozen_inputs.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/runtime/frozen_inputs.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">runtime</span><span class="w"> </span><span class="p">{</span>
+<span class="n">FrozenInputs</span><span class="o">::</span><span class="n">FrozenInputs</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="n">storage</span><span class="o">::</span><span class="n">DatabaseOptions</span><span class="w"> </span><span class="n">options</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">opening_bytes</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">cache_slots_</span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">cache_slots</span><span class="p">),</span><span class="w"> </span><span class="n">cache_bytes_</span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">cache_bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">budget</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_shared</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="p">(</span><span class="n">opening_bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">storage</span><span class="o">::</span><span class="n">Database</span><span class="w"> </span><span class="n">database</span><span class="p">{</span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="n">storage</span><span class="o">::</span><span class="n">DatabaseOpen</span><span class="o">::</span><span class="n">recover</span><span class="p">,</span><span class="w"> </span><span class="n">options</span><span class="p">};</span>
+<span class="w">    </span><span class="c1">// Do not maintain or rotate here: the controller must prepare a disk-only fixture.</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">manifest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">database</span><span class="p">.</span><span class="n">manifest</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">manifest</span><span class="p">.</span><span class="n">log_count</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">database</span><span class="p">.</span><span class="n">sequence</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">manifest</span><span class="p">.</span><span class="n">logs</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">base</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"prepare and flush the immutable fixture before opening"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">view_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">database</span><span class="p">.</span><span class="n">snapshot</span><span class="p">();</span>
+<span class="p">}</span>
+<span class="n">storage</span><span class="o">::</span><span class="n">ReadView</span><span class="w"> </span><span class="n">FrozenInputs</span><span class="o">::</span><span class="n">capture</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">view_</span><span class="p">.</span><span class="n">isolate_disk</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">budget</span><span class="p">),</span><span class="w"> </span><span class="n">cache_slots_</span><span class="p">,</span><span class="w"> </span><span class="n">cache_bytes_</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::runtime</span>
+</code></pre></figure>
+<p>The private <code>capture</code> result can outlive the local call because it owns both its
+private ledger and its parent anchor. Within this executor it is created, used,
+and destroyed on one worker. Callers receive scalar completion statistics and a
+published CSV name, not an escaped plan or allocator-backed batch. That narrower
+interface is what makes the confinement argument tractable.</p>
+<h2 id="cancellation-is-a-request-not-an-asynchronous-destructor">Cancellation is a request, not an asynchronous destructor</h2>
+<p>We need a token reachable from deeply nested block I/O without adding a token
+parameter to every existing codec and operator. Use a scoped thread-local pointer
+to a borrowed token. <code>thread_local</code> denotes a distinct object for each thread;
+our inline header variable names the current thread's slot across translation
+units. An <code>inline</code> variable permits this header definition in multiple translation
+units without creating a different program variable in each; it is not a request
+to optimize a function call. See <a href="https://eel.is/c++draft/basic.stc.thread">thread storage duration</a>
+and the <a href="https://eel.is/c++draft/dcl.inline">inline specifier</a>.
+The pointer's lifetime is not the token's lifetime: an RAII scope restores the
+previous pointer before the stack token dies.</p>
+<p>This design is for ordinary synchronous calls on a worker. A coroutine that
+resumes on another thread, a child thread, or a nested blocking pool submission
+would not inherit this contract. We implement none of those. A null scope means
+&quot;temporarily do not observe cancellation,&quot; which will matter at result commit.</p>
+<p>Create the complete token header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/runtime/cancel.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_RUNTIME_CANCEL_HPP</span>
+<span class="cp">#define STRATA_RUNTIME_CANCEL_HPP</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;atomic&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;exception&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">runtime</span><span class="w"> </span><span class="p">{</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">Canceled</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exception</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="nf">what</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s">"query canceled"</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">};</span>
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Boundary</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">admitted</span><span class="p">,</span><span class="w"> </span><span class="n">batch</span><span class="p">,</span><span class="w"> </span><span class="n">block</span><span class="p">,</span><span class="w"> </span><span class="n">spill_pass</span><span class="p">,</span><span class="w"> </span><span class="n">before_publish</span><span class="w"> </span><span class="p">};</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">CheckpointHook</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">call</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">Boundary</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">argument</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">Cancellation</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">requested</span><span class="p">;</span>
+<span class="w">    </span><span class="n">CheckpointHook</span><span class="w"> </span><span class="n">hook</span><span class="p">{};</span>
+<span class="p">};</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">thread_local</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Cancellation</span><span class="o">*</span><span class="w"> </span><span class="n">current_cancellation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CancellationScope</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">CancellationScope</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Cancellation</span><span class="o">*</span><span class="w"> </span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">previous_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">current_cancellation</span><span class="p">,</span><span class="w"> </span><span class="n">value</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="o">~</span><span class="n">CancellationScope</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">current_cancellation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">previous_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">CancellationScope</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">CancellationScope</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">CancellationScope</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">CancellationScope</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">Cancellation</span><span class="o">*</span><span class="w"> </span><span class="n">previous_</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">checkpoint</span><span class="p">(</span><span class="n">Boundary</span><span class="w"> </span><span class="n">boundary</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">*</span><span class="w"> </span><span class="n">token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">current_cancellation</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">token</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">token</span><span class="o">-&gt;</span><span class="n">requested</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">Canceled</span><span class="p">{};</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">token</span><span class="o">-&gt;</span><span class="n">hook</span><span class="p">.</span><span class="n">call</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">token</span><span class="o">-&gt;</span><span class="n">hook</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="n">token</span><span class="o">-&gt;</span><span class="n">hook</span><span class="p">.</span><span class="n">argument</span><span class="p">,</span><span class="w"> </span><span class="n">boundary</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">token</span><span class="o">-&gt;</span><span class="n">requested</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">Canceled</span><span class="p">{};</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::runtime</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p><code>Cancellation::requested</code> borrows an atomic flag in the task's completion owner.
+The worker retains that owner for the whole call. <code>CheckpointHook</code> is a borrowed
+function pointer/context pair used for controlled tests; production use leaves
+it empty. The callback must not destroy its request, retain borrowed query rows,
+or recursively wait for work on this pool.</p>
+<p>The first load catches an already requested stop. The hook can request a stop
+at an exact boundary; the second load observes it before the operation continues.
+<code>Canceled</code> is an ordinary exception, so the existing owned plans, runs, buffers,
+and file handles unwind normally. No other thread destroys those objects.</p>
+<p>The flag carries only the stop decision. It does not publish a result, a mutable
+message, or a pointer. Therefore relaxed atomic loads/stores are sufficient;
+result visibility will come from a separate mutex. The distinction between atomic
+access and payload ordering is specified in
+<a href="https://eel.is/c++draft/atomics.order">atomic ordering</a>. Adding a non-atomic
+&quot;reason&quot; field beside the flag would require its own synchronization policy.</p>
+<p><code>CancellationScope</code> uses <code>std::exchange</code>: remember the old slot, install the new
+pointer, then restore the old slot on scope exit. With no token installed, every
+checkpoint is a cheap no-op and the synchronous earlier tests keep their
+semantics. Never put a throwing checkpoint into a destructor or cleanup routine.
+A stop must initiate cleanup, not repeatedly interrupt it.</p>
+<h2 id="place-checks-where-the-work-is-bounded">Place checks where the work is bounded</h2>
+<p>Add the token include and one check to each transfer loop in <code>src/io/file.cpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/io/file.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- a/src/io/file.cpp</span>
+<span class="gi">+++ b/src/io/file.cpp</span>
+<span class="gu">@@ -1,4 +1,5 @@</span>
+<span class="w"> </span>#include "strata/io/file.hpp"
+<span class="gi">+#include "strata/runtime/cancel.hpp"</span>
+<span class="w"> </span>#include "strata/core/checked.hpp"
+<span class="w"> </span>#include "strata/core/codec.hpp"
+<span class="w"> </span>
+<span class="gu">@@ -180,6 +181,7 @@</span>
+<span class="w"> </span>    (void)checked_file_end(offset, output.size());
+<span class="w"> </span>    std::size_t done = 0;
+<span class="w"> </span>    while (done &lt; output.size()) {
+<span class="gi">+        runtime::checkpoint(runtime::Boundary::block);</span>
+<span class="w"> </span>        const auto count = std::min(output.size() - done, io_chunk_bytes);
+<span class="w"> </span>        const Transfer result = operations_-&gt;read_at(
+<span class="w"> </span>            descriptor_, output.subspan(done, count),
+<span class="gu">@@ -211,6 +213,7 @@</span>
+<span class="w"> </span>    (void)checked_file_end(offset, input.size());
+<span class="w"> </span>    std::size_t done = 0;
+<span class="w"> </span>    while (done &lt; input.size()) {
+<span class="gi">+        runtime::checkpoint(runtime::Boundary::block);</span>
+<span class="w"> </span>        const auto count = std::min(input.size() - done, io_chunk_bytes);
+<span class="w"> </span>        const Transfer result = operations_-&gt;write_at(
+<span class="w"> </span>            descriptor_, input.subspan(done, count),
+</code></pre></figure>
+<p>The check precedes each existing bounded transfer. If an earlier transfer already
+wrote bytes, cancellation does not undo them. For query spill/output files those
+partial effects belong to temporary owners and are cleaned up by their existing
+failure paths. This does not turn arbitrary database writes into cancellable
+transactions: the executor runs queries only.</p>
+<p>A blocked native read or write cannot be interrupted by changing this C++ flag.
+Response time includes the current call, scheduling, and work before the next
+check. A chunk sort is also allowed to finish its bounded in-memory chunk before
+observing a later boundary. There is no hard wall-clock cancellation deadline.</p>
+<p>Add scan checks <em>inside</em> the exception-handling region so cancellation leaves
+those streams terminal and releases their source ownership:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/query/scan.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- a/src/query/scan.cpp</span>
+<span class="gi">+++ b/src/query/scan.cpp</span>
+<span class="gu">@@ -1,6 +1,7 @@</span>
+<span class="w"> </span>#include "strata/query/scan.hpp"
+<span class="w"> </span>
+<span class="w"> </span>#include "strata/core/codec.hpp"
+<span class="gi">+#include "strata/runtime/cancel.hpp"</span>
+<span class="w"> </span>
+<span class="w"> </span>namespace strata::query {
+<span class="w"> </span>
+<span class="gu">@@ -28,6 +29,7 @@</span>
+<span class="w"> </span>    output.clear();
+<span class="w"> </span>    if (state_ == StreamState::ended) { return Pull::end; }
+<span class="w"> </span>    try {
+<span class="gi">+        runtime::checkpoint(runtime::Boundary::batch);</span>
+<span class="w"> </span>        if (!started_) {
+<span class="w"> </span>            cursor_ = view_.scan({Relation::events, 0}, Key{Relation::accounts, 0});
+<span class="w"> </span>            started_ = true;
+<span class="gu">@@ -50,6 +52,7 @@</span>
+<span class="w"> </span>    output.clear();
+<span class="w"> </span>    if (state_ == StreamState::ended) { return Pull::end; }
+<span class="w"> </span>    try {
+<span class="gi">+        runtime::checkpoint(runtime::Boundary::batch);</span>
+<span class="w"> </span>        if (!started_) {
+<span class="w"> </span>            cursor_ = view_.scan({Relation::accounts, 0});
+<span class="w"> </span>            started_ = true;
+</code></pre></figure>
+<p>Add a check before each materialized spill pass. The existing block loops and
+source scans supply finer boundaries within long sorts; the pass check also
+provides a precise test point after initial runs exist.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/query/external_sort.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- a/src/query/external_sort.cpp</span>
+<span class="gi">+++ b/src/query/external_sort.cpp</span>
+<span class="gu">@@ -1,3 +1,4 @@</span>
+<span class="gi">+#include "strata/runtime/cancel.hpp"</span>
+<span class="w"> </span>#include "strata/query/joined_sort.hpp"
+<span class="w"> </span>#include "strata/core/codec.hpp"
+<span class="w"> </span>#include "strata/io/directory.hpp"
+<span class="gu">@@ -622,6 +623,7 @@</span>
+<span class="w"> </span>
+<span class="w"> </span>template&lt;class Schema&gt;
+<span class="w"> </span>void TypedCore&lt;Schema&gt;::merge_pass() {
+<span class="gi">+    runtime::checkpoint(runtime::Boundary::spill_pass);</span>
+<span class="w"> </span>    std::size_t produced = 0;
+<span class="w"> </span>    for (std::size_t first = 0; first &lt; run_count_;) {
+<span class="w"> </span>        const auto count = std::min(stats_-&gt;fan_in, run_count_ - first);
+</code></pre></figure>
+<p>These are intentionally small amendments. Keep the existing partial-transfer
+logic, terminal stream handling, run ownership, and replacement verification.
+Cancellation composes with those mechanisms; it does not replace them with an
+unexplained global abort.</p>
+<h2 id="completion-has-a-point-after-which-cancellation-loses">Completion has a point after which cancellation loses</h2>
+<p>Chapter 17's sink accumulates a temporary CSV and publishes only after valid
+end-of-stream. We must decide what happens when cancellation races with its final
+rename. The policy is:</p>
+<table>
+<thead>
+<tr>
+<th>Observation point</th>
+<th>Task outcome</th>
+<th>Previously completed destination</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stop observed before the publication gate</td>
+<td>Canceled</td>
+<td>Preserved</td>
+</tr>
+<tr>
+<td>Gate passed; <code>finish()</code> throws</td>
+<td>Failed</td>
+<td>Governed by the sink's failure contract</td>
+</tr>
+<tr>
+<td>Gate passed; <code>finish()</code> successfully publishes</td>
+<td>Completed</td>
+<td>Replaced with the complete new result</td>
+</tr>
+</tbody>
+</table>
+<p>A cancellation request can arrive after the gate but before rename. It is too
+late to demand cancellation from this operation. We mask cooperative checks
+through <code>finish()</code> and report its actual outcome. Do not inspect the flag again
+after success and retroactively label the published file canceled.</p>
+<p>Amend <code>include/strata/query/result.hpp</code> as follows:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/result.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- a/include/strata/query/result.hpp</span>
+<span class="gi">+++ b/include/strata/query/result.hpp</span>
+<span class="gu">@@ -3,6 +3,7 @@</span>
+<span class="w"> </span>
+<span class="w"> </span>#include "strata/query/aggregate.hpp"
+<span class="w"> </span>#include "strata/io/file.hpp"
+<span class="gi">+#include "strata/runtime/cancel.hpp"</span>
+<span class="w"> </span>
+<span class="w"> </span>#include &lt;array&gt;
+<span class="w"> </span>#include &lt;cstdint&gt;
+<span class="gu">@@ -61,6 +62,7 @@</span>
+<span class="w"> </span>        GroupBatch output{plan.budget(), output_rows};
+<span class="w"> </span>        sink.begin();
+<span class="w"> </span>        for (;;) {
+<span class="gi">+            runtime::checkpoint(runtime::Boundary::batch);</span>
+<span class="w"> </span>            const auto result = plan.next(output);
+<span class="w"> </span>            if (result == Pull::end) {
+<span class="w"> </span>                if (output.size() != 0) { throw std::logic_error("nonempty result end"); }
+<span class="gu">@@ -72,7 +74,9 @@</span>
+<span class="w"> </span>                staged_groups = next_count;
+<span class="w"> </span>            }
+<span class="w"> </span>        }
+<span class="gd">-        sink.finish();  // The only publication boundary, after successful EOF.</span>
+<span class="gi">+        runtime::checkpoint(runtime::Boundary::before_publish);</span>
+<span class="gi">+        runtime::CancellationScope noncancelable{nullptr};</span>
+<span class="gi">+        sink.finish();  // Completion wins a cancellation arriving after this gate.</span>
+<span class="w"> </span>    } catch (...) { sink.abort(); throw; }
+<span class="w"> </span>}
+<span class="w"> </span>}  // namespace strata::query
+</code></pre></figure>
+<p>The output batch and plan still die through ordinary scopes. The noncancelable
+scope dies before the surrounding catch or its caller runs. A genuine close or
+rename failure remains an exception; masking a stop does not swallow I/O errors.
+<code>CsvResult::finish</code> already performs no throwing operation after successful
+rename. Other <code>ResultSink</code> implementations used with this policy must likewise
+make successful return mean completed publication and must not throw after an
+irreversible success.</p>
+<p><code>staged_groups</code> counts rows appended to the temporary sink. It is useful on a
+canceled or failed query but does not mean those rows were externally published.
+A query can stage both groups and then be canceled at <code>before_publish</code>, leaving
+the earlier completed CSV untouched. These result semantics do not add crash
+recovery or power-loss durability to temporary query output.</p>
+<p>At this point we have safe synchronous building blocks for a worker: a private
+read context, bounded allocations, cancellation points, and one publication rule.
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-19-part-2.html">Part 2</a> supplies
+the ownership and synchronization that decide when those blocks may run.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-18-part-2.html"><small>Previous · Chapter 18 · Part 2</small><span>Join before destroying shared state</span></a><a href="chapter-19-part-2.html"><small>Next · Chapter 19 · Part 2</small><span>A terminal result owns no running query</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 19 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-admit-ownership-before-doing-work">Part 1 — Admit ownership before doing work</a></li><li class="toc-h2"><a href="#one-request-three-different-bounds">One request, three different bounds</a></li><li class="toc-h2"><a href="#immutable-data-is-not-an-immutable-reader">Immutable data is not an immutable reader</a></li><li class="toc-h2"><a href="#retain-the-parent-without-allocating-through-it">Retain the parent without allocating through it</a></li><li class="toc-h2"><a href="#open-once-then-expose-only-isolated-captures">Open once, then expose only isolated captures</a></li><li class="toc-h2"><a href="#cancellation-is-a-request-not-an-asynchronous-destructor">Cancellation is a request, not an asynchronous destructor</a></li><li class="toc-h2"><a href="#place-checks-where-the-work-is-bounded">Place checks where the work is bounded</a></li><li class="toc-h2"><a href="#completion-has-a-point-after-which-cancellation-loses">Completion has a point after which cancellation loses</a></li></ul></aside>
+</div></body></html>

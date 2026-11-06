@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 18 · Part 2 — Join before destroying shared state · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-18-part-2.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html" aria-current="page"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 18 · Part 2</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/42">Read on GitHub</a><a href="source/chapter-18-part-2.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-2-join-before-destroying-shared-state">Part 2 — Join before destroying shared state</a></li><li class="toc-h2"><a href="#a-thread-owner-needs-a-policy-for-incomplete-construction">A thread owner needs a policy for incomplete construction</a></li><li class="toc-h2"><a href="#never-join-while-holding-a-mutex-a-worker-needs">Never join while holding a mutex a worker needs</a></li><li class="toc-h2"><a href="#deliver-an-exception-only-after-cleanup-can-no-longer-race">Deliver an exception only after cleanup can no longer race</a></li><li class="toc-h2"><a href="#make-test-failures-clean-up-threads-too">Make test failures clean up threads too</a></li><li class="toc-h2"><a href="#distinguish-correct-synchronization-from-correct-queue-semantics">Distinguish correct synchronization from correct queue semantics</a></li><li class="toc-h2"><a href="#establish-blocked-waiters-then-change-state">Establish blocked waiters, then change state</a></li><li class="toc-h2"><a href="#check-each-job-not-just-the-aggregate-total">Check each job, not just the aggregate total</a></li><li class="toc-h2"><a href="#run-the-promised-result-and-retain-the-rejected-owner">Run the promised result and retain the rejected owner</a></li><li class="toc-h2"><a href="#append-native-build-targets-not-a-new-engine-configuration">Append native build targets, not a new engine configuration</a></li><li class="toc-h2"><a href="#isolate-the-data-race-instead-of-normalizing-it">Isolate the data race instead of normalizing it</a></li><li class="toc-h2"><a href="#repair-the-scalar-without-pretending-to-repair-a-multi-field-protocol">Repair the scalar without pretending to repair a multi-field protocol</a></li><li class="toc-h2"><a href="#make-a-race-free-protocol-mistake-on-purpose">Make a race-free protocol mistake on purpose</a></li><li class="toc-h2"><a href="#diagnose-the-missing-relationship">Diagnose the missing relationship</a></li><li class="toc-h2"><a href="#what-has-and-has-not-been-established">What has and has not been established</a></li><li class="toc-h3"><a href="#references-for-this-part">References for this part</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-18-synchronization-and-thread-lifetime">Chapter 18 — Synchronization and thread lifetime</h1>
+<h2 id="part-2-join-before-destroying-shared-state">Part 2 — Join before destroying shared state</h2>
+<p>A stop flag, a wakeup, and a join answer different questions. The state decides
+whether another operation is allowed. The wakeup gives a blocked thread a chance
+to inspect that state. The join establishes that the thread has finished and
+will no longer use its references. Omitting any one can leave a different bug.</p>
+<p>This part completes the files begun in
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-18.html">Part 1</a>.
+It shares the chapter's <strong>3.0-hour allocation</strong>. Keep all engine code at
+Chapter 17 unchanged. The only cumulative build change is an appended group of
+standalone targets.</p>
+<h2 id="a-thread-owner-needs-a-policy-for-incomplete-construction">A thread owner needs a policy for incomplete construction</h2>
+<p><code>SumWorkers</code> owns its queue and every worker handle. It is deliberately not a
+general callable executor: each job either contributes a checked integer value
+or raises a deterministic error. That narrow operation keeps attention on
+lifetime and failure rather than task type erasure.</p>
+<p>Multiple callers may submit using independent job handles. <code>request_cancel</code>
+may overlap submission and worker processing. The controlling thread alone
+calls <code>finish</code> and destroys the owner; those lifecycle operations must not run
+concurrently with each other, and destruction requires external submitters to
+have stopped using the object. Workers never call <code>finish</code>. A live object is not
+made safe to destroy by holding a pointer to it in another thread.</p>
+<p>Create the complete <code>workers.hpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/workers.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_EXERCISES_CHAPTER_18_WORKERS_HPP</span>
+<span class="cp">#define STRATA_EXERCISES_CHAPTER_18_WORKERS_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"job_queue.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;exception&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;thread&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">foundation18</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">ThreadCounts</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">started</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">exited</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">joined</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Totals</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">jobs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">SumWorkers</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="c1">// counts, when supplied, must outlive this owner and its constructor.</span>
+<span class="w">    </span><span class="n">SumWorkers</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">worker_count</span><span class="p">,</span>
+<span class="w">               </span><span class="n">ThreadCounts</span><span class="o">*</span><span class="w"> </span><span class="n">counts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">,</span>
+<span class="w">               </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fail_before</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">());</span>
+<span class="w">    </span><span class="o">~</span><span class="n">SumWorkers</span><span class="p">();</span>
+<span class="w">    </span><span class="n">SumWorkers</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">SumWorkers</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">SumWorkers</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">SumWorkers</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">SumWorkers</span><span class="p">(</span><span class="n">SumWorkers</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">SumWorkers</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">SumWorkers</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">submit</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">job</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">request_cancel</span><span class="p">();</span>
+<span class="w">    </span><span class="n">Totals</span><span class="w"> </span><span class="nf">finish</span><span class="p">();</span>
+<span class="w">    </span><span class="n">Totals</span><span class="w"> </span><span class="nf">totals</span><span class="p">();</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">work</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">join_all</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">JobQueue</span><span class="w"> </span><span class="n">queue_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="w"> </span><span class="n">result_mutex_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Totals</span><span class="w"> </span><span class="n">totals_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">exception_ptr</span><span class="w"> </span><span class="n">error_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ThreadCounts</span><span class="o">*</span><span class="w"> </span><span class="n">counts_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kr">thread</span><span class="o">&gt;</span><span class="w"> </span><span class="n">threads_</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w"> </span><span class="c1">// namespace foundation18</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The mutex protects the totals and first recorded worker exception together.
+The thread vector is controlled only by the owner thread. <code>ThreadCounts</code> is
+optional external diagnostic storage: if supplied, it must outlive construction,
+all worker execution, and destruction. Tests declare it before the owner.
+Atomic counters do not extend the lifetime of their containing object.</p>
+<p><code>fail_before</code> is a zero-based launch index. Passing 2 simulates failure just
+before starting the third worker. The default maximum <code>size_t</code> disables the
+injection. No attempt is made to exhaust real system thread resources.</p>
+<p>The class is nonmovable because worker lambdas capture its <code>this</code> pointer. Moving
+its fields would not retarget those pointers, and mutexes themselves are not
+movable value objects. Shared ownership is not needed when one controlling
+scope already owns the entire lifetime.</p>
+<p>Start <code>workers.cpp</code> with construction and cleanup:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/workers.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"workers.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;system_error&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">foundation18</span><span class="w"> </span><span class="p">{</span>
+
+<span class="n">SumWorkers</span><span class="o">::</span><span class="n">SumWorkers</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">worker_count</span><span class="p">,</span>
+<span class="w">                       </span><span class="n">ThreadCounts</span><span class="o">*</span><span class="w"> </span><span class="n">counts</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fail_before</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">queue_</span><span class="p">(</span><span class="n">capacity</span><span class="p">),</span><span class="w"> </span><span class="n">counts_</span><span class="p">(</span><span class="n">counts</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">worker_count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">worker_count</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"exercise worker count must be 1..8"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">threads_</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="n">worker_count</span><span class="p">);</span><span class="w"> </span><span class="c1">// No vector growth after the first start.</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">worker_count</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">fail_before</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">system_error</span><span class="p">(</span>
+<span class="w">                    </span><span class="n">std</span><span class="o">::</span><span class="n">make_error_code</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">errc</span><span class="o">::</span><span class="n">resource_unavailable_try_again</span><span class="p">),</span>
+<span class="w">                    </span><span class="s">"injected thread start failure"</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="n">threads_</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">([</span><span class="k">this</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">work</span><span class="p">();</span><span class="w"> </span><span class="p">});</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">queue_</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span>
+<span class="w">        </span><span class="n">join_all</span><span class="p">();</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">SumWorkers</span><span class="o">::~</span><span class="n">SumWorkers</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">queue_</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span>
+<span class="w">    </span><span class="n">join_all</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>All members are initialized before the constructor body starts launching threads.
+An early worker may run while later workers are being constructed, but uses only
+the already-initialized queue, result state, and diagnostic pointer. It does not
+access the thread vector. The vector reserves handle storage before any thread
+starts, so later launch attempts do not trigger vector growth. <code>emplace_back</code>
+constructs a <code>std::thread</code> directly in that reserved slot from the lambda.</p>
+<p>If the third launch throws, the <code>SumWorkers</code> object was <strong>not successfully
+constructed</strong>. Its destructor will not run. Relying on that destructor for cleanup
+would leave two joinable member handles to be destroyed during unwinding. The
+constructor's catch must cancel the queue, join the existing workers, and only
+then rethrow the original start error. A real thread-constructor exception reaches
+the same catch. The simulated <code>system_error</code> uses the standard resource-unavailable
+error category rather than claiming an actual operating-system failure. See the
+<a href="https://eel.is/c++draft/thread.thread.constr">thread creation failure contract</a>.</p>
+<p>With failure before launch index 2, the sequence is:</p>
+<table>
+<thead>
+<tr>
+<th>Controller</th>
+<th>Existing workers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reserve three handle slots</td>
+<td>None yet</td>
+</tr>
+<tr>
+<td>Start worker 0, then worker 1</td>
+<td>May reach empty-queue wait</td>
+</tr>
+<tr>
+<td>Inject failure before worker 2</td>
+<td>Still own references to this object</td>
+</tr>
+<tr>
+<td>Cancel queue and notify</td>
+<td>Observe canceled state, return from pop</td>
+</tr>
+<tr>
+<td>Join workers 0 and 1</td>
+<td>Complete; no later access to members</td>
+</tr>
+<tr>
+<td>Rethrow start error</td>
+<td>Member destruction is now safe</td>
+</tr>
+</tbody>
+</table>
+<p>Neither worker is guaranteed to have reached its wait before the failure. If
+cancellation wins first, their first pop sees canceled and returns immediately.
+Both schedules are correct. Tests inspect started/exited/joined counts <strong>after</strong>
+constructor unwinding, without depending on sleep durations.</p>
+<p>The normal destructor uses cancellation, not implicit draining. Call <code>finish</code>
+explicitly for a completed sum and an observable worker error. During caller
+exception unwinding, destructor cleanup discards queued jobs, lets already-owned
+jobs finish, and joins. It cannot throw a worker error while another exception
+is already unwinding.</p>
+<h2 id="never-join-while-holding-a-mutex-a-worker-needs">Never join while holding a mutex a worker needs</h2>
+<p>Append submission, observation, and joining:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/workers.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">SumWorkers::submit</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">job</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">queue_</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">job</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">SumWorkers::request_cancel</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">queue_</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+
+<span class="n">Totals</span><span class="w"> </span><span class="nf">SumWorkers::totals</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">result_mutex_</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">totals_</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">SumWorkers::join_all</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="kr">thread</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">threads_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="kr">thread</span><span class="p">.</span><span class="n">joinable</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kr">thread</span><span class="p">.</span><span class="n">join</span><span class="p">();</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">counts_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="n">counts_</span><span class="o">-&gt;</span><span class="n">joined</span><span class="p">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>submit</code> preserves the queue's ownership contract. <code>totals</code> returns a coherent
+copy under the result mutex; callers do not borrow mutable internal fields.
+<code>request_cancel</code> changes queue policy and wakes waiters, but does not join.
+The controller must still finish or destroy the owner.</p>
+<p><code>join_all</code> holds neither queue nor result mutex. Joining while holding a mutex
+needed by a worker's final accounting would produce a cycle: the controller
+waits for the worker, while the worker waits for the controller's lock. The
+controller never calls this routine from a worker, which would attempt to join
+itself. A joined handle is skipped on subsequent calls.</p>
+<p><code>join_all</code> is <code>noexcept</code> for cleanup. Under the stated ownership contract every
+join is on a valid, distinct, controller-owned joinable handle. Should a join
+still throw a system error, this implementation fails fast through termination;
+it does <strong>not</strong> detach and then destroy storage still in use. Failure of the
+underlying synchronization primitives during destructor cleanup is likewise not
+modeled as a recoverable job error. Normal job exceptions and injected launch
+failures are handled; arbitrary synchronization-system failure is a different
+boundary. See the possible errors in
+<a href="https://eel.is/c++draft/thread.thread.member"><code>thread::join</code></a>.</p>
+<h2 id="deliver-an-exception-only-after-cleanup-can-no-longer-race">Deliver an exception only after cleanup can no longer race</h2>
+<p>Append <code>finish</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/workers.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">Totals</span><span class="w"> </span><span class="nf">SumWorkers::finish</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">queue_</span><span class="p">.</span><span class="n">close</span><span class="p">();</span>
+<span class="w">    </span><span class="n">join_all</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">exception_ptr</span><span class="w"> </span><span class="n">error</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Totals</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">result_mutex_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">error_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">totals_</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">rethrow_exception</span><span class="p">(</span><span class="n">error</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Closing first stops admission while preserving accepted work. Joining then waits
+for all workers. Only afterward do we copy the outcome and rethrow any captured
+error. The rethrow happens outside the result mutex, so the caller's error handler
+cannot run while that lock remains held. Repeated finish returns the same totals
+or rethrows the same first recorded error; it does not start another execution.</p>
+<p>The return value is the sum of <strong>completed contributions</strong>. After explicit
+cancellation it may be partial. This exercise has no per-job completion records
+or canceled-result discriminant, so a caller that requested cancellation must
+not interpret the returned pair as proof that every accepted job ran. The next
+runtime chapter supplies explicit task states; adding arbitrary callables here
+would not supply those semantics by itself.</p>
+<p>Complete the worker loop and implementation file:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/workers.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">SumWorkers::work</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">counts_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">counts_</span><span class="o">-&gt;</span><span class="n">started</span><span class="p">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">job</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue_</span><span class="p">.</span><span class="n">pop</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">job</span><span class="o">-&gt;</span><span class="n">fail</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="p">(</span><span class="s">"injected job failure"</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">result_mutex_</span><span class="p">);</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">();</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">totals_</span><span class="p">.</span><span class="n">jobs</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">job</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">totals_</span><span class="p">.</span><span class="n">sum</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">overflow_error</span><span class="p">(</span><span class="s">"worker totals overflow"</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="o">++</span><span class="n">totals_</span><span class="p">.</span><span class="n">jobs</span><span class="p">;</span>
+<span class="w">            </span><span class="n">totals_</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">job</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">(</span><span class="n">result_mutex_</span><span class="p">);</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">error_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="n">error_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">current_exception</span><span class="p">();</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">queue_</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span><span class="w"> </span><span class="c1">// Do not take queue_ while holding result_mutex_.</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">counts_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">counts_</span><span class="o">-&gt;</span><span class="n">exited</span><span class="p">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w"> </span><span class="c1">// namespace foundation18</span>
+</code></pre></figure>
+<p><code>while (auto job = queue_.pop())</code> declares an owning handle whose Boolean
+conversion determines whether the body runs. Each successful pop gives this
+worker exclusive job ownership. The body-local lock guard is destroyed before
+the iteration's job owner, so releasing the job happens outside the result lock.
+If processing throws, normal unwinding releases both before entering the catch.</p>
+<p>Let <span class="math-input" data-display="false">n</span> be the existing count, <span class="math-input" data-display="false">s</span> the existing sum, <span class="math-input" data-display="false">v</span> the job value, and <span class="math-input" data-display="false">M</span> the
+maximum <code>uint64_t</code>. An admissible contribution requires</p>
+<div class="math-input" data-display="true">n &lt; M,\qquad v \le M-s.</div>
+<p>Only after both checks do we publish the new pair <span class="math-input" data-display="false">(n+1,s+v)</span>. The subtraction is
+safe because <span class="math-input" data-display="false">s</span> is already representable. For <span class="math-input" data-display="false">s=M</span> and <span class="math-input" data-display="false">v=1</span>, the check fails
+before either field changes. This is Chapter 4's failure-safe state transition
+inside one mutex, not a durable transaction or rollback of earlier jobs.</p>
+<p>The catch stores only the first error to acquire <code>result_mutex_</code>. With several
+workers, that is not necessarily the earliest submitted failing job. Recording
+it precedes queue cancellation, and the result lock is released before acquiring
+the queue lock. No path nests these two mutexes. Other workers may already own
+jobs; they may finish their contributions before their next pop notices canceled
+state. Partial totals are therefore not generally deterministic after concurrent
+failure. The single-worker failure fixture below fixes the relevant ordering so
+that its expected partial sum is exactly 10.</p>
+<p>A bare <code>std::thread</code> destructor invokes termination if its handle is still
+joinable, even when the underlying function has already returned. Joinable is a
+handle state, not a synonym for “currently executing.” Explicit joining is not
+optional housekeeping. See
+<a href="https://eel.is/c++draft/thread.thread.destr">thread destruction</a>.
+C++20 <code>std::jthread</code> supplies stop-request-and-join behavior during destruction,
+but a stop request does not itself change this queue's predicate or notify its
+ordinary condition variables. Replacing the handle type alone would not fix a
+join-before-wakeup deadlock. Its behavior is specified under
+<a href="https://eel.is/c++draft/thread.jthread.cons">jthread construction and destruction</a>.</p>
+<h2 id="make-test-failures-clean-up-threads-too">Make test failures clean up threads too</h2>
+<p>Tests need the same lifetime discipline as application code. A <code>require</code> that
+throws while an unguarded test thread waits in pop could terminate the program
+or hang cleanup, obscuring the original assertion. The small harness below
+cancels its associated queue and joins during destruction.</p>
+<p>Begin <code>main.cpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"workers.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;system_error&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">foundation18</span><span class="p">;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="p">{</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">require</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">condition</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="p">(</span><span class="n">message</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Error</span><span class="p">,</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Function</span><span class="o">&gt;</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">expect_error</span><span class="p">(</span><span class="n">Function</span><span class="w"> </span><span class="n">function</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">caught</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">function</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Error</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">caught</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">caught</span><span class="p">,</span><span class="w"> </span><span class="n">message</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>expect_error&lt;Error&gt;</code> checks one specified exception family; an unrelated error
+continues outward instead of counting as success. It takes its callable by value,
+a pattern from Chapter 5. <code>require</code> remains active with <code>NDEBUG</code> defined.</p>
+<p>Append the test-only thread guard:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="c1">// Test harness: all referenced locals must be declared BEFORE this guard.</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">QueueThreads</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">QueueThreads</span><span class="p">(</span><span class="n">JobQueue</span><span class="o">&amp;</span><span class="w"> </span><span class="n">queue</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">queue_</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="o">~</span><span class="n">QueueThreads</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">queue_</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span>
+<span class="w">        </span><span class="n">join_all</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">QueueThreads</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">QueueThreads</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">QueueThreads</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">QueueThreads</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Function</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">start</span><span class="p">(</span><span class="n">Function</span><span class="w"> </span><span class="n">function</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">used_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">threads_</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"test thread capacity exceeded"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">used_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">threads_</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kr">thread</span><span class="p">(</span>
+<span class="w">            </span><span class="p">[</span><span class="k">this</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="n">task</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">function</span><span class="p">)]()</span><span class="w"> </span><span class="k">mutable</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">task</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">                </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="n">errors_</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">current_exception</span><span class="p">();</span>
+<span class="w">                    </span><span class="n">queue_</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span>
+<span class="w">                </span><span class="p">}</span>
+<span class="w">            </span><span class="p">});</span>
+<span class="w">        </span><span class="o">++</span><span class="n">used_</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">index</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">join_one</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">index</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">used_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">out_of_range</span><span class="p">(</span><span class="s">"test thread index"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">threads_</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">joinable</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">threads_</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">join</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">finish</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">join_all</span><span class="p">();</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">used_</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">errors_</span><span class="p">[</span><span class="n">i</span><span class="p">])</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">rethrow_exception</span><span class="p">(</span><span class="n">errors_</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">join_all</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="kr">thread</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">threads_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="kr">thread</span><span class="p">.</span><span class="n">joinable</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kr">thread</span><span class="p">.</span><span class="n">join</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">JobQueue</span><span class="o">&amp;</span><span class="w"> </span><span class="n">queue_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">exception_ptr</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="o">&gt;</span><span class="w"> </span><span class="n">errors_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kr">thread</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="o">&gt;</span><span class="w"> </span><span class="n">threads_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">used_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>The fixed six-slot arrays are enough for three producers and three consumers.
+Default-constructed thread handles are not joinable. Each worker writes only its
+own <code>errors_[index]</code>; the controller inspects those slots after joining. Distinct
+ordinary array elements are distinct storage, unlike packed <code>vector&lt;bool&gt;</code> proxy
+bits. Only the controller changes <code>used_</code>.</p>
+<p>The lambda's <code>task = std::move(function)</code> is an <strong>initialization capture</strong>: the
+closure owns the passed callable. <code>mutable</code> permits invoking a callable with a
+non-const call operator. Its references, if any, are still borrowed. Capturing a
+closure by value does not turn references inside that closure into owning values.</p>
+<p>Declare every object borrowed by these closures <strong>before</strong> <code>QueueThreads</code>.
+Reverse destruction order then runs the guard, wakes the threads, and joins before
+those objects disappear. If starting a later harness thread fails, the already
+constructed guard supplies the same cleanup. The worker catch records its own
+error and cancels the queue so other threads do not wait forever for work that
+will never arrive.</p>
+<p><code>finish</code> intentionally does not close the queue: tests must first arrange that
+their operations can finish. A producer-only test frees a slot; a consumer-only
+test supplies an item or closes; the mixed fixture joins its producers and then
+closes. The destructor is the fallback on assertion failure, not a substitute
+for testing each normal protocol.</p>
+<h2 id="distinguish-correct-synchronization-from-correct-queue-semantics">Distinguish correct synchronization from correct queue semantics</h2>
+<p>Append the single-thread ring and shutdown check:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_fifo_and_contracts</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">expect_error</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="o">&gt;</span><span class="p">([]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">JobQueue</span><span class="w"> </span><span class="n">invalid</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span><span class="w"> </span><span class="p">},</span>
+<span class="w">                                       </span><span class="s">"zero capacity accepted"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">JobQueue</span><span class="w"> </span><span class="n">queue</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="w"> </span><span class="n">empty</span><span class="p">;</span>
+<span class="w">    </span><span class="n">expect_error</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="o">&gt;</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">empty</span><span class="p">);</span><span class="w"> </span><span class="p">},</span>
+<span class="w">                                       </span><span class="s">"empty job accepted"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">base</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">base</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">6</span><span class="p">;</span><span class="w"> </span><span class="n">base</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">first</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">second</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">first</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">second</span><span class="p">),</span><span class="w"> </span><span class="s">"open queue rejected"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">first</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">second</span><span class="p">,</span><span class="w"> </span><span class="s">"accepted job stayed in caller"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">a</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">a</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">b</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">                </span><span class="s">"ring order or wrap differs"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">last</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">42</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">last</span><span class="p">),</span><span class="w"> </span><span class="s">"last open push rejected"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">close</span><span class="p">();</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">close</span><span class="p">();</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">late</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">99</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="o">*</span><span class="w"> </span><span class="n">identity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">late</span><span class="p">.</span><span class="n">get</span><span class="p">();</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">late</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">late</span><span class="p">.</span><span class="n">get</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">identity</span><span class="p">,</span><span class="w"> </span><span class="s">"late job consumed"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">drained</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">drained</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">drained</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s">"close discarded accepted job"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">(),</span><span class="w"> </span><span class="s">"drained queue returned an item"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>This checks exact FIFO order through repeated wraparound, not just a sum.
+<code>identity</code> records the address owned before a rejected submission; equality
+proves that rejection did not consume or replace that job. Calling close twice
+must not discard the already-accepted value 42.</p>
+<p>For a logical mutation, change pop's return-empty condition from
+<code>state_ == QueueState::canceled || count_ == 0</code> to
+<code>state_ != QueueState::open || count_ == 0</code>. All accesses remain protected,
+but the test must report <code>close discarded accepted job</code>. This is a protocol error,
+not a data race. Restore the original line before continuing.</p>
+<h2 id="establish-blocked-waiters-then-change-state">Establish blocked waiters, then change state</h2>
+<p>Append the empty-consumer scenario:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_waiting_consumers</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">cancel</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">JobQueue</span><span class="w"> </span><span class="n">queue</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="o">&gt;</span><span class="w"> </span><span class="n">results</span><span class="p">;</span>
+<span class="w">    </span><span class="n">QueueThreads</span><span class="w"> </span><span class="n">threads</span><span class="p">(</span><span class="n">queue</span><span class="p">);</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">results</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">threads</span><span class="p">.</span><span class="n">start</span><span class="p">([</span><span class="o">&amp;</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">results</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span><span class="w"> </span><span class="p">});</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">await_waiters</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">probe</span><span class="p">();</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">notify_without_change</span><span class="p">();</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">await_waiters</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">predicate_checks</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">probe</span><span class="p">().</span><span class="n">queued</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s">"notification invented an item"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cancel</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">close</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">threads</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">results</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="s">"closed empty queue produced a job"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The controller waits until all three pop operations are registered on an empty
+queue. It sends an extra notification and waits for another predicate check
+without adding work. Output handles are read only after joining. Close and
+cancel are both tested; each must wake all three consumers to return empty.
+A five-second sleep followed by inspecting <code>results</code> would be both an unreliable
+scheduling assumption and an unsynchronized access.</p>
+<p>Append the full-producer scenario:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_waiting_producers</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">cancel</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">JobQueue</span><span class="w"> </span><span class="n">queue</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">queued</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">10</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">queued</span><span class="p">),</span><span class="w"> </span><span class="s">"initial push rejected"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">pending</span><span class="p">;</span>
+<span class="w">    </span><span class="n">pending</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">20</span><span class="p">);</span>
+<span class="w">    </span><span class="n">pending</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">12</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">identities</span><span class="p">{</span><span class="n">pending</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">get</span><span class="p">(),</span><span class="w"> </span><span class="n">pending</span><span class="p">[</span><span class="mi">1</span><span class="p">].</span><span class="n">get</span><span class="p">()};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">accepted</span><span class="p">{</span><span class="nb">true</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">};</span><span class="w"> </span><span class="c1">// Not vector&lt;bool&gt;.</span>
+<span class="w">    </span><span class="n">QueueThreads</span><span class="w"> </span><span class="n">threads</span><span class="p">(</span><span class="n">queue</span><span class="p">);</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">pending</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">threads</span><span class="p">.</span><span class="n">start</span><span class="p">([</span><span class="o">&amp;</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">accepted</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">pending</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span><span class="w"> </span><span class="p">});</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">await_waiters</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">probe</span><span class="p">();</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">notify_without_change</span><span class="p">();</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">await_waiters</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">predicate_checks</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">probe</span><span class="p">().</span><span class="n">queued</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="s">"notification made room"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cancel</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">close</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">threads</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">pending</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">accepted</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">pending</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">get</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">identities</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+<span class="w">                </span><span class="s">"rejected producer lost ownership"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cancel</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">queue</span><span class="p">.</span><span class="n">close</span><span class="p">();</span><span class="w"> </span><span class="c1">// Closing cannot reverse cancellation.</span>
+<span class="w">        </span><span class="n">queue</span><span class="p">.</span><span class="n">cancel</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">(),</span><span class="w"> </span><span class="s">"cancel retained queued work"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">probe</span><span class="p">().</span><span class="n">state</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">QueueState</span><span class="o">::</span><span class="n">canceled</span><span class="p">,</span><span class="w"> </span><span class="s">"cancel reversed"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">drained</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">drained</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">drained</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="s">"close did not drain"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">(),</span><span class="w"> </span><span class="s">"drain did not finish"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Here one queued job fills the single slot, while two producers each own a pending
+job. The controller never reads or resets those handles until the producers are
+joined. It can inspect the ring through the locked <code>probe</code> meanwhile. Both close
+and cancel reject waiters without moving their handles. Close still delivers
+the initial 10; cancel does not. Close after cancel must not reverse the state.</p>
+<p>The pair of tests distinguishes waking “at least one” from waking <strong>every</strong>
+shutdown waiter. They also exercise nonproductive notifications. A passing run
+establishes these controlled executions, not fairness for every scheduler.</p>
+<p>Append the ordinary resource-change wakeup checks:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_transfer_wakeups</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">JobQueue</span><span class="w"> </span><span class="n">queue</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">first</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">10</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">second</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">20</span><span class="p">);</span>
+<span class="w">        </span><span class="kt">bool</span><span class="w"> </span><span class="n">accepted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">first</span><span class="p">),</span><span class="w"> </span><span class="s">"initial push rejected"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">QueueThreads</span><span class="w"> </span><span class="n">threads</span><span class="p">(</span><span class="n">queue</span><span class="p">);</span>
+<span class="w">        </span><span class="n">threads</span><span class="p">.</span><span class="n">start</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">accepted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">second</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
+<span class="w">        </span><span class="n">queue</span><span class="p">.</span><span class="n">await_waiters</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+<span class="w">        </span><span class="n">threads</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span><span class="w"> </span><span class="c1">// Removing the first job must wake this producer.</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">result</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">result</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">10</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">accepted</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">second</span><span class="p">,</span>
+<span class="w">                </span><span class="s">"space wakeup did not transfer ownership"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">queue</span><span class="p">.</span><span class="n">close</span><span class="p">();</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">next</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">next</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">20</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">(),</span><span class="w"> </span><span class="s">"second job missing"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">JobQueue</span><span class="w"> </span><span class="n">queue</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">job</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">12</span><span class="p">);</span>
+<span class="w">        </span><span class="n">QueueThreads</span><span class="w"> </span><span class="n">threads</span><span class="p">(</span><span class="n">queue</span><span class="p">);</span>
+<span class="w">        </span><span class="n">threads</span><span class="p">.</span><span class="n">start</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span><span class="w"> </span><span class="p">});</span>
+<span class="w">        </span><span class="n">queue</span><span class="p">.</span><span class="n">await_waiters</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">job</span><span class="p">),</span><span class="w"> </span><span class="s">"waiting consumer push rejected"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">threads</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span><span class="w"> </span><span class="c1">// Inserting the job must wake this consumer.</span>
+<span class="w">        </span><span class="n">queue</span><span class="p">.</span><span class="n">close</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">result</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">result</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">12</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">job</span><span class="p">,</span><span class="w"> </span><span class="s">"item wakeup lost job"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The first removes 10 from a full queue and waits for the blocked producer to
+transfer 20. The second supplies 12 to an already-waiting consumer. Joining in
+these two cases is legitimate because the controller has already performed the
+resource change allowing the worker to finish. Shutdown alone is not the only
+path that must notify correctly.</p>
+<h2 id="check-each-job-not-just-the-aggregate-total">Check each job, not just the aggregate total</h2>
+<p>Append the multiple-producer/multiple-consumer fixture:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_multiple_producers_and_consumers</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">per_producer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span><span class="p">;</span>
+<span class="w">    </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">producer_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span>
+<span class="w">    </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">consumer_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span>
+<span class="w">    </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">producer_count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">per_producer</span><span class="p">;</span>
+<span class="w">    </span><span class="n">JobQueue</span><span class="w"> </span><span class="n">queue</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">unsigned</span><span class="p">,</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">consumer_count</span><span class="o">&gt;</span><span class="w"> </span><span class="n">seen</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="p">,</span><span class="w"> </span><span class="n">producer_count</span><span class="o">&gt;</span><span class="w"> </span><span class="n">producer_threads</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">QueueThreads</span><span class="w"> </span><span class="n">threads</span><span class="p">(</span><span class="n">queue</span><span class="p">);</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">consumer_count</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">threads</span><span class="p">.</span><span class="n">start</span><span class="p">([</span><span class="o">&amp;</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">job</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="n">require</span><span class="p">(</span><span class="n">job</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">job</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">total</span><span class="p">,</span><span class="w"> </span><span class="s">"invalid job ID"</span><span class="p">);</span>
+<span class="w">                </span><span class="o">++</span><span class="n">seen</span><span class="p">[</span><span class="n">c</span><span class="p">][</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">job</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">)];</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">producer_count</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">p</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">producer_threads</span><span class="p">[</span><span class="n">p</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">threads</span><span class="p">.</span><span class="n">start</span><span class="p">([</span><span class="o">&amp;</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">per_producer</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">auto</span><span class="w"> </span><span class="n">job</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="n">p</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">per_producer</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="p">);</span>
+<span class="w">                </span><span class="n">require</span><span class="p">(</span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">job</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">job</span><span class="p">,</span><span class="w"> </span><span class="s">"producer rejected unexpectedly"</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">});</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">producer_threads</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">threads</span><span class="p">.</span><span class="n">join_one</span><span class="p">(</span><span class="n">index</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">queue</span><span class="p">.</span><span class="n">close</span><span class="p">();</span>
+<span class="w">    </span><span class="n">threads</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">total</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kt">unsigned</span><span class="w"> </span><span class="n">occurrences</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">consumer</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">seen</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">occurrences</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">consumer</span><span class="p">[</span><span class="n">id</span><span class="p">];</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">occurrences</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="s">"job was lost or processed more than once"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">id</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">180300</span><span class="p">,</span><span class="w"> </span><span class="s">"600-job fixture sum differs"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Three producers generate disjoint ID intervals <code>1..200</code>, <code>201..400</code>, and
+<code>401..600</code>. Each of three consumers owns its own histogram row. No two consumers
+write the same row, and the controller reads all rows only after joining. The
+arrays exist before any thread starts; they are test-oracle storage, not a
+production result container.</p>
+<p>For each ID <span class="math-input" data-display="false">i</span>, let <span class="math-input" data-display="false">h_{c,i}</span> be the count recorded by consumer <span class="math-input" data-display="false">c</span>. The actual
+coverage check is</p>
+<div class="math-input" data-display="true">\sum_{c=0}^{2} h_{c,i}=1\quad\text{for every }i\in\{1,\ldots,600\}.</div>
+<p>Only after checking every ID do we compute the fixture sum</p>
+<div class="math-input" data-display="true">\sum_{i=1}^{600}i=\frac{600\cdot601}{2}=180{,}300.</div>
+<p>A sum alone could conceal one missing ID and a compensating duplicate. We do not
+expect a particular consumer to receive a particular ID, nor a deterministic
+interleaving between producers. FIFO orders accepted ring transitions, not the
+wall-clock time when independent producers began constructing their jobs.</p>
+<p>The controller first joins producers, which can finish because consumers are
+already running. It then closes the queue and joins consumers. Joining consumers
+first on an open, empty queue would never finish: no operation would tell them
+that production had ended.</p>
+<h2 id="run-the-promised-result-and-retain-the-rejected-owner">Run the promised result and retain the rejected owner</h2>
+<p>Append the sum fixture:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_sum_and_late_job</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">ThreadCounts</span><span class="w"> </span><span class="n">counts</span><span class="p">;</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">SumWorkers</span><span class="w"> </span><span class="n">workers</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">counts</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">10</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">20</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">12</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">c</span><span class="p">),</span>
+<span class="w">                </span><span class="s">"normal submission rejected"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">a</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">b</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="s">"accepted ownership not transferred"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">totals</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">totals</span><span class="p">.</span><span class="n">jobs</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">totals</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s">"drained totals differ"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">workers</span><span class="p">.</span><span class="n">finish</span><span class="p">().</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="s">"repeat finish differs"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">late</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">99</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">late</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">late</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">late</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">99</span><span class="p">,</span>
+<span class="w">                </span><span class="s">"late submission consumed its job"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"sum=42, late job retained=99</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">counts</span><span class="p">.</span><span class="n">started</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">exited</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">joined</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">            </span><span class="s">"normal owner did not join exactly twice"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The three successful submissions empty the caller's handles. Closing and joining
+through <code>finish</code> yields three contributions totaling 42; the exact split across
+the two workers is irrelevant. The later 99 remains owned by the caller. Reading
+an atomic counter in comparisons such as <code>counts.started == 2</code> invokes its atomic
+value conversion; these checks happen after joins, not as a polling protocol.
+The counter is diagnostic, not the reason the worker lifetimes are safe.</p>
+<p>Append processing failure, overflow, and explicit cancellation checks:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_errors_and_cancel</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">SumWorkers</span><span class="w"> </span><span class="n">workers</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">10</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">failure</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">trailing</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">99</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">failure</span><span class="p">),</span><span class="w"> </span><span class="s">"failure setup"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">accepted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">trailing</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">accepted</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">!</span><span class="n">trailing</span><span class="p">,</span><span class="w"> </span><span class="s">"trailing ownership disagrees"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">expect_error</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="o">&gt;</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span><span class="w"> </span><span class="p">},</span>
+<span class="w">                                         </span><span class="s">"worker exception disappeared"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">partial</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">totals</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">partial</span><span class="p">.</span><span class="n">jobs</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">partial</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="s">"error rolled back or ran tail"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">expect_error</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="o">&gt;</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span><span class="w"> </span><span class="p">},</span>
+<span class="w">                                         </span><span class="s">"repeat finish lost the error"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">SumWorkers</span><span class="w"> </span><span class="n">workers</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">maximum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">());</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">extra</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">maximum</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">extra</span><span class="p">),</span><span class="w"> </span><span class="s">"overflow setup"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">expect_error</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">overflow_error</span><span class="o">&gt;</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span><span class="w"> </span><span class="p">},</span>
+<span class="w">                                          </span><span class="s">"worker sum wrapped"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">partial</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">workers</span><span class="p">.</span><span class="n">totals</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">partial</span><span class="p">.</span><span class="n">jobs</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                </span><span class="n">partial</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">(),</span>
+<span class="w">                </span><span class="s">"failed addition changed totals"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">ThreadCounts</span><span class="w"> </span><span class="n">counts</span><span class="p">;</span>
+<span class="w">        </span><span class="n">SumWorkers</span><span class="w"> </span><span class="n">workers</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">counts</span><span class="p">);</span>
+<span class="w">        </span><span class="n">workers</span><span class="p">.</span><span class="n">request_cancel</span><span class="p">();</span>
+<span class="w">        </span><span class="n">workers</span><span class="p">.</span><span class="n">request_cancel</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">workers</span><span class="p">.</span><span class="n">finish</span><span class="p">().</span><span class="n">jobs</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s">"empty cancel made work"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">rejected</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Job</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">7</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="o">!</span><span class="n">workers</span><span class="p">.</span><span class="n">submit</span><span class="p">(</span><span class="n">rejected</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">rejected</span><span class="p">,</span><span class="w"> </span><span class="s">"cancel consumed late job"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">counts</span><span class="p">.</span><span class="n">exited</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">joined</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="s">"cancel did not join"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>With one worker, FIFO fixes the order: 10 contributes first, the failing 20 raises
+an exception, and 99 cannot contribute. The 99 may have been admitted before
+cancellation or may still belong to the caller; both schedules are allowed.
+<code>accepted == !trailing</code> checks the appropriate ownership in either case. The
+partial total remains <code>(1,10)</code>, and <code>finish</code> rethrows the recorded failure even
+on a second call.</p>
+<p>The overflow fixture completes the maximum representable value, then rejects
+adding 1 before changing either total. The cancellation fixture has no jobs, so
+it makes no timing assumption about whether a worker was already waiting when
+cancellation occurred. Waiting-state shutdown itself was covered separately with
+explicit rendezvous.</p>
+<p>Append construction and unwinding checks:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_lifetime_and_startup</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fail_before</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">fail_before</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">fail_before</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">ThreadCounts</span><span class="w"> </span><span class="n">counts</span><span class="p">;</span>
+<span class="w">        </span><span class="n">expect_error</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">system_error</span><span class="o">&gt;</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">SumWorkers</span><span class="w"> </span><span class="n">failed</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">counts</span><span class="p">,</span><span class="w"> </span><span class="n">fail_before</span><span class="p">);</span>
+<span class="w">        </span><span class="p">},</span><span class="w"> </span><span class="s">"startup injection did not fail"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">counts</span><span class="p">.</span><span class="n">started</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">fail_before</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">exited</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">fail_before</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                </span><span class="n">counts</span><span class="p">.</span><span class="n">joined</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">fail_before</span><span class="p">,</span><span class="w"> </span><span class="s">"partial startup leaked a thread"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">ThreadCounts</span><span class="w"> </span><span class="n">counts</span><span class="p">;</span>
+<span class="w">    </span><span class="k">struct</span><span class="w"> </span><span class="nc">CallerFailure</span><span class="w"> </span><span class="p">{};</span>
+<span class="w">    </span><span class="n">expect_error</span><span class="o">&lt;</span><span class="n">CallerFailure</span><span class="o">&gt;</span><span class="p">([</span><span class="o">&amp;</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">SumWorkers</span><span class="w"> </span><span class="n">workers</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">counts</span><span class="p">);</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">CallerFailure</span><span class="p">{};</span>
+<span class="w">    </span><span class="p">},</span><span class="w"> </span><span class="s">"caller failure missing"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">require</span><span class="p">(</span><span class="n">counts</span><span class="p">.</span><span class="n">started</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">exited</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">joined</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">            </span><span class="s">"unwinding did not join workers"</span><span class="p">);</span>
+<span class="w">    </span><span class="n">expect_error</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="o">&gt;</span><span class="p">([]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">SumWorkers</span><span class="w"> </span><span class="n">invalid</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w"> </span><span class="p">},</span>
+<span class="w">                                       </span><span class="s">"zero workers accepted"</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w"> </span><span class="c1">// namespace</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">check_fifo_and_contracts</span><span class="p">();</span>
+<span class="w">        </span><span class="n">check_waiting_consumers</span><span class="p">(</span><span class="nb">false</span><span class="p">);</span>
+<span class="w">        </span><span class="n">check_waiting_consumers</span><span class="p">(</span><span class="nb">true</span><span class="p">);</span>
+<span class="w">        </span><span class="n">check_waiting_producers</span><span class="p">(</span><span class="nb">false</span><span class="p">);</span>
+<span class="w">        </span><span class="n">check_waiting_producers</span><span class="p">(</span><span class="nb">true</span><span class="p">);</span>
+<span class="w">        </span><span class="n">check_transfer_wakeups</span><span class="p">();</span>
+<span class="w">        </span><span class="n">check_multiple_producers_and_consumers</span><span class="p">();</span>
+<span class="w">        </span><span class="n">check_sum_and_late_job</span><span class="p">();</span>
+<span class="w">        </span><span class="n">check_errors_and_cancel</span><span class="p">();</span>
+<span class="w">        </span><span class="n">check_lifetime_and_startup</span><span class="p">();</span>
+<span class="w">        </span><span class="n">require</span><span class="p">(</span><span class="n">Job</span><span class="o">::</span><span class="n">live</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s">"jobs survived joined cleanup"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"600 jobs exactly once; waiters, errors, startup, cleanup passed</span><span class="se">\n</span><span class="s">"</span>
+<span class="w">                  </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"live jobs=0</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exception</span><span class="o">&amp;</span><span class="w"> </span><span class="n">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"foundation-18: "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">error</span><span class="p">.</span><span class="n">what</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Failure before launch indices 0, 1, and 2 verifies cleanup of zero, one, and two
+started workers. The observer outlives the failed construction. Throwing a
+<code>CallerFailure</code> after starting three workers verifies destructor cleanup during
+ordinary stack unwinding. At the end, every owner scope has ended and every
+started thread has been joined, so the final live-job count must be zero.</p>
+<p>The expected output of <code>foundation-18</code> is:</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>sum=42, late job retained=99
+600 jobs exactly once; waiters, errors, startup, cleanup passed
+live jobs=0
+</code></pre></figure>
+<p>No worker prints concurrently. The controlling thread reports only after the
+relevant checks, avoiding nondeterministic interleaved logging as a supposed
+proof of correctness.</p>
+<h2 id="append-native-build-targets-not-a-new-engine-configuration">Append native build targets, not a new engine configuration</h2>
+<p>Append the following block to the existing root <code>CMakeLists.txt</code>. Do not replace
+the earlier targets. <code>Threads::Threads</code> carries the platform's required compile
+and link settings; its flags may be empty where support is already provided by
+the system libraries. <code>THREADS_PREFER_PTHREAD_FLAG</code> requests the compiler option
+when appropriate rather than hard-coding a particular thread library. See
+<a href="https://cmake.org/cmake/help/latest/module/FindThreads.html">CMake's FindThreads module</a>.</p>
+<figure class="code-block"><figcaption><span class="code-title">CMakeLists.txt</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="c"># Chapter 18: standalone synchronization exercises, not a threaded engine.</span>
+<span class="nb">set</span><span class="p">(</span><span class="s">THREADS_PREFER_PTHREAD_FLAG</span><span class="w"> </span><span class="s">TRUE</span><span class="p">)</span>
+<span class="nb">find_package</span><span class="p">(</span><span class="s">Threads</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span>
+
+<span class="nb">add_executable</span><span class="p">(</span><span class="s">foundation-18-visibility</span>
+<span class="w">    </span><span class="s">exercises/chapter-18/visibility.cpp</span><span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span><span class="s">foundation-18-visibility</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">cxx_std_20</span><span class="p">)</span>
+<span class="nb">target_compile_options</span><span class="p">(</span><span class="s">foundation-18-visibility</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">-Wall</span><span class="w"> </span><span class="s">-Wextra</span><span class="w"> </span><span class="s">-Wpedantic</span><span class="p">)</span>
+<span class="nb">target_link_libraries</span><span class="p">(</span><span class="s">foundation-18-visibility</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">Threads::Threads</span><span class="p">)</span>
+<span class="nb">add_test</span><span class="p">(</span><span class="s">NAME</span><span class="w"> </span><span class="s">foundation-18-visibility</span><span class="w"> </span><span class="s">COMMAND</span><span class="w"> </span><span class="s">foundation-18-visibility</span><span class="p">)</span>
+
+<span class="nb">add_executable</span><span class="p">(</span><span class="s">foundation-18</span>
+<span class="w">    </span><span class="s">exercises/chapter-18/job_queue.cpp</span>
+<span class="w">    </span><span class="s">exercises/chapter-18/workers.cpp</span>
+<span class="w">    </span><span class="s">exercises/chapter-18/main.cpp</span><span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span><span class="s">foundation-18</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">cxx_std_20</span><span class="p">)</span>
+<span class="nb">target_compile_options</span><span class="p">(</span><span class="s">foundation-18</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">-Wall</span><span class="w"> </span><span class="s">-Wextra</span><span class="w"> </span><span class="s">-Wpedantic</span><span class="p">)</span>
+<span class="nb">target_link_libraries</span><span class="p">(</span><span class="s">foundation-18</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">Threads::Threads</span><span class="p">)</span>
+<span class="nb">add_test</span><span class="p">(</span><span class="s">NAME</span><span class="w"> </span><span class="s">foundation-18</span><span class="w"> </span><span class="s">COMMAND</span><span class="w"> </span><span class="s">foundation-18</span><span class="p">)</span>
+<span class="nb">set_tests_properties</span><span class="p">(</span><span class="s">foundation-18</span><span class="w"> </span><span class="s">foundation-18-visibility</span><span class="w"> </span><span class="s">PROPERTIES</span><span class="w"> </span><span class="s">TIMEOUT</span><span class="w"> </span><span class="s">30</span><span class="p">)</span>
+
+<span class="c"># Intentionally wrong: never part of the default build or passing CTest suite.</span>
+<span class="nb">add_executable</span><span class="p">(</span><span class="s">foundation-18-racy</span><span class="w"> </span><span class="s">EXCLUDE_FROM_ALL</span>
+<span class="w">    </span><span class="s">exercises/chapter-18/racy_counter.cpp</span><span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span><span class="s">foundation-18-racy</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">cxx_std_20</span><span class="p">)</span>
+<span class="nb">target_compile_options</span><span class="p">(</span><span class="s">foundation-18-racy</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">-Wall</span><span class="w"> </span><span class="s">-Wextra</span><span class="w"> </span><span class="s">-Wpedantic</span><span class="p">)</span>
+<span class="nb">target_link_libraries</span><span class="p">(</span><span class="s">foundation-18-racy</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">Threads::Threads</span><span class="p">)</span>
+</code></pre></figure>
+<p><code>EXCLUDE_FROM_ALL</code> keeps the intentionally wrong executable out of the default
+build. There is deliberately no <code>add_test</code> for it. A correct normal CTest run
+must never depend on executing undefined behavior. The 30-second timeouts are
+watchdogs, not synchronization; a stuck join is a failed test, not a reason to
+increase an arbitrary sleep.</p>
+<p>From the learner workspace, configure and run the two normal targets:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/debug<span class="w"> </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Debug<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span>
+cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--target<span class="w"> </span>foundation-18-visibility<span class="w"> </span>foundation-18<span class="w"> </span>-j<span class="w"> </span><span class="m">4</span>
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>--output-on-failure<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-R<span class="w"> </span><span class="s1">'^foundation-18(-visibility)?$'</span>
+
+cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/release<span class="w"> </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Release<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span>
+cmake<span class="w"> </span>--build<span class="w"> </span>build/release<span class="w"> </span>--target<span class="w"> </span>foundation-18-visibility<span class="w"> </span>foundation-18<span class="w"> </span>-j<span class="w"> </span><span class="m">4</span>
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>--output-on-failure<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-R<span class="w"> </span><span class="s1">'^foundation-18(-visibility)?$'</span>
+</code></pre></figure>
+<p>Use the configured compiler path for an equivalent native LLVM installation.
+When reusing a build directory, keep its compiler selection consistent; choose a
+new directory when changing toolchains. The regular expressions select exactly
+the two new passing tests. The earlier foundation and engine tests remain
+available through the unchanged cumulative configuration.</p>
+<p>A memory/undefined-behavior diagnostic build is separate:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/asan-18<span class="w"> </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Debug<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_FLAGS<span class="o">=</span><span class="s1">'-fsanitize=address,undefined -fno-omit-frame-pointer'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_EXE_LINKER_FLAGS<span class="o">=</span><span class="s1">'-fsanitize=address,undefined'</span>
+cmake<span class="w"> </span>--build<span class="w"> </span>build/asan-18<span class="w"> </span>--target<span class="w"> </span>foundation-18-visibility<span class="w"> </span>foundation-18<span class="w"> </span>-j<span class="w"> </span><span class="m">4</span>
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/asan-18<span class="w"> </span>--output-on-failure<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-R<span class="w"> </span><span class="s1">'^foundation-18(-visibility)?$'</span>
+</code></pre></figure>
+<p>These instruments can catch memory misuse and selected undefined operations.
+They are not a data-race checker and do not establish that a queue drains the
+right jobs. Keep logical assertions in every configuration.</p>
+<h2 id="isolate-the-data-race-instead-of-normalizing-it">Isolate the data race instead of normalizing it</h2>
+<p>Create <code>racy_counter.cpp</code> exactly as this separate diagnostic:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-18/racy_counter.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="c1">// Intentionally undefined behavior. Build/run only as a race-detector exercise.</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;atomic&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;thread&gt;</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Counter</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kt">unsigned</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="p">};</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">shared</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_shared</span><span class="o">&lt;</span><span class="n">Counter</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">unsigned</span><span class="o">&gt;</span><span class="w"> </span><span class="n">arrived</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="w"> </span><span class="n">go</span><span class="p">{</span><span class="nb">false</span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kr">thread</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">threads</span><span class="p">;</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="kr">thread</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">threads</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kr">thread</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kr">thread</span><span class="p">([</span><span class="n">shared</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">arrived</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">go</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="n">arrived</span><span class="p">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_release</span><span class="p">);</span>
+<span class="w">                </span><span class="n">arrived</span><span class="p">.</span><span class="n">notify_one</span><span class="p">();</span>
+<span class="w">                </span><span class="n">go</span><span class="p">.</span><span class="n">wait</span><span class="p">(</span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">);</span>
+<span class="w">                </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">100000</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="o">++</span><span class="n">shared</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">;</span><span class="w"> </span><span class="c1">// Deliberate unsynchronized conflicting writes.</span>
+<span class="w">                </span><span class="p">}</span>
+<span class="w">            </span><span class="p">});</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">go</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="nb">true</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_release</span><span class="p">);</span>
+<span class="w">        </span><span class="n">go</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="kr">thread</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">threads</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="kr">thread</span><span class="p">.</span><span class="n">joinable</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kr">thread</span><span class="p">.</span><span class="n">join</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arrived</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">);</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">arrived</span><span class="p">.</span><span class="n">wait</span><span class="p">(</span><span class="n">count</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">);</span>
+<span class="w">        </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arrived</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">go</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="nb">true</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_release</span><span class="p">);</span>
+<span class="w">    </span><span class="n">go</span><span class="p">.</span><span class="n">notify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="kr">thread</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">threads</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kr">thread</span><span class="p">.</span><span class="n">join</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"diagnostic only; no valid expected count: "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">shared</span><span class="o">-&gt;</span><span class="n">value</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Both closures own a copy of the <code>shared_ptr</code>, so the counter's lifetime is not
+the bug. The arrival counter and start gate are atomic; they arrange for both
+workers to reach a controlled starting phase. The accesses to <code>Counter::value</code>
+after that gate are plain, conflicting increments with no ordering between
+workers. Joining both afterward does not repair those earlier accesses.</p>
+<p>The atomic <code>arrived.wait(count, acquire)</code> waits for a change from its last
+observed value; the loop then loads the current count again. This prevents
+notification counting from becoming a second bug in the diagnostic. A partial
+thread-start failure releases the start gate and joins any existing worker
+before rethrowing. That cleanup does not make the normal two-worker increment
+legal: the program intentionally has undefined behavior and belongs nowhere in
+the passing suite.</p>
+<p>Build a <strong>separate</strong> race-diagnostic configuration:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/tsan-18<span class="w"> </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Debug<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_FLAGS<span class="o">=</span><span class="s1">'-O1 -g -fsanitize=thread'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_EXE_LINKER_FLAGS<span class="o">=</span><span class="s1">'-fsanitize=thread'</span>
+cmake<span class="w"> </span>--build<span class="w"> </span>build/tsan-18<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--target<span class="w"> </span>foundation-18-visibility<span class="w"> </span>foundation-18<span class="w"> </span>foundation-18-racy<span class="w"> </span>-j<span class="w"> </span><span class="m">4</span>
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/tsan-18<span class="w"> </span>--output-on-failure<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-R<span class="w"> </span><span class="s1">'^foundation-18(-visibility)?$'</span>
+
+<span class="nv">status</span><span class="o">=</span><span class="m">0</span>
+<span class="nv">TSAN_OPTIONS</span><span class="o">=</span><span class="nv">halt_on_error</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>build/tsan-18/foundation-18-racy<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>&gt;<span class="w"> </span>build/tsan-18/racy.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nv">status</span><span class="o">=</span><span class="nv">$?</span>
+cat<span class="w"> </span>build/tsan-18/racy.log
+<span class="nb">printf</span><span class="w"> </span><span class="s1">'diagnostic exit=%s\n'</span><span class="w"> </span><span class="s2">"</span><span class="nv">$status</span><span class="s2">"</span>
+</code></pre></figure>
+<p>The normal tests should pass without a race report. The deliberately wrong
+program should report conflicting accesses at <code>++shared-&gt;value</code>, with worker
+creation stacks. A nonzero exit by itself is not enough: a runtime load error or
+unsupported environment is not a detected race. Read the diagnostic. Its address,
+thread identifiers, stack formatting, and exit code are not portable expectations.
+Even printing 200,000 would not validate this program; undefined behavior has no
+required numerical result.</p>
+<p>Clang documents ThreadSanitizer support for Darwin ARM64 and compilation/linking
+with <code>-fsanitize=thread</code>; <code>-g</code> retains source locations, and modest optimization
+is appropriate for its diagnostic use. Consult the
+<a href="https://clang.llvm.org/docs/ThreadSanitizer.html">ThreadSanitizer documentation</a>
+for the installed runtime's limitations. Use a working compatible native toolchain,
+not an invented required version. Do not combine ThreadSanitizer with
+AddressSanitizer in the same executable. GCC's
+<a href="https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html">instrumentation options</a>
+also document that incompatibility; GCC is an additional testing option where
+available, not a macOS installation requirement.</p>
+<p>A sanitizer substantially changes execution and resource behavior. Its passing
+run is evidence about exercised accesses, not a proof of race freedom, scheduling
+fairness, absence of deadlock, or production throughput. The controlled
+rendezvous tests and explicit state reasoning remain necessary.</p>
+<h2 id="repair-the-scalar-without-pretending-to-repair-a-multi-field-protocol">Repair the scalar without pretending to repair a multi-field protocol</h2>
+<p>As a small variation, copy <code>racy_counter.cpp</code> to a temporary file outside the
+normal target. Replace the declaration and increment with:</p>
+<figure class="code-block"><figcaption><span class="code-title">C++</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">Counter</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">unsigned</span><span class="o">&gt;</span><span class="w"> </span><span class="n">value</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span><span class="w"> </span><span class="p">};</span>
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-title">C++</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">shared</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">);</span>
+</code></pre></figure>
+<p>Replace the final output statement with the following statements:</p>
+<figure class="code-block"><figcaption><span class="code-title">C++</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">shared</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_relaxed</span><span class="p">);</span>
+<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"atomic count="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">200000</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+</code></pre></figure>
+<p>Now the shared operation is one scalar read-modify-write. No other payload is
+published through the counter, so relaxed ordering is sufficient for this
+purpose. The joins precede the final read. Rebuild the temporary version with
+ThreadSanitizer: the expected result is <code>atomic count=200000</code> without the original
+race report. Do not apply this edit to the queue's count and assume the slots,
+indices, and state now form an atomic transition; they still need their common
+mutex. Preserve the intentionally wrong canonical diagnostic for later comparison.</p>
+<h2 id="make-a-race-free-protocol-mistake-on-purpose">Make a race-free protocol mistake on purpose</h2>
+<p>In a saved working copy of <code>job_queue.cpp</code>, make the one-line pop change described
+earlier: return empty for <strong>any</strong> non-open state. Rebuild <code>foundation-18</code> in Debug,
+Release, and the supported sanitizer configurations, then run it directly. The
+expected logical failure is:</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>foundation-18: close discarded accepted job
+</code></pre></figure>
+<p>Its exit is nonzero even in Release. A clean sanitizer result would not contradict
+this assertion: the program discarded accepted work under the mutex. Restore the
+original canceled-or-empty condition, rebuild, and require both normal tests to
+pass again. Do not leave the mutation in the learner workspace for the next chapter.</p>
+<h2 id="diagnose-the-missing-relationship">Diagnose the missing relationship</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Inspect first</th>
+<th>Concrete correction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shutdown hangs with several consumers</td>
+<td>Close/cancel state and both waiter classes</td>
+<td>Set state under the mutex, notify all, then join</td>
+</tr>
+<tr>
+<td>Close loses accepted jobs</td>
+<td>Pop's return-empty branch</td>
+<td>Drain until count is zero unless canceled</td>
+</tr>
+<tr>
+<td>A rejected push empties the caller</td>
+<td>Location of the pointer move</td>
+<td>Move only after deciding to accept under the mutex</td>
+</tr>
+<tr>
+<td>Exception during startup terminates</td>
+<td>Constructor catch and joinable members</td>
+<td>Cancel and join existing workers before rethrowing</td>
+</tr>
+<tr>
+<td>A job exception terminates immediately</td>
+<td>The thread callable boundary</td>
+<td>Capture the exception, clean up, rethrow in the controller</td>
+</tr>
+<tr>
+<td>Pair totals sometimes disagree</td>
+<td>Whether all fields use the same lock</td>
+<td>Protect and inspect the whole invariant together</td>
+</tr>
+<tr>
+<td>Race despite shared ownership</td>
+<td>Accesses to the pointed-to payload</td>
+<td>Add appropriate synchronization; reference counting is not that lock</td>
+</tr>
+<tr>
+<td>Rendezvous times out</td>
+<td>Predicate counters and actual thread startup</td>
+<td>Diagnose the blocked operation; do not treat a longer sleep as a fix</td>
+</tr>
+</tbody>
+</table>
+<p>A missing notification may leave the controller blocked in <code>join</code>, while a worker
+waits in pop or push. A debugger's all-thread backtraces can reveal that wait
+relationship; the waiting stack alone is not evidence that the mutex was forgotten.
+The relevant question is which operation can make the predicate true, and whether
+that operation can still run. Assertions made before releasing a required test
+resource can themselves create a hang, which is why test cleanup is also owned.</p>
+<p>The five-second rendezvous watchdog can expire while a debugger has paused
+threads. That is a test-environment interruption, not a successful synchronization
+result. For interactive stepping, adjust only the diagnostic watchdog in a scratch
+copy; never remove the production predicate or rely on scheduling delays.</p>
+<h2 id="what-has-and-has-not-been-established">What has and has not been established</h2>
+<p>The new normal programs were executed with Clang 17 on Linux in Debug, Release,
+and AddressSanitizer/UndefinedBehaviorSanitizer configurations. A separate GCC
+14.2 ThreadSanitizer build ran the normal programs without a race report and
+reported the deliberately shared-counter race. These are execution observations,
+not required compiler versions. Native M4/macOS execution remains unverified.</p>
+<p>The queue fixture transfers 600 distinct jobs exactly once, deliberately wakes
+waiters without supplying permission, closes and cancels with producers and
+consumers registered, retains rejected ownership, propagates job failures,
+preserves totals on checked overflow, joins partially started workers, and reaches
+zero live jobs. None of those observations proves arbitrary scheduler fairness.
+The exercise also does not promise prompt interruption of a blocking filesystem
+operation or a bound on whole-process memory.</p>
+<p>Most importantly, the engine is still synchronous. An immutable database fixture
+can still use a mutable cache, accounting ledger, retirement registry, or counters
+on its read path. Before multiple query workers share those objects, each mutable
+access needs synchronization or genuine isolation. A <code>shared_ptr&lt;ReadView&gt;</code> alone
+would not supply it. The next chapter adds bounded execution and cooperative
+cancellation to complete queries; it must preserve these lifetime rules while
+introducing explicit task completion and admission semantics.</p>
+<h3 id="references-for-this-part">References for this part</h3>
+<p>In addition to Part 1's C++ references, the implementations above rely on the
+specified thread creation/join/destruction behavior and exception transport.
+CMake's <code>FindThreads</code> documentation explains platform-specific build support;
+Clang's ThreadSanitizer documentation and GCC's instrumentation documentation
+explain the diagnostic configurations. The linked pages were consulted on
+November 6, 2026. Their current tool-version labels are not course requirements.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-18.html"><small>Previous · Chapter 18 · Part 1</small><span>Synchronization and thread lifetime</span></a><a href="chapter-19.html"><small>Next · Chapter 19 · Part 1</small><span>Bounded execution and cooperative cancellation</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 18 · Part 2</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-2-join-before-destroying-shared-state">Part 2 — Join before destroying shared state</a></li><li class="toc-h2"><a href="#a-thread-owner-needs-a-policy-for-incomplete-construction">A thread owner needs a policy for incomplete construction</a></li><li class="toc-h2"><a href="#never-join-while-holding-a-mutex-a-worker-needs">Never join while holding a mutex a worker needs</a></li><li class="toc-h2"><a href="#deliver-an-exception-only-after-cleanup-can-no-longer-race">Deliver an exception only after cleanup can no longer race</a></li><li class="toc-h2"><a href="#make-test-failures-clean-up-threads-too">Make test failures clean up threads too</a></li><li class="toc-h2"><a href="#distinguish-correct-synchronization-from-correct-queue-semantics">Distinguish correct synchronization from correct queue semantics</a></li><li class="toc-h2"><a href="#establish-blocked-waiters-then-change-state">Establish blocked waiters, then change state</a></li><li class="toc-h2"><a href="#check-each-job-not-just-the-aggregate-total">Check each job, not just the aggregate total</a></li><li class="toc-h2"><a href="#run-the-promised-result-and-retain-the-rejected-owner">Run the promised result and retain the rejected owner</a></li><li class="toc-h2"><a href="#append-native-build-targets-not-a-new-engine-configuration">Append native build targets, not a new engine configuration</a></li><li class="toc-h2"><a href="#isolate-the-data-race-instead-of-normalizing-it">Isolate the data race instead of normalizing it</a></li><li class="toc-h2"><a href="#repair-the-scalar-without-pretending-to-repair-a-multi-field-protocol">Repair the scalar without pretending to repair a multi-field protocol</a></li><li class="toc-h2"><a href="#make-a-race-free-protocol-mistake-on-purpose">Make a race-free protocol mistake on purpose</a></li><li class="toc-h2"><a href="#diagnose-the-missing-relationship">Diagnose the missing relationship</a></li><li class="toc-h2"><a href="#what-has-and-has-not-been-established">What has and has not been established</a></li><li class="toc-h3"><a href="#references-for-this-part">References for this part</a></li></ul></aside>
+</div></body></html>

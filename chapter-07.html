@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 7 · Part 1 — An arena-backed skip-list memtable · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-07.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html" aria-current="page"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 7 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/9">Read on GitHub</a><a href="source/chapter-07.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-stable-storage-and-ordered-search">Part 1 — Stable storage and ordered search</a></li><li class="toc-h2"><a href="#the-files-and-the-ownership-boundary">The files and the ownership boundary</a></li><li class="toc-h2"><a href="#an-arena-gives-addresses-a-longer-life-than-a-vector">An arena gives addresses a longer life than a vector</a></li><li class="toc-h3"><a href="#give-rollback-one-exclusive-owner">Give rollback one exclusive owner</a></li><li class="toc-h2"><a href="#rewinding-storage-without-rewinding-old-objects">Rewinding storage without rewinding old objects</a></li><li class="toc-h2"><a href="#derive-alignment-before-doing-pointer-arithmetic">Derive alignment before doing pointer arithmetic</a></li><li class="toc-h2"><a href="#construct-an-object-do-not-merely-cast-to-one">Construct an object; do not merely cast to one</a></li><li class="toc-h2"><a href="#represent-versions-not-overwrites">Represent versions, not overwrites</a></li><li class="toc-h3"><a href="#requests-own-their-input-image">Requests own their input image</a></li><li class="toc-h2"><a href="#a-skip-list-is-several-ordered-lists-sharing-nodes">A skip list is several ordered lists sharing nodes</a></li><li class="toc-h3"><a href="#bounded-towers-without-pretending-a-one-element-array-is-larger">Bounded towers without pretending a one-element array is larger</a></li><li class="toc-h3"><a href="#a-cursor-borrows-a-preparation-owns-a-pending-change">A cursor borrows; a preparation owns a pending change</a></li><li class="toc-h2"><a href="#begin-with-construction-and-whole-generation-destruction">Begin with construction and whole-generation destruction</a></li><li class="toc-h2"><a href="#search-by-preserving-the-predecessor-invariant">Search by preserving the predecessor invariant</a></li><li class="toc-h2"><a href="#heights-a-useful-model-not-a-worst-case-promise">Heights: a useful model, not a worst-case promise</a></li><li class="toc-h2"><a href="#references-for-this-part">References for this part</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-7-an-arena-backed-skip-list-memtable">Chapter 7 — An arena-backed skip-list memtable</h1>
+<h2 id="part-1-stable-storage-and-ordered-search">Part 1 — Stable storage and ordered search</h2>
+<p>Suppose the in-memory index contains event 10 and event 30. A batch adds event
+20, adds event 25, and deletes event 10. Allocating and publishing each operation
+in turn is unsafe: a later allocation failure could leave only half the batch
+visible. Keeping every allocation alive is not sufficient either. Incorrect
+link updates can make a fully allocated node unreachable.</p>
+<p>We will implement two connected mechanisms. An arena supplies stable, aligned
+storage under a byte cap and can abandon everything allocated during one
+preparation. A skip list orders versions of records and publishes an entirely
+prepared batch without allocating. The link algorithm, allocation policy,
+rollback, and structural checks are ours; no standard ordered container sits
+inside the engine.</p>
+<p>Begin with the restored <a href="https://25d-228.github.io/cplusplus-learning/chapter-06.html">Chapter 6</a>
+workspace, including its <a href="https://25d-228.github.io/cplusplus-learning/chapter-06-part-2.html">second part</a>
+and all eight passing CTest entries. Keep Chapters 1–5's independent foundation
+programs. We reuse <code>Key</code>, <code>KeyLess</code>, the <code>Event</code> and <code>Account</code> value types,
+30/14-byte codecs, and checked size arithmetic. No preceding file is replaced.</p>
+<blockquote>
+<p><strong>Learning objectives</strong></p>
+<p>Allocate aligned storage without relocating existing nodes; separate storage
+from object lifetime; roll back a preparation without losing old values;
+derive skip-list search and insertion; order versions and deletion markers;
+publish interacting nodes without throwing; distinguish stable addresses from
+snapshot semantics; verify every level against a reference order.</p>
+</blockquote>
+<p>The allocation remains <strong>4.5 implementation hours</strong>: arena 1.0, index and batch
+preparation 2.5, and structural tests/debugging 1.0. Reading is separate. This
+chapter has two complete parts with that <strong>single</strong> allocation. Part 1 develops
+storage, record entries, and search. <a href="https://25d-228.github.io/cplusplus-learning/chapter-07-part-2.html">Part 2</a>
+finishes publication, diagnostics, tests, and the build. Implement both before
+advancing; the source files continue across the two pages.</p>
+<h2 id="the-files-and-the-ownership-boundary">The files and the ownership boundary</h2>
+<p>Create the directories, retaining the native C++20 compiler already selected:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — extend the engine directories</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>include/strata/memory<span class="w"> </span>include/strata/storage<span class="w"> </span>src/memory<span class="w"> </span>src/storage
+</code></pre></figure>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>include/strata/memory/arena.hpp</code></td>
+<td>Capped storage and one rollback transaction</td>
+</tr>
+<tr>
+<td><code>src/memory/arena.cpp</code></td>
+<td>Chunk acquisition, aligned bump allocation, rollback</td>
+</tr>
+<tr>
+<td><code>include/strata/storage/entry.hpp</code></td>
+<td>Internal keys, owned mutations, borrowed entries</td>
+</tr>
+<tr>
+<td><code>include/strata/storage/memtable.hpp</code></td>
+<td>Index, cursor, prepared-batch interfaces</td>
+</tr>
+<tr>
+<td><code>src/storage/memtable.cpp</code></td>
+<td>Search, preparation, link publication, invariants</td>
+</tr>
+<tr>
+<td><code>tests/memtable.cpp</code></td>
+<td>Lifetime, failure, version, and reference checks</td>
+</tr>
+</tbody>
+</table>
+<p>All filename-labelled blocks for a file append <strong>in reading order</strong>, first this
+page and then Part 2. A later CMake block appends to the existing root file.
+There is no new dependency or unfinished future target.</p>
+<p><code>MemTable</code> owns its arena. The arena owns chunks, and chunks provide storage for
+nodes and their encoded values. A <code>Cursor</code> or <code>EntryView</code> borrows those objects;
+it owns no chunk. A prepared-batch token temporarily controls an arena checkpoint
+and the lifetimes of unpublished nodes. It must be destroyed or committed before
+the table can be frozen, and must never outlive the table.</p>
+<p>The entire layer is <strong>single-threaded or externally exclusive</strong>. Even an
+otherwise read-only lookup must not overlap link publication in another thread.
+A later snapshot layer will share frozen tables, not turn these ordinary pointer
+writes into lock-free operations.</p>
+<h2 id="an-arena-gives-addresses-a-longer-life-than-a-vector">An arena gives addresses a longer life than a vector</h2>
+<p>A vector can move its elements when capacity grows. That is unacceptable for a
+node referenced by many other nodes. Instead, acquire independent chunks and
+never move them. Each chunk holds 4096 payload bytes. A bump cursor advances
+inside the newest chunk; a new chunk is acquired when the remaining suffix
+cannot hold the next aligned request. We do not search old holes or individually
+free committed nodes.</p>
+<p>The payload is a genuine bounded array of <code>std::byte</code>, not a one-element array
+followed by out-of-bounds indexing. <code>alignas(std::max_align_t)</code> makes its base
+suitable for the fundamental alignments this arena supports. <code>alignof(T)</code> asks
+for a type's alignment, whereas <code>sizeof(T)</code> asks for its complete object size.
+An over-aligned type is rejected rather than silently misaligned. See the
+<a href="https://eel.is/c++draft/basic.align">alignment rules</a> and the special role of
+<a href="https://eel.is/c++draft/intro.object">byte arrays that provide object storage</a>.</p>
+<p>Start the arena header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/arena.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_MEMORY_ARENA_HPP</span>
+<span class="cp">#define STRATA_MEMORY_ARENA_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">memory</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ArenaFull</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">ArenaFull</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="p">(</span><span class="s">"arena byte cap reached"</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Arena</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">chunk_payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4096</span><span class="p">;</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">struct</span><span class="w"> </span><span class="nc">Chunk</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">Chunk</span><span class="o">*</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="k">alignas</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">max_align_t</span><span class="p">)</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="w"> </span><span class="n">bytes</span><span class="p">[</span><span class="n">chunk_payload</span><span class="p">];</span>
+<span class="w">    </span><span class="p">};</span>
+</code></pre></figure>
+<p><code>ArenaFull</code> means the configured storage cap prevents another chunk. It differs
+from <code>std::bad_alloc</code>, which can represent allocator failure or our test seam.
+Both are exceptions; neither permits partial publication. This distinction
+lets later admission code react to a full memtable without pretending the
+system allocator failed.</p>
+<p><code>Chunk::previous</code> links <strong>ownership history</strong>, not search order. <code>used</code> is an
+offset into its own byte array. The array is not initialized by <code>new Chunk</code>;
+its bytes must be written or used to construct an object before reading them.
+Pointer and offset members have explicit default initializers.</p>
+<p>We charge <code>sizeof(Chunk)</code>, not merely 4096. This includes the link, offset,
+member padding, payload, and any trailing padding. A partially filled chunk
+costs the same as a full one. The allocator's hidden bookkeeping is not included.</p>
+<h3 id="give-rollback-one-exclusive-owner">Give rollback one exclusive owner</h3>
+<p>The nested class <code>Arena::Transaction</code> may access private arena members, but it
+still needs an actual <code>Arena&amp;</code>; nesting does not manufacture an owning instance.
+It records the current chunk, that chunk's cursor, and the total used bytes.
+Only one transaction may be active. Deleting both copy and move operations
+prevents multiple guards from believing they own the same rollback point.
+The <a href="https://eel.is/c++draft/class.access.nest">nested-class access rules</a>
+explain the access permission, not a lifetime extension.</p>
+<p>Continue the open <code>Arena</code> declaration:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/arena.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">class</span><span class="w"> </span><span class="nc">Transaction</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">public</span><span class="o">:</span>
+<span class="w">        </span><span class="k">explicit</span><span class="w"> </span><span class="n">Transaction</span><span class="p">(</span><span class="n">Arena</span><span class="o">&amp;</span><span class="w"> </span><span class="n">arena</span><span class="p">);</span>
+<span class="w">        </span><span class="o">~</span><span class="n">Transaction</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Transaction</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Transaction</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Transaction</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Transaction</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Transaction</span><span class="p">(</span><span class="n">Transaction</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Transaction</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">Transaction</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="nf">allocate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">alignment</span><span class="p">);</span>
+<span class="w">        </span><span class="kt">void</span><span class="w"> </span><span class="nf">commit</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">private</span><span class="o">:</span>
+<span class="w">        </span><span class="n">Arena</span><span class="o">*</span><span class="w"> </span><span class="n">arena_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Chunk</span><span class="o">*</span><span class="w"> </span><span class="n">saved_head_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">saved_offset_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">saved_used_</span><span class="p">;</span>
+<span class="w">    </span><span class="p">};</span>
+</code></pre></figure>
+<p>On normal scope exit without <code>commit</code>, the transaction discards new chunks and
+rewinds the original chunk. On commit, it stops owning that rollback obligation.
+Objects constructed in the abandoned storage must be destroyed <strong>before</strong> the
+transaction releases or rewinds it. This arena deliberately does not maintain a
+hidden destructor registry; its caller owns object lifetimes.</p>
+<p>Complete the header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/arena.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">Arena</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">byte_cap</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">cap_</span><span class="p">(</span><span class="n">byte_cap</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="o">~</span><span class="n">Arena</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Arena</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Arena</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Arena</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Arena</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Arena</span><span class="p">(</span><span class="n">Arena</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Arena</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">Arena</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">chunk_charge</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">Chunk</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">reserved_bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">reserved_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">used_bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">used_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">transaction_active</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">active_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">fail_on_chunk</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">ordinal</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">clear_failure</span><span class="p">();</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">allocate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">alignment</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">drop_head</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Chunk</span><span class="o">*</span><span class="w"> </span><span class="n">head_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cap_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">reserved_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">used_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">active_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fail_after_</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::memory</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p><code>reserved_bytes()</code> is the sum of complete live chunk charges. <code>used_bytes()</code>
+is the sum of consumed payload prefixes, including alignment padding. The arena
+object itself, the memtable's head pointers, stack scratch space, and operating
+system memory are outside this local cap. Chapter 9 will compose subsystem
+charges; this is not yet a whole-process or whole-engine budget.</p>
+<p><code>fail_on_chunk(k)</code> arms a one-based countdown for <strong>new chunk acquisition</strong>, not
+every small allocation and not every allocation in the process. A request that
+fits the existing chunk does not consume the countdown. Cap rejection precedes
+the seam. A triggered failure disarms itself; unused countdown progress is
+observational test state, not something rollback promises to restore.</p>
+<h2 id="rewinding-storage-without-rewinding-old-objects">Rewinding storage without rewinding old objects</h2>
+<p>Let a checkpoint contain head <span class="math-input" data-display="false">H</span>, its used offset <span class="math-input" data-display="false">u</span>, and total consumed
+payload <span class="math-input" data-display="false">U</span>. A transaction can append bytes to <span class="math-input" data-display="false">H</span> and prepend new chunks. To
+abandon it, delete chunks until the head is again <span class="math-input" data-display="false">H</span>, restore that chunk's
+cursor to <span class="math-input" data-display="false">u</span>, and restore the aggregate to <span class="math-input" data-display="false">U</span>. Older chunks were never changed.
+A null <span class="math-input" data-display="false">H</span> means the arena was initially empty, so every acquired chunk is new.</p>
+<p>Create the implementation:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/arena.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/memory/arena.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;exception&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;new&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">memory</span><span class="w"> </span><span class="p">{</span>
+
+<span class="n">Arena</span><span class="o">::</span><span class="n">Transaction</span><span class="o">::</span><span class="n">Transaction</span><span class="p">(</span><span class="n">Arena</span><span class="o">&amp;</span><span class="w"> </span><span class="n">arena</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">arena_</span><span class="p">(</span><span class="o">&amp;</span><span class="n">arena</span><span class="p">),</span><span class="w"> </span><span class="n">saved_head_</span><span class="p">(</span><span class="n">arena</span><span class="p">.</span><span class="n">head_</span><span class="p">),</span>
+<span class="w">      </span><span class="n">saved_offset_</span><span class="p">(</span><span class="n">arena</span><span class="p">.</span><span class="n">head_</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span>
+<span class="w">      </span><span class="n">saved_used_</span><span class="p">(</span><span class="n">arena</span><span class="p">.</span><span class="n">used_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">arena</span><span class="p">.</span><span class="n">active_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"nested arena transaction"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">arena</span><span class="p">.</span><span class="n">active_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">Arena</span><span class="o">::</span><span class="n">Transaction</span><span class="o">::~</span><span class="n">Transaction</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">arena_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">arena_</span><span class="o">-&gt;</span><span class="n">head_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">saved_head_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">arena_</span><span class="o">-&gt;</span><span class="n">drop_head</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">saved_head_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">saved_head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">saved_offset_</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">arena_</span><span class="o">-&gt;</span><span class="n">used_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">saved_used_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">arena_</span><span class="o">-&gt;</span><span class="n">active_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>If a nested transaction is attempted, its constructor throws before setting the
+active flag. The first guard remains responsible for its checkpoint. For a
+successfully constructed guard, the destructor handles both ordinary abandonment
+and stack unwinding. The comparison of head pointers is a comparison of chunk
+identity, not an attempt to order unrelated addresses.</p>
+<p>The checkpoint only rolls back <strong>allocations</strong>. It cannot undo a caller writing
+through a pointer to old data. Our memtable will keep old values immutable and
+avoid changing links until preparation is complete. That caller discipline is
+what makes arena rollback useful for a strong state guarantee.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/arena.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="nf">Arena::Transaction::allocate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">alignment</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">arena_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"allocation after transaction commit"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">arena_</span><span class="o">-&gt;</span><span class="n">allocate</span><span class="p">(</span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">alignment</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">Arena::Transaction::commit</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">arena_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">arena_</span><span class="o">-&gt;</span><span class="n">active_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="n">arena_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">Arena::drop_head</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Chunk</span><span class="o">*</span><span class="w"> </span><span class="n">old</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">head_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">head_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">old</span><span class="o">-&gt;</span><span class="n">previous</span><span class="p">;</span>
+<span class="w">    </span><span class="n">reserved_</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">Chunk</span><span class="p">);</span>
+<span class="w">    </span><span class="k">delete</span><span class="w"> </span><span class="n">old</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">Arena</span><span class="o">::~</span><span class="n">Arena</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">active_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">head_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">drop_head</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>drop_head</code> releases a complete <code>Chunk</code> with ordinary <code>delete</code>; it does not
+<code>delete</code> arena-constructed nodes individually. Its caller knows a head exists.
+The decrement is valid because each head was previously charged once. The
+transaction restores the aggregate consumed-byte count after dropping all new
+chunks; destruction of the whole arena no longer needs that counter.</p>
+<p>Destroying an arena with an outstanding transaction is a lifetime contract
+violation. <code>std::terminate()</code> makes that misuse fail immediately rather than
+leaving a guard pointing into a destroyed owner. This is not an ordinary
+resource-pressure outcome. A table is likewise nonmovable so an outstanding
+token cannot quietly start referring to a different owner address.</p>
+<p>Complete the small fault-control operations:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/arena.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">Arena::fail_on_chunk</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">ordinal</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">active_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"cannot change failure seam during transaction"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ordinal</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"chunk failure ordinal must be positive"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">fail_after_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ordinal</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">Arena::clear_failure</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">active_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"cannot change failure seam during transaction"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">fail_after_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Changing the seam while a transaction is active is rejected. It would otherwise
+make an in-progress operation's test policy depend on unrelated activity. The
+same guard makes the seam unusable as a hidden callback during commit.</p>
+<h2 id="derive-alignment-before-doing-pointer-arithmetic">Derive alignment before doing pointer arithmetic</h2>
+<p>Let <span class="math-input" data-display="false">C=4096</span> be the payload capacity, <span class="math-input" data-display="false">u</span> the current used offset, <span class="math-input" data-display="false">a</span> the requested
+alignment, and <span class="math-input" data-display="false">n</span> the requested nonzero byte count. The base is aligned to every
+supported <span class="math-input" data-display="false">a</span>. The padding needed to reach the next aligned offset is</p>
+<div class="math-input" data-display="true">p = (a-(u\bmod a))\bmod a.</div>
+<p>This also returns zero when <span class="math-input" data-display="false">u</span> is already aligned. Require <span class="math-input" data-display="false">a&gt;0</span> before the
+modulo. For <span class="math-input" data-display="false">u=5</span>, <span class="math-input" data-display="false">a=8</span>, and <span class="math-input" data-display="false">n=16</span>, padding is 3, the returned offset is 8,
+and the new cursor is <span class="math-input" data-display="false">5+3+16=24</span>. Bytes 5 through 7 are padding, not part of the
+new object. With <span class="math-input" data-display="false">u=4090</span>, <span class="math-input" data-display="false">a=8</span>, and <span class="math-input" data-display="false">n=8</span>, padding is 6 but the request cannot
+fit: no bytes remain after alignment.</p>
+<p>Avoid computing an unchecked <code>u + p + n</code>. First require</p>
+<div class="math-input" data-display="true">p\leq C-u,\qquad n\leq C-u-p.</div>
+<p>Only then advance the cursor. The loop invariant is <span class="math-input" data-display="false">0\leq u\leq C</span>. The first
+test protects the second subtraction. A positive power of two has exactly one
+set bit, so <code>a &amp; (a - 1)</code> is zero; the zero-alignment test must precede that
+expression. We support only such alignments no greater than <code>max_align_t</code>.</p>
+<p>Begin the allocation function:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/arena.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="nf">Arena::allocate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">alignment</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">alignment</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">(</span><span class="n">alignment</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">alignment</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">alignment</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="k">alignof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">max_align_t</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"unsupported arena alignment"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">chunk_payload</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"arena request must fit one nonempty chunk"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">try_chunk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="k">this</span><span class="p">,</span><span class="w"> </span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">alignment</span><span class="p">]()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">head_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">padding</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">alignment</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">alignment</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">alignment</span><span class="p">;</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">available</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">chunk_payload</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">padding</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">available</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">available</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">padding</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">auto</span><span class="o">*</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">padding</span><span class="p">;</span>
+<span class="w">        </span><span class="n">head_</span><span class="o">-&gt;</span><span class="n">used</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">padding</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span>
+<span class="w">        </span><span class="n">used_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">padding</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">};</span>
+</code></pre></figure>
+<p><code>try_chunk</code> is a local lambda. <code>[this, bytes, alignment]</code> borrows this arena
+through <code>this</code> and copies the two request sizes. The explicit <code>-&gt; void*</code> fixes
+the return type because one branch returns <code>nullptr</code> and another returns a byte
+pointer. It is used only during this call. It neither escapes nor allocates.</p>
+<p>A <code>void*</code> denotes an address without a pointed-to object type. Returning it
+separates storage allocation from construction. No <code>Node</code> has been constructed
+merely because this function advanced the cursor. The successful arithmetic is
+bounded by one payload. Aggregate used bytes cannot overflow either: consumed
+payload never exceeds the sum of charged live chunks, which fits the cap.</p>
+<p>Finish the function and namespace:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/arena.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_chunk</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">Chunk</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">cap_</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">reserved_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">ArenaFull</span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">fail_after_</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">--*</span><span class="n">fail_after_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">fail_after_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="o">*</span><span class="w"> </span><span class="n">fresh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Chunk</span><span class="p">;</span>
+<span class="w">    </span><span class="n">fresh</span><span class="o">-&gt;</span><span class="n">previous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">head_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">head_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fresh</span><span class="p">;</span>
+<span class="w">    </span><span class="n">reserved_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">Chunk</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">try_chunk</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::memory</span>
+</code></pre></figure>
+<p>Let <span class="math-input" data-display="false">B</span> be the configured cap, <span class="math-input" data-display="false">R</span> current reserved bytes, and <span class="math-input" data-display="false">K=\operatorname{sizeof}(\text{Chunk})</span>. The maintained invariant <span class="math-input" data-display="false">R\leq B</span> allows the admission check
+<span class="math-input" data-display="false">K\leq B-R</span> without overflowing <code>R + K</code>. <code>new Chunk</code> can throw, but until it
+returns, no ownership pointer or charge has changed. After acquisition, linking
+the chunk and updating the charge cannot fail.</p>
+<p>The second call to <code>try_chunk</code> must succeed: the new chunk has offset zero, a
+suitably aligned base, and the request was already checked against 4096. The
+last chunk's unusable tail remains charged. This is intentional fragmentation,
+not lost accounting. Our arena favors predictable lifetime and rollback over
+packing every free byte.</p>
+<p>The condition <code>if (void* result = try_chunk())</code> declares a local pointer and tests
+whether it is nonnull. Its scope is that <code>if</code> statement. It is not a cast from
+integer truth to an address.</p>
+<h2 id="construct-an-object-do-not-merely-cast-to-one">Construct an object; do not merely cast to one</h2>
+<p>The language requires enough suitably aligned storage and completed
+initialization for an object's lifetime to begin. A cast alone does not run a
+constructor. Placement construction places an object in storage already owned
+elsewhere. A placement <code>new</code> expression uses an address rather than acquiring
+its own allocation; C++20's <code>std::construct_at</code> expresses that operation through
+<code>&lt;memory&gt;</code> and returns a pointer to the constructed object. The relevant sources
+are <a href="https://eel.is/c++draft/basic.life">object lifetime</a>,
+<a href="https://eel.is/c++draft/expr.new">placement new</a>, and
+<a href="https://eel.is/c++draft/specialized.construct"><code>construct_at</code></a>.</p>
+<p>For our node the concrete operation will be:</p>
+<figure class="code-block"><figcaption><span class="code-title">Construction pattern — explained here, implemented below</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">auto</span><span class="o">*</span><span class="w"> </span><span class="n">node</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">construct_at</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">Node</span><span class="o">*&gt;</span><span class="p">(</span>
+<span class="w">    </span><span class="n">transaction_</span><span class="p">.</span><span class="n">allocate</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">Node</span><span class="p">),</span><span class="w"> </span><span class="k">alignof</span><span class="p">(</span><span class="n">Node</span><span class="p">))));</span>
+</code></pre></figure>
+<p>The allocator returns suitably sized storage. <code>static_cast&lt;Node*&gt;</code> gives that
+address the type needed by <code>construct_at</code>; construction, not the cast, creates
+the initialized node. We retain the pointer returned by construction rather
+than relying on a stale pointer from an earlier occupant of the same storage.
+The empty argument list value-initializes this concrete node, including null
+links. It does not initialize a disk format.</p>
+<p><code>std::destroy_at(node)</code> invokes the destructor without freeing the containing
+chunk. This pairs with placement construction, whereas <code>delete node</code> would
+attempt to release storage not independently acquired by <code>new Node</code>. Destroy
+nodes before releasing their chunks. The library specifies this distinction in
+<a href="https://eel.is/c++draft/specialized.destroy"><code>destroy_at</code></a>. Part 2 includes a
+nontrivial counted object so this lifetime step is observable, rather than
+relying only on nodes whose destructor currently does no work.</p>
+<h2 id="represent-versions-not-overwrites">Represent versions, not overwrites</h2>
+<p>A storage key is the pair <code>(relation, primary)</code>. Its order is already defined by
+Chapter 6's <code>KeyLess</code>. An <strong>internal key</strong> adds a positive batch sequence. For
+equal storage keys, a larger sequence sorts <strong>earlier</strong>, placing newest versions
+first. Different storage keys still sort ascending. No subtraction participates
+in the engine comparator, so the full unsigned range is usable.</p>
+<p>For one key, versions at sequences 9, 7, and 4 appear as <code>9, 7, 4</code>. A lookup
+visible through sequence 8 starts at internal key <code>(key,8)</code> and finds sequence 7.
+A lookup through zero finds none, because committed sequences are positive.
+Sequence gaps are valid; wrapping or reusing a sequence in one table is not.</p>
+<p>An erase is a stored <strong>tombstone</strong>, not the absence of a node. If sequence 7 is
+an erase, a lookup through 8 returns that erase. It must not fall through to the
+put at sequence 4. A later merged reader needs the distinction to suppress an
+older value in another source.</p>
+<p>Create the entry header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/entry.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_STORAGE_ENTRY_HPP</span>
+<span class="cp">#define STRATA_STORAGE_ENTRY_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/codec.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/record.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">EntryKind</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">put</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">erase</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">InternalKey</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Key</span><span class="w"> </span><span class="n">user</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">InternalKey</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">InternalLess</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">InternalKey</span><span class="o">&amp;</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">InternalKey</span><span class="o">&amp;</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">KeyLess</span><span class="p">{}(</span><span class="n">a</span><span class="p">.</span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">user</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">KeyLess</span><span class="p">{}(</span><span class="n">b</span><span class="p">.</span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">user</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">sequence</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">sequence</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">EntryView</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">InternalKey</span><span class="w"> </span><span class="n">key</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EntryKind</span><span class="w"> </span><span class="n">kind</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>EntryView</code> owns a copy of the key and kind, but only a span into the value bytes.
+Copying this view does not keep a memtable alive. A put carries exactly its
+relation's encoded row; an erase carries no row bytes. Sequence and operation
+kind are storage metadata, not silently added to Chapter 6's codec.</p>
+<h3 id="requests-own-their-input-image">Requests own their input image</h3>
+<p>We could accept a span into a temporary encoded array, but that would make
+lifetime errors easy. A <code>Mutation</code> instead owns a fixed 30-byte array, enough for
+either schema, plus a logical length. Account images use the first 14 bytes.
+Factories are <code>static</code> member functions: call <code>Mutation::put(event)</code> without an
+existing mutation object. Overload selection distinguishes an event from an
+account by argument type.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/entry.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">Mutation</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">EntryKind</span><span class="w"> </span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">erase</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">event_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bytes</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">Mutation</span><span class="w"> </span><span class="nf">put</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Event</span><span class="o">&amp;</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">key_of</span><span class="p">(</span><span class="n">event</span><span class="p">),</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">put</span><span class="p">,</span><span class="w"> </span><span class="n">encode_event</span><span class="p">(</span><span class="n">event</span><span class="p">),</span><span class="w"> </span><span class="n">event_bytes</span><span class="p">};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">Mutation</span><span class="w"> </span><span class="nf">put</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Account</span><span class="o">&amp;</span><span class="w"> </span><span class="n">account</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">Mutation</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">        </span><span class="n">result</span><span class="p">.</span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">key_of</span><span class="p">(</span><span class="n">account</span><span class="p">);</span>
+<span class="w">        </span><span class="n">result</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">put</span><span class="p">;</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">image</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">encode_account</span><span class="p">(</span><span class="n">account</span><span class="p">);</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">image</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">image</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">bytes</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="w">        </span><span class="n">result</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">account_bytes</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">Mutation</span><span class="w"> </span><span class="nf">erase</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">Mutation</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">        </span><span class="n">result</span><span class="p">.</span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">key</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>These factories make the usual path correct, but their public fields are not a
+trust boundary. A caller can still fabricate an inconsistent key or length.
+Validate the entire request before allocating nodes. A repeated storage key
+within a batch is rejected later, even when one operation is a put and another
+an erase. That policy avoids an implicit &quot;first wins&quot; or &quot;last wins&quot; rule.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/entry.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">validate_mutation</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Mutation</span><span class="o">&amp;</span><span class="w"> </span><span class="n">mutation</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mutation</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">        </span><span class="n">mutation</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"unknown mutation relation"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mutation</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">erase</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mutation</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"tombstone has a value"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mutation</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">put</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">mutation</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">mutation</span><span class="p">.</span><span class="n">bytes</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid mutation kind or size"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">image</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">{</span><span class="n">mutation</span><span class="p">.</span><span class="n">bytes</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="n">mutation</span><span class="p">.</span><span class="n">length</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">decoded_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mutation</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span>
+<span class="w">        </span><span class="o">?</span><span class="w"> </span><span class="n">key_of</span><span class="p">(</span><span class="n">decode_event</span><span class="p">(</span><span class="n">image</span><span class="p">))</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">key_of</span><span class="p">(</span><span class="n">decode_account</span><span class="p">(</span><span class="n">image</span><span class="p">));</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">decoded_key</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">mutation</span><span class="p">.</span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"mutation key disagrees with encoded row"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::storage</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The length guard precedes <code>.first(length)</code>. An erase with nonzero length is
+rejected; a put must decode with the expected relation, version, and exact byte
+count. The decoded row's key must equal the metadata key. Otherwise a point
+lookup could find a value that claims to belong to a different row.</p>
+<p><code>FormatError</code> remains the codec's malformed-image error. Invalid operation
+metadata uses <code>invalid_argument</code>. Either error happens before the index changes.
+The unused suffix of an account's owning array is not copied into the memtable.</p>
+<h2 id="a-skip-list-is-several-ordered-lists-sharing-nodes">A skip list is several ordered lists sharing nodes</h2>
+<p>Level zero contains every version. A node with height <span class="math-input" data-display="false">h</span> participates in levels
+<span class="math-input" data-display="false">0</span> through <span class="math-input" data-display="false">h-1</span>. At each level it points to the next node participating there;
+its height is not the number of following rows to skip. Higher levels bypass
+some lower-level work without creating copies of the records.</p>
+<p>This is the probabilistic search-and-splice structure introduced by
+<a href="https://15721.courses.cs.cmu.edu/spring2017/papers/07-oltpindexes1/pugh-skiplists-cacm1990.pdf">William Pugh, <em>Skip Lists: A Probabilistic Alternative to Balanced Trees</em>,
+first two pages</a>.
+Our versioned ordering, arena rollback, and batch publication policy are
+additional design decisions. We do not implement physical deletion of individual
+nodes; an erase adds another version, and a whole generation is reclaimed later.</p>
+<p>Consider this illustrative shape, ignoring sequences because all keys differ:</p>
+<figure class="code-block"><figcaption><span class="code-title">A four-node search shape</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>height:       1       3       1       2
+level 2: head ------&gt;20-----------------&gt; end
+level 1: head ------&gt;20-------------&gt;40-&gt; end
+level 0: head -&gt;10--&gt;20--&gt;30---------&gt;40-&gt; end
+</code></pre></figure>
+<p>To seek 25, begin at the highest level. Advance to 20, but not beyond the end.
+At level 1, 40 would overshoot, so stay at 20 and descend. At level 0, 30 would
+also overshoot. The next node at level zero is therefore the lower bound, 30.
+Seeking exactly 20 must stop <strong>before</strong> 20, so the horizontal comparison is
+strictly less than, not less than or equal to.</p>
+<h3 id="bounded-towers-without-pretending-a-one-element-array-is-larger">Bounded towers without pretending a one-element array is larger</h3>
+<p>We choose a maximum height of 16 and give every node a real <code>std::array</code> of 16
+link pointers. Only the first <code>height</code> slots participate; the remaining slots
+stay null. This spends extra memory for a simple, portable object layout. It is
+not the variable-length trailing-array technique seen in some implementations.</p>
+<p>The node also has a separate pending-chain pointer. Before publication that
+chain owns the inventory of constructed nodes. It must not reuse <code>next[0]</code>,
+whose meaning changes during publication. Node payloads live in separately
+allocated regions of the same arena, so tombstones need no payload allocation.</p>
+<p>Start the memtable header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/memtable.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_STORAGE_MEMTABLE_HPP</span>
+<span class="cp">#define STRATA_STORAGE_MEMTABLE_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/memory/arena.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/entry.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MemTable</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">16</span><span class="p">;</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_batch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="p">;</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">struct</span><span class="w"> </span><span class="nc">Node</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">InternalKey</span><span class="w"> </span><span class="n">key</span><span class="p">{};</span>
+<span class="w">        </span><span class="n">EntryKind</span><span class="w"> </span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">erase</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">value</span><span class="p">{};</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">Node</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">max_height</span><span class="o">&gt;</span><span class="w"> </span><span class="n">next</span><span class="p">{};</span>
+<span class="w">        </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">pending_next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="p">};</span>
+</code></pre></figure>
+<p>The fields in an arena node are ordinary C++ objects; <code>InternalKey</code>, spans, and
+link arrays may contain implementation padding. None is written directly to
+storage. The static payload limit and complete node size are checked in the
+constructor implementation below.</p>
+<p>We keep one head pointer for each level instead of inventing a sentinel key
+smaller than every possible unsigned key. A null predecessor means &quot;use the
+head pointer at this level,&quot; not an actual node with an invalid relation tag.</p>
+<h3 id="a-cursor-borrows-a-preparation-owns-a-pending-change">A cursor borrows; a preparation owns a pending change</h3>
+<p>The two nested interfaces have different responsibilities. A cursor holds one
+borrowed node pointer and can advance at level zero. A prepared token holds the
+rollback guard and unpublished-node chain. Their constructors are private so
+only <code>MemTable</code> can produce a valid one. The explicit <code>friend class MemTable</code>
+permits the enclosing class to call those private constructors; outer classes
+do not automatically gain access to nested classes' private members. See
+<a href="https://eel.is/c++draft/class.friend">friend declarations</a>.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/memtable.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">class</span><span class="w"> </span><span class="nc">Cursor</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">public</span><span class="o">:</span>
+<span class="w">        </span><span class="kt">bool</span><span class="w"> </span><span class="n">valid</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">node_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">        </span><span class="kt">void</span><span class="w"> </span><span class="nf">next</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="k">private</span><span class="o">:</span>
+<span class="w">        </span><span class="k">friend</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">MemTable</span><span class="p">;</span>
+<span class="w">        </span><span class="k">explicit</span><span class="w"> </span><span class="n">Cursor</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">node</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">node_</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">node_</span><span class="p">;</span>
+<span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="k">class</span><span class="w"> </span><span class="nc">Prepared</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">public</span><span class="o">:</span>
+<span class="w">        </span><span class="o">~</span><span class="n">Prepared</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Prepared</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Prepared</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Prepared</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Prepared</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Prepared</span><span class="p">(</span><span class="n">Prepared</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Prepared</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">Prepared</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">        </span><span class="kt">void</span><span class="w"> </span><span class="nf">commit</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="k">private</span><span class="o">:</span>
+<span class="w">        </span><span class="k">friend</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">MemTable</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Prepared</span><span class="p">(</span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="n">table</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence</span><span class="p">,</span>
+<span class="w">                 </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">changes</span><span class="p">);</span>
+<span class="w">        </span><span class="kt">void</span><span class="w"> </span><span class="nf">destroy_pending</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">        </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="n">table_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">memory</span><span class="o">::</span><span class="n">Arena</span><span class="o">::</span><span class="n">Transaction</span><span class="w"> </span><span class="n">transaction_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">first_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">last_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">new_size_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">next_seed_</span><span class="p">;</span>
+<span class="w">    </span><span class="p">};</span>
+</code></pre></figure>
+<p><code>table_</code> is a reference, so the token does not own or extend its table's lifetime.
+<code>transaction_</code> is declared before the pending pointers. The token's destructor
+body will destroy unpublished nodes first; automatic member destruction then
+runs the transaction's rollback. The copied generator state belongs to the
+candidate until commit.</p>
+<p>The token is deliberately neither copyable nor movable. That is compatible
+with returning a freshly constructed token by value, as Part 2 explains. It
+also avoids a move-assignment case that might unexpectedly abandon an unrelated
+prepared batch.</p>
+<p>Continue with the public operations:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/memtable.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">MemTable</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">byte_cap</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">seed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fixed_height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="o">~</span><span class="n">MemTable</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MemTable</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MemTable</span><span class="p">(</span><span class="n">MemTable</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">MemTable</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">Prepared</span><span class="w"> </span><span class="nf">prepare</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">changes</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Cursor</span><span class="w"> </span><span class="nf">begin</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Cursor</span><span class="w"> </span><span class="nf">begin</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Cursor</span><span class="w"> </span><span class="nf">lower_bound</span><span class="p">(</span><span class="n">InternalKey</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Cursor</span><span class="w"> </span><span class="nf">lower_bound</span><span class="p">(</span><span class="n">InternalKey</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">EntryView</span><span class="o">&gt;</span><span class="w"> </span><span class="n">find</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">visible</span><span class="w"> </span><span class="o">=</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">())</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">EntryView</span><span class="o">&gt;</span><span class="w"> </span><span class="n">find</span><span class="p">(</span><span class="n">Key</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="o">=</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">())</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">freeze</span><span class="p">();</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">frozen</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">frozen_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">size</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">size_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">last_sequence</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">last_sequence_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">reserved_bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">arena_</span><span class="p">.</span><span class="n">reserved_bytes</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">used_bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">arena_</span><span class="p">.</span><span class="n">used_bytes</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">node_bytes</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">Node</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">fail_on_chunk</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">ordinal</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">arena_</span><span class="p">.</span><span class="n">fail_on_chunk</span><span class="p">(</span><span class="n">ordinal</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">clear_failure</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">arena_</span><span class="p">.</span><span class="n">clear_failure</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">check_structure</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="p">,</span><span class="w"> </span><span class="n">max_height</span><span class="o">&gt;</span><span class="w"> </span><span class="n">height_counts</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+</code></pre></figure>
+<p>A default <code>visible</code> argument means the largest representable sequence. Explicit
+values allow boundary tests and future merged reads. The ref-qualified <code>const &amp;</code>
+accessors borrow from an lvalue table; their <code>const &amp;&amp;</code> counterparts are deleted
+to reject obvious borrowing from a temporary. This is a useful restriction,
+not a lifetime proof for every possible caller.</p>
+<p><code>size()</code> counts <strong>versions</strong>, including tombstones, not distinct live keys.
+<code>freeze()</code> only seals this table against later preparation. It does not flush,
+create a durable snapshot, synchronize threads, or transfer ownership.</p>
+<p>Finish the private state:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/memtable.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">Node</span><span class="o">*&amp;</span><span class="w"> </span><span class="n">link</span><span class="p">(</span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">previous</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">level</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="nf">link</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">previous</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">level</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">node</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">choose_height</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">state</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">memory</span><span class="o">::</span><span class="n">Arena</span><span class="w"> </span><span class="n">arena_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">Node</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">max_height</span><span class="o">&gt;</span><span class="w"> </span><span class="n">heads_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">last_sequence_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">seed_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fixed_height_</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">frozen_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::storage</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>Declare the arena before the index state so it is destroyed last. The table's
+destructor body will traverse level zero while all node storage is still alive.
+No head array or cursor owns a node separately. <code>fixed_height</code> is a deterministic
+test configuration: zero chooses generated heights; 1 through 16 force one
+height for every node. It is not an adaptive performance setting.</p>
+<h2 id="begin-with-construction-and-whole-generation-destruction">Begin with construction and whole-generation destruction</h2>
+<p>The type traits with suffix <code>_v</code> are compile-time Boolean queries from
+<code>&lt;type_traits&gt;</code>. <code>is_nothrow_default_constructible_v&lt;Node&gt;</code> checks that empty node
+construction cannot throw, and <code>is_trivially_destructible_v&lt;Node&gt;</code> checks that
+node destruction is trivial. See the <a href="https://eel.is/c++draft/meta.unary.prop">type-property specifications</a>.
+These assertions guard this concrete representation; they do not say that
+arbitrary placement constructors cannot fail.</p>
+<p>Create the source file:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/memtable.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/memtable.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/checked.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;exception&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;type_traits&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+
+<span class="n">MemTable</span><span class="o">::</span><span class="n">MemTable</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">byte_cap</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">seed</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fixed_height</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">arena_</span><span class="p">(</span><span class="n">byte_cap</span><span class="p">),</span><span class="w"> </span><span class="n">seed_</span><span class="p">(</span><span class="n">seed</span><span class="p">),</span><span class="w"> </span><span class="n">fixed_height_</span><span class="p">(</span><span class="n">fixed_height</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="k">alignof</span><span class="p">(</span><span class="n">Node</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="k">alignof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">max_align_t</span><span class="p">));</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">Node</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">memory</span><span class="o">::</span><span class="n">Arena</span><span class="o">::</span><span class="n">chunk_payload</span><span class="p">);</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_nothrow_default_constructible_v</span><span class="o">&lt;</span><span class="n">Node</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_trivially_destructible_v</span><span class="o">&lt;</span><span class="n">Node</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">seed</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">fixed_height</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_height</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid height generator configuration"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">MemTable</span><span class="o">::~</span><span class="n">MemTable</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">arena_</span><span class="p">.</span><span class="n">transaction_active</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">node</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">heads_</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">node</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">destroy_at</span><span class="p">(</span><span class="n">node</span><span class="p">);</span>
+<span class="w">        </span><span class="n">node</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">next</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Nonthrowing node construction makes the interval between obtaining node storage
+and registering its lifetime in the pending chain safe. Later payload allocation
+can still fail and must be covered by that chain's cleanup.</p>
+<p>Destruction saves <code>next[0]</code> <strong>before</strong> ending the current node's lifetime. Reading
+that member afterward would use a dead object. The arena then releases its own
+chunks automatically after the table destructor body finishes. Values are byte
+regions owned by those chunks; there is no separate heap payload to delete.</p>
+<p>The zero generator seed is rejected because the chosen shift/XOR recurrence
+would remain zero forever. The fixed-height upper bound is validated once rather
+than checked at every link access.</p>
+<h2 id="search-by-preserving-the-predecessor-invariant">Search by preserving the predecessor invariant</h2>
+<p>The mutable helper returns <code>Node*&amp;</code>: a <strong>reference to a pointer slot</strong>, not just
+a copied pointer. Assigning through it updates either a node's actual outgoing
+link or the actual head slot. The const helper returns a borrowed pointer value
+and cannot expose a mutable link. These overloads share the sentinel-free head
+policy.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/memtable.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">MemTable</span><span class="o">::</span><span class="n">Node</span><span class="o">*&amp;</span><span class="w"> </span><span class="nf">MemTable::link</span><span class="p">(</span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">previous</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">level</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">previous</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">[</span><span class="n">level</span><span class="p">]</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">heads_</span><span class="p">[</span><span class="n">level</span><span class="p">];</span>
+<span class="p">}</span>
+
+<span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">::</span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="nf">MemTable::link</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">previous</span><span class="p">,</span>
+<span class="w">                                   </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">level</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">previous</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">[</span><span class="n">level</span><span class="p">]</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">heads_</span><span class="p">[</span><span class="n">level</span><span class="p">];</span>
+<span class="p">}</span>
+
+<span class="n">MemTable</span><span class="o">::</span><span class="n">Cursor</span><span class="w"> </span><span class="nf">MemTable::begin</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">Cursor</span><span class="p">{</span><span class="n">heads_</span><span class="p">[</span><span class="mi">0</span><span class="p">]};</span>
+<span class="p">}</span>
+
+<span class="n">MemTable</span><span class="o">::</span><span class="n">Cursor</span><span class="w"> </span><span class="nf">MemTable::lower_bound</span><span class="p">(</span><span class="n">InternalKey</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">previous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">level</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">max_height</span><span class="p">;</span><span class="w"> </span><span class="n">level</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">;)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="o">--</span><span class="n">level</span><span class="p">;</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">Node</span><span class="o">*</span><span class="w"> </span><span class="n">next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">link</span><span class="p">(</span><span class="n">previous</span><span class="p">,</span><span class="w"> </span><span class="n">level</span><span class="p">);</span>
+<span class="w">        </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">next</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">InternalLess</span><span class="p">{}(</span><span class="n">next</span><span class="o">-&gt;</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">previous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">next</span><span class="p">;</span>
+<span class="w">            </span><span class="n">next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">link</span><span class="p">(</span><span class="n">previous</span><span class="p">,</span><span class="w"> </span><span class="n">level</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">Cursor</span><span class="p">{</span><span class="n">link</span><span class="p">(</span><span class="n">previous</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)};</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>At the start of each horizontal step, <code>previous</code> is null or has an internal key
+strictly before the target. Moving to <code>next</code> preserves that invariant. When the
+next key is not before the target, descending one level keeps the same valid
+predecessor and examines finer links. A node reached at a higher level also
+participates at all lower levels, so its lower links exist.</p>
+<p>The outer loop starts at 16 and decrements <strong>inside</strong> the loop before use. It
+visits levels 15 through 0 without testing an unsigned variable against zero
+with <code>&gt;=</code>, which would never become false after wraparound. Once level zero is
+finished, its next link is the first key not before the target, or null at end.</p>
+<p><code>begin</code> returns the first level-zero node. It is raw internal iteration, not a
+query that collapses old versions. Both cursor operations and lookup are small
+enough to keep the borrowing behavior explicit:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/memtable.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">EntryView</span><span class="w"> </span><span class="nf">MemTable::Cursor::entry</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">node_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">out_of_range</span><span class="p">(</span><span class="s">"entry at end of memtable"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">node_</span><span class="o">-&gt;</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">node_</span><span class="o">-&gt;</span><span class="n">kind</span><span class="p">,</span><span class="w"> </span><span class="n">node_</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">MemTable::Cursor::next</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">node_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">node_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">node_</span><span class="o">-&gt;</span><span class="n">next</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">EntryView</span><span class="o">&gt;</span><span class="w"> </span><span class="n">MemTable</span><span class="o">::</span><span class="n">find</span><span class="p">(</span><span class="n">Key</span><span class="w"> </span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">visible</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lower_bound</span><span class="p">({</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">visible</span><span class="p">});</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">cursor</span><span class="p">.</span><span class="n">valid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">entry</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">entry</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>entry()</code> returns a new view object, not a node reference. At end it throws
+<code>out_of_range</code>; <code>next()</code> at end is an idempotent no-op. The lookup checks the
+storage key after lower bound because the next node can belong to another key.
+An equal key with an erase kind is returned as a <strong>present tombstone</strong>. A missing
+optional and a tombstone are intentionally different results.</p>
+<p>A previously returned value span remains valid across later insertions because
+old arena storage does not move or get overwritten. A cursor resumed after
+insertion can nevertheless see changed forward links. Therefore iteration must
+not span a commit when a stable result is required. Freeze first, and keep the
+whole table alive for the entire read. Stable addresses are not by themselves
+snapshot semantics.</p>
+<h2 id="heights-a-useful-model-not-a-worst-case-promise">Heights: a useful model, not a worst-case promise</h2>
+<p>With ideal independent promotion probability <span class="math-input" data-display="false">1/2</span>, a node reaches height at
+least <span class="math-input" data-display="false">h</span> with probability <span class="math-input" data-display="false">2^{-(h-1)}</span>. For maximum height <span class="math-input" data-display="false">H</span>, its expected
+participating height is</p>
+<div class="math-input" data-display="true">\mathbb{E}[h]=\sum_{j=1}^{H}2^{-(j-1)}=2(1-2^{-H}).</div>
+<p>For <span class="math-input" data-display="false">H=16</span>, that is approximately 1.99997 participating levels. With <span class="math-input" data-display="false">n</span> nodes,
+level <span class="math-input" data-display="false">i</span> has expected membership <span class="math-input" data-display="false">n/2^i</span>. Sixteen nodes would have expected
+memberships 16, 8, 4, 2, 1 in the first five levels; an actual fixture need not
+match those numbers.</p>
+<p>These calculations describe an idealized distribution, not memory allocation:
+our node <strong>always stores 16 pointers</strong>, even when its height is one. Nor is a
+fixed height cap an asymptotic logarithmic guarantee for arbitrarily large <span class="math-input" data-display="false">n</span>.
+The top level still has roughly <span class="math-input" data-display="false">n/2^{15}</span> nodes in this model, and an all-height-one
+list has linear search. Chunk caps bound practical table sizes; generated heights
+provide a useful expected search shape, not an adversarial performance guarantee.</p>
+<p>Use a reproducible 32-bit shift/XOR generator. A generated zero bit promotes;
+stop at the first one bit or at the height cap:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/memtable.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">MemTable::choose_height</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">state</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">fixed_height_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">fixed_height_</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">state</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">13</span><span class="p">;</span>
+<span class="w">    </span><span class="n">state</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="mi">17</span><span class="p">;</span>
+<span class="w">    </span><span class="n">state</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">bits</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">height</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">max_height</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">bits</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mi">1U</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="o">++</span><span class="n">height</span><span class="p">;</span>
+<span class="w">        </span><span class="n">bits</span><span class="w"> </span><span class="o">&gt;&gt;=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">height</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The three shifts update a local 32-bit unsigned state. Every shift count is
+smaller than 32. Copying that state into a preparation makes a failed attempt
+leave the table's future height sequence unchanged. This simple generator is
+not cryptographic, and this implementation does not claim its bits satisfy the
+independence assumptions of the probability model. The test seed makes failures
+repeatable; forcing heights 1 and 16 exercises both structural extremes without
+waiting for a rare generated tower.</p>
+<p>The source namespace intentionally remains open here. Continue in
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-07-part-2.html">Part 2 — Prepare, publish, and verify</a>
+to finish the source, add the complete tests, and run the nine-test cumulative
+suite. Nothing in Part 1 is a durable database yet.</p>
+<h2 id="references-for-this-part">References for this part</h2>
+<p>The links above identify the particular language and algorithm facts used here.
+The public working draft evolves beyond C++20; only the facilities explicitly
+used by these listings belong to our C++20 baseline. No newer draft feature is
+required. Pugh's paper supplies the skip-list background, not our memory,
+versioning, or batch-failure policy. Its figures are not copied into the book.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-06-part-2.html"><small>Previous · Chapter 6 · Part 2</small><span>Deterministic faults and native checks</span></a><a href="chapter-07-part-2.html"><small>Next · Chapter 7 · Part 2</small><span>Prepare, publish, and verify</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 7 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-stable-storage-and-ordered-search">Part 1 — Stable storage and ordered search</a></li><li class="toc-h2"><a href="#the-files-and-the-ownership-boundary">The files and the ownership boundary</a></li><li class="toc-h2"><a href="#an-arena-gives-addresses-a-longer-life-than-a-vector">An arena gives addresses a longer life than a vector</a></li><li class="toc-h3"><a href="#give-rollback-one-exclusive-owner">Give rollback one exclusive owner</a></li><li class="toc-h2"><a href="#rewinding-storage-without-rewinding-old-objects">Rewinding storage without rewinding old objects</a></li><li class="toc-h2"><a href="#derive-alignment-before-doing-pointer-arithmetic">Derive alignment before doing pointer arithmetic</a></li><li class="toc-h2"><a href="#construct-an-object-do-not-merely-cast-to-one">Construct an object; do not merely cast to one</a></li><li class="toc-h2"><a href="#represent-versions-not-overwrites">Represent versions, not overwrites</a></li><li class="toc-h3"><a href="#requests-own-their-input-image">Requests own their input image</a></li><li class="toc-h2"><a href="#a-skip-list-is-several-ordered-lists-sharing-nodes">A skip list is several ordered lists sharing nodes</a></li><li class="toc-h3"><a href="#bounded-towers-without-pretending-a-one-element-array-is-larger">Bounded towers without pretending a one-element array is larger</a></li><li class="toc-h3"><a href="#a-cursor-borrows-a-preparation-owns-a-pending-change">A cursor borrows; a preparation owns a pending change</a></li><li class="toc-h2"><a href="#begin-with-construction-and-whole-generation-destruction">Begin with construction and whole-generation destruction</a></li><li class="toc-h2"><a href="#search-by-preserving-the-predecessor-invariant">Search by preserving the predecessor invariant</a></li><li class="toc-h2"><a href="#heights-a-useful-model-not-a-worst-case-promise">Heights: a useful model, not a worst-case promise</a></li><li class="toc-h2"><a href="#references-for-this-part">References for this part</a></li></ul></aside>
+</div></body></html>

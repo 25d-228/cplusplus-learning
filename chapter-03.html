@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 3 — Lifetime, RAII, and move-only owners · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-03.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html" aria-current="page"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 3</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/4">Read on GitHub</a><a href="source/chapter-03.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#one-source-file-several-observable-lifetimes">One source file, several observable lifetimes</a></li><li class="toc-h2"><a href="#storage-is-not-an-object-and-an-object-is-not-its-payload">Storage is not an object, and an object is not its payload</a></li><li class="toc-h2"><a href="#constructors-establish-state-destructors-finish-a-scope">Constructors establish state; destructors finish a scope</a></li><li class="toc-h2"><a href="#prefer-an-existing-owner-before-writing-special-members">Prefer an existing owner before writing special members</a></li><li class="toc-h3"><a href="#stdmove-permits-a-transfer-it-does-not-perform-one">std::move permits a transfer; it does not perform one</a></li><li class="toc-h2"><a href="#an-invariant-that-needs-a-custom-move">An invariant that needs a custom move</a></li><li class="toc-h3"><a href="#read-the-interface-before-its-implementation">Read the interface before its implementation</a></li><li class="toc-h2"><a href="#acquire-once-and-make-release-idempotent">Acquire once, and make release idempotent</a></li><li class="toc-h2"><a href="#a-view-exposes-bytes-not-release-authority">A view exposes bytes, not release authority</a></li><li class="toc-h2"><a href="#transfer-both-fields-not-just-the-pointer">Transfer both fields, not just the pointer</a></li><li class="toc-h3"><a href="#why-these-moves-can-honestly-be-noexcept">Why these moves can honestly be noexcept</a></li><li class="toc-h2"><a href="#follow-two-allocations-through-three-owners">Follow two allocations through three owners</a></li><li class="toc-h2"><a href="#empty-objects-and-reusable-moved-from-sources">Empty objects and reusable moved-from sources</a></li><li class="toc-h2"><a href="#a-return-statement-still-crosses-the-lifetime-boundary">A return statement still crosses the lifetime boundary</a></li><li class="toc-h2"><a href="#relocating-owners-is-different-from-relocating-their-arrays">Relocating owners is different from relocating their arrays</a></li><li class="toc-h2"><a href="#connect-the-checks-to-the-existing-build">Connect the checks to the existing build</a></li><li class="toc-h2"><a href="#diagnose-an-ownership-mistake-at-the-right-boundary">Diagnose an ownership mistake at the right boundary</a></li><li class="toc-h3"><a href="#ask-for-a-forbidden-copy">Ask for a forbidden copy</a></li><li class="toc-h3"><a href="#a-const-source-is-not-permission-to-change-ownership">A const source is not permission to change ownership</a></li><li class="toc-h3"><a href="#reject-a-borrow-from-a-temporary">Reject a borrow from a temporary</a></li><li class="toc-h3"><a href="#test-the-self-move-promise-not-just-absence-of-a-crash">Test the self-move promise, not just absence of a crash</a></li><li class="toc-h3"><a href="#run-a-focused-memory-diagnostic-on-the-restored-program">Run a focused memory diagnostic on the restored program</a></li><li class="toc-h2"><a href="#change-member-order-and-predict-the-trace">Change member order and predict the trace</a></li><li class="toc-h2"><a href="#what-this-owner-does-and-does-not-promise">What this owner does and does not promise</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-3-lifetime-raii-and-move-only-owners">Chapter 3 — Lifetime, RAII, and move-only owners</h1>
+<p>A buffer holding a disk block can outlive the function that read it, but it
+cannot outlive its last owner. A query can borrow the block without becoming responsible for
+freeing it. Moving that responsibility to another object need not move even one
+payload byte. These are different relationships, and a useful resource type
+must make each one explicit.</p>
+<p>This chapter builds a fixed-size, move-only byte buffer. It transfers <code>{4, 5, 6}</code>
+without allocating another payload, releases an already-owned destination before
+replacing it, leaves a distinct moved-from source empty, and makes self-move a
+no-op. Allocation counters and a separate lifetime trace make those promises
+observable. The same reasoning will later govern file handles, pinned blocks,
+arenas, and spill-file cleanup; this exercise is not the engine's allocator.</p>
+<p><strong>Starting code:</strong> retain the complete programs and root CMake configuration
+from <a href="https://25d-228.github.io/cplusplus-learning/chapter-01.html">Chapter 1</a> and
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-02.html">Chapter 2</a>. Their
+three passing CTest entries stay in place. You need references, <code>const</code>, arrays,
+vectors, spans, and Chapter 1's active <code>check</code> pattern. No engine files or future
+chapter code are required.</p>
+<blockquote>
+<p><strong>Learning objectives</strong></p>
+<p>Separate storage, object lifetime, ownership, and borrowing; define classes
+with constructors, destructors, and private invariants; prefer member-owned
+resources and the rule of zero; distinguish move construction from move
+assignment; implement a documented moved-from state; account for destruction,
+self-move, early return, and vector relocation without double release.</p>
+</blockquote>
+<p>The allocation is <strong>2.5 implementation hours</strong>: 1.0 for the owner and lifetime
+exercises, 1.0 for move paths and container integration, and 0.5 for checks and
+diagnosis. Reading is separate. The fixtures are deliberately small; their
+purpose is an exact state trace, not a throughput result.</p>
+<h2 id="one-source-file-several-observable-lifetimes">One source file, several observable lifetimes</h2>
+<p>From the learner workspace root, select the working compiler from Chapter 1
+and create the exercise directory:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — prepare this chapter</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nv">CXX</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span>exercises/chapter-03
+</code></pre></figure>
+<p>Use a previously selected compatible native LLVM compiler instead when that is
+your working toolchain. This chapter introduces no dependency beyond the C++20
+standard library and the existing build tools.</p>
+<p>Every C++ block labelled <strong><code>exercises/chapter-03/buffer_owner.cpp</code></strong>, in reading
+order, appends to that one file. Together they are its complete contents. The
+CMake block at the end appends one target and one test. Blocks explicitly labelled
+as temporary diagnostic edits are not part of the final source.</p>
+<h2 id="storage-is-not-an-object-and-an-object-is-not-its-payload">Storage is not an object, and an object is not its payload</h2>
+<p><em>Storage</em> is a region of memory with a size and alignment. An <em>object</em> has a type,
+initialization, and a lifetime in suitable storage. For the ordinary class
+objects in this chapter, completed initialization establishes a usable object;
+starting its destructor ends its lifetime in the formal language sense.
+Construction and destruction have special rules that still permit their member
+accesses. Merely retaining an address does not keep an object alive. The
+<a href="https://eel.is/c++draft/basic.life">object-lifetime rules</a> distinguish these
+concepts more generally, including storage reuse cases we are not using here.</p>
+<p>Consider a local owner that contains a pointer to three dynamically allocated
+bytes. There are at least three separate things to track:</p>
+<table>
+<thead>
+<tr>
+<th>Thing</th>
+<th>Where its storage comes from</th>
+<th>What ends its useful lifetime here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local owner object</td>
+<td>Automatic storage for a local variable</td>
+<td>Leaving its scope</td>
+</tr>
+<tr>
+<td>Dynamically allocated byte array</td>
+<td>An array allocation</td>
+<td>Its owning pointer resets or is destroyed</td>
+</tr>
+<tr>
+<td>Local <code>std::span</code> value</td>
+<td>Automatic storage for another local variable</td>
+<td>Leaving the span's scope; its <em>borrow</em> can become invalid sooner</td>
+</tr>
+</tbody>
+</table>
+<p>The pointer member belongs to the owner object, but the pointed-to array is not
+a member subobject. Destroying a bare pointer does not release its pointee.
+Destroying an owning smart pointer does. A span stores access information; it
+does not participate in release responsibility.</p>
+<p>We will not use placement <code>new</code>, casts from untyped storage, or manual destructor
+calls in this chapter. Those would mix the question of <em>who releases a resource</em>
+with the different question of <em>which objects exist in raw storage</em>. The later
+arena implementation will need the latter distinction explicitly.</p>
+<h2 id="constructors-establish-state-destructors-finish-a-scope">Constructors establish state; destructors finish a scope</h2>
+<p>A <code>class</code>, like a <code>struct</code>, defines a type with data and functions. Its default
+member access is private; a struct's is public. We write <code>public:</code> for callable
+operations and <code>private:</code> for internal state. Private access prevents a caller
+from casually breaking an invariant; it does not make an incorrect constructor
+or member function correct.</p>
+<p>A constructor has the class's name and no return type. A destructor uses that
+name preceded by <code>~</code>, takes no arguments, and has no return type. The expression
+following a constructor's colon initializes members <strong>before</strong> its body runs.
+A reference member must be bound there or by a member initializer; assignment
+inside the body cannot go back and initialize an unbound reference.</p>
+<p>Start with an allocation-free log and the active check helper:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;type_traits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="w"> </span><span class="p">{</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">condition</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"FAIL "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">LifetimeLog</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">&gt;</span><span class="w"> </span><span class="n">events</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">overflow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">record</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">used</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">events</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">overflow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">            </span><span class="k">return</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">events</span><span class="p">[</span><span class="n">used</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">event</span><span class="p">;</span>
+<span class="w">        </span><span class="o">++</span><span class="n">used</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>The function inside <code>LifetimeLog</code> is a <em>member function</em>. A call such as
+<code>log.record(1)</code> operates on that particular log's fields. <code>noexcept</code> on the
+function declares that no exception may escape it. Here that promise is supported
+by fixed-array indexing guarded by the bound, and scalar assignments; no memory
+allocation or stream output happens inside <code>record</code>.</p>
+<p>An exception is a separate error-control path, taught in Chapter 4. For now,
+remember that <code>noexcept</code> does not turn failure into success or make throwing code
+safe: an exception escaping such a function leads to termination. See the
+<a href="https://eel.is/c++draft/except.spec">exception specifications</a> and
+<a href="https://eel.is/c++draft/except.terminate">termination rules</a>. We use a bounded
+log rather than potentially allocating output from a destructor.</p>
+<p>The next two small classes record construction as a positive identifier and
+destruction as its negative. The identifiers in this fixture are only 1–4.
+They borrow <code>LifetimeLog</code>; the log must outlive them. A declaration ending in
+<code>= delete</code> forbids that operation at compile time. These probes deliberately
+cannot be copied: duplicating a probe would duplicate destruction events without
+matching the construction events we want to observe.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">ScopeMark</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">ScopeMark</span><span class="p">(</span><span class="n">LifetimeLog</span><span class="o">&amp;</span><span class="w"> </span><span class="n">log</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">log_</span><span class="p">(</span><span class="n">log</span><span class="p">),</span><span class="w"> </span><span class="n">id_</span><span class="p">(</span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">log_</span><span class="p">.</span><span class="n">record</span><span class="p">(</span><span class="n">id_</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="o">~</span><span class="n">ScopeMark</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">log_</span><span class="p">.</span><span class="n">record</span><span class="p">(</span><span class="o">-</span><span class="n">id_</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">ScopeMark</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ScopeMark</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ScopeMark</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ScopeMark</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">LifetimeLog</span><span class="o">&amp;</span><span class="w"> </span><span class="n">log_</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">id_</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MarkPair</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">MarkPair</span><span class="p">(</span><span class="n">LifetimeLog</span><span class="o">&amp;</span><span class="w"> </span><span class="n">log</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">log_</span><span class="p">(</span><span class="n">log</span><span class="p">),</span><span class="w"> </span><span class="n">first_</span><span class="p">(</span><span class="n">log</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">second_</span><span class="p">(</span><span class="n">log</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">log_</span><span class="p">.</span><span class="n">record</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="o">~</span><span class="n">MarkPair</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">log_</span><span class="p">.</span><span class="n">record</span><span class="p">(</span><span class="mi">-3</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">MarkPair</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MarkPair</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MarkPair</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MarkPair</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">LifetimeLog</span><span class="o">&amp;</span><span class="w"> </span><span class="n">log_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ScopeMark</span><span class="w"> </span><span class="n">first_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ScopeMark</span><span class="w"> </span><span class="n">second_</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>The trailing underscores are a naming convention for private fields, not special
+syntax. <code>explicit</code> prevents <code>MarkPair</code>'s one-argument constructor from serving as
+an implicit conversion from a log. Direct construction, <code>MarkPair pair(log)</code>,
+remains valid. <code>operator=</code> names an assignment operator; its detailed role will
+become concrete in the buffer's move assignment.</p>
+<p><code>MarkPair</code> declares <code>first_</code> before <code>second_</code>. They initialize in that declaration
+order, not whichever order an author happens to write in the constructor's
+initializer list. Write both in the same order to make the dependency visible.
+The constructor body records 3 only after those members are ready. The
+<a href="https://eel.is/c++draft/class.base.init">member-initialization specification</a>
+defines this ordering.</p>
+<p>On destruction, <code>MarkPair</code>'s destructor body records -3 <strong>before</strong> its members are
+destroyed. <code>second_</code> then records -2, followed by <code>first_</code> recording -1. The
+reference member <code>log_</code> never destroys the log it names. The
+<a href="https://eel.is/c++draft/class.dtor">destructor rules</a> explain the body/member
+sequence. Do not call a member's destructor manually: the automatic member
+cleanup would otherwise encounter an already-destroyed object.</p>
+<p>Append a complete check of both nested scopes and member order:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_scope_order</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">LifetimeLog</span><span class="w"> </span><span class="n">log</span><span class="p">;</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">MarkPair</span><span class="w"> </span><span class="n">pair</span><span class="p">(</span><span class="n">log</span><span class="p">);</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">ScopeMark</span><span class="w"> </span><span class="n">nested</span><span class="p">(</span><span class="n">log</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">&gt;</span><span class="w"> </span><span class="n">expected</span><span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">-4</span><span class="p">,</span><span class="w"> </span><span class="mi">-3</span><span class="p">,</span><span class="w"> </span><span class="mi">-2</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="o">!</span><span class="n">log</span><span class="p">.</span><span class="n">overflow</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">log</span><span class="p">.</span><span class="n">used</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">expected</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">log</span><span class="p">.</span><span class="n">events</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">expected</span><span class="p">,</span><span class="w"> </span><span class="s">"scope and member destruction order"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"lifetime:"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">event</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">log</span><span class="p">.</span><span class="n">events</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">' '</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">event</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>There is no heap allocation in the trace itself. <code>log</code> is declared outside the
+probes' scope, so all record operations finish before the log dies. This is the
+same ownership-order question a future cache will face: a pin must stop using the
+cache's bookkeeping before that bookkeeping is destroyed.</p>
+<h2 id="prefer-an-existing-owner-before-writing-special-members">Prefer an existing owner before writing special members</h2>
+<p><strong>Resource Acquisition Is Initialization</strong>, or <strong>RAII</strong>, binds a resource's
+release responsibility to an object's lifetime. A successful construction gives
+you an owner; destruction releases what it still owns. The resource might be an
+allocation, file descriptor, lock, or temporary file, not just memory. RAII is
+not garbage collection, and it does not require the owner itself to be on the
+heap.</p>
+<p><code>std::vector</code> already owns its element storage. <code>std::unique_ptr&lt;T&gt;</code> represents
+exclusive release responsibility for a separately allocated <code>T</code>; moving it
+transfers that responsibility. For an array, use <code>std::unique_ptr&lt;T[]&gt;</code>, whose
+default deletion uses the array form of deletion. Neither form is a reference
+count. Copying a unique pointer is prohibited; its interfaces are specified in
+<a href="https://eel.is/c++draft/unique.ptr.runtime">unique ownership</a>.</p>
+<p>Before introducing our cross-member invariant, compare two small aggregates:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">ValueRecord</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">payload</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">UniqueRecord</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">payload</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>std::byte</code>, from <code>&lt;cstddef&gt;</code>, represents a byte without treating it as an ordinary
+arithmetic integer. Write a known byte value as <code>std::byte{4}</code>. For printing a
+numeric value, <code>std::to_integer&lt;unsigned int&gt;(value)</code> converts explicitly; see
+<a href="https://eel.is/c++draft/support.types.byteops">byte operations</a>. The fixed
+three-element array here lets <code>UniqueRecord</code> avoid a second length member.</p>
+<p>Neither aggregate declares a destructor, copy operation, or move operation.
+This design is often called the <strong>rule of zero</strong>: let well-chosen member types
+supply those operations instead of duplicating their resource management.
+<code>ValueRecord</code> can copy its vector into independent storage. <code>UniqueRecord</code> cannot
+copy its unique pointer, but the generated move transfers that member. The
+<a href="https://eel.is/c++draft/class.copy.ctor">copy/move constructor rules</a> describe
+memberwise generation and when a generated copy is deleted.</p>
+<h3 id="stdmove-permits-a-transfer-it-does-not-perform-one"><code>std::move</code> permits a transfer; it does not perform one</h3>
+<p>A named object expression such as <code>source</code> is an <em>lvalue</em>: it designates an
+existing object. <code>std::move(source)</code> produces an expression that permits selection
+of an operation accepting an expiring value, conventionally a <code>T&amp;&amp;</code> parameter.
+It does not allocate, copy payload bytes, destroy the source, or itself remove
+ownership. The selected constructor or assignment operator performs the work.
+The <a href="https://eel.is/c++draft/forward">move helper's specification</a> describes a
+cast, not a transfer algorithm.</p>
+<p>An rvalue reference parameter is written <code>T&amp;&amp;</code>; it is not two levels of pointer.
+The parameter still refers to an object. Once that parameter has a name inside
+the function, using its name is again an lvalue expression. This is why a custom
+move constructor must explicitly move the source's owning member rather than
+assume every access to the parameter will move automatically.</p>
+<p>Append the rule-of-zero exercise:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_standard_owners</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">ValueRecord</span><span class="w"> </span><span class="n">original</span><span class="p">{{</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">4</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">5</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">6</span><span class="p">}}};</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">copied</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">original</span><span class="p">;</span>
+<span class="w">    </span><span class="n">copied</span><span class="p">.</span><span class="n">payload</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">9</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">original</span><span class="p">.</span><span class="n">payload</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">5</span><span class="p">}</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">copied</span><span class="p">.</span><span class="n">payload</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">9</span><span class="p">},</span><span class="w"> </span><span class="s">"value copy is independent"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fixture</span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">4</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">5</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">6</span><span class="p">}</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="w">    </span><span class="n">UniqueRecord</span><span class="w"> </span><span class="n">source</span><span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="o">&gt;&gt;</span><span class="p">(</span><span class="n">fixture</span><span class="p">)};</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">destination</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">source</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="o">!</span><span class="n">source</span><span class="p">.</span><span class="n">payload</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">destination</span><span class="p">.</span><span class="n">payload</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="o">*</span><span class="n">destination</span><span class="p">.</span><span class="n">payload</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">fixture</span><span class="p">,</span><span class="w"> </span><span class="s">"generated unique-owner move"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"standard owners: independent copy; unique source empty</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>std::make_unique&lt;T&gt;(arguments)</code> allocates and constructs a <code>T</code> and returns its
+unique owner. Here <code>T</code> is one <code>std::array</code>, not an unknown-length array. The
+parenthesized <code>fixture</code> supplies its copied initial value. Dereferencing
+<code>*destination.payload</code> accesses that owned array; the boolean tests verify that
+the pointer exists before the dereference. When this function returns, the
+vectors and remaining unique pointer release their resources through their own
+members' destruction. No handwritten destructor is needed.</p>
+<p>The empty <code>source.payload</code> is a documented consequence of the
+<a href="https://eel.is/c++draft/unique.ptr.single.ctor">unique-pointer move constructor</a>,
+not a universal property of moving. The standard library generally permits a
+valid but unspecified moved-from state unless a type gives a stronger guarantee;
+see <a href="https://eel.is/c++draft/lib.types.movedfrom">moved-from library objects</a>.
+A user-defined type does not become correct merely because it has a <code>T&amp;&amp;</code>
+constructor. We must establish and document our own source state.</p>
+<h2 id="an-invariant-that-needs-a-custom-move">An invariant that needs a custom move</h2>
+<p>Our <code>ByteBuffer</code> has two coupled fields: an owning pointer and a byte count.
+The public boundary invariant is:</p>
+<ul>
+<li>Empty means a null pointer and count zero, with no allocation.</li>
+<li>Nonempty means exclusive ownership of an array of exactly the advertised
+number of accessible bytes; every byte has been initialized.</li>
+<li>A move between distinct owners preserves the array's address and contents,
+and leaves the source empty. A self-move preserves the original state.</li>
+</ul>
+<p>Let <span class="math-input" data-display="false">p</span> denote the stored pointer and <span class="math-input" data-display="false">n</span> the byte count. The empty-state part is</p>
+<div class="math-input" data-display="true">n = 0 \quad\Longleftrightarrow\quad p = \mathrm{nullptr}.</div>
+<p>The other half of the contract cannot be proved from those two values alone: a
+nonnull pointer with count three must actually own a live three-byte array. We
+arrange that by making fields private and allowing acquisition only through the
+constructor. A span does not validate this ownership for us.</p>
+<p>Why not generate every move? A defaulted move would move the unique pointer but
+copy the scalar length. A source that originally held three bytes would then
+contain a null pointer and length three. Each member would individually be in a
+legal state, but the combined object would violate our invariant. The rule of
+zero works best when the chosen representation makes memberwise operations
+correct; it is not a command to accept an invalid state.</p>
+<p>The buffer also records successful payload acquisitions and releases. Define
+<span class="math-input" data-display="false">A</span> as acquisitions, <span class="math-input" data-display="false">R</span> as releases, and <span class="math-input" data-display="false">L</span> as currently live payload arrays.
+For this finite, single-threaded fixture, at completed public operations,</p>
+<div class="math-input" data-display="true">L = A - R.</div>
+<p>Moving to a fresh owner changes neither <span class="math-input" data-display="false">A</span> nor <span class="math-input" data-display="false">R</span>. Replacing an already-owning
+destination releases one array, so <span class="math-input" data-display="false">R</span> increases by one and <span class="math-input" data-display="false">L</span> decreases by one.
+These counters count <strong>arrays owned by <code>ByteBuffer</code> only</strong>. They do not count
+stream allocations, vectors' element storage, allocator bookkeeping, the earlier
+standard-owner exercise, or process memory usage. They are not a thread-safe
+memory budget and are not intended for an indefinitely running counter service.</p>
+<h3 id="read-the-interface-before-its-implementation">Read the interface before its implementation</h3>
+<p>A default constructor takes no arguments. <code>= default</code> asks the compiler to
+generate that operation using the members' declared initializers. <code>= delete</code>
+instead makes an attempted call ill-formed. We explicitly delete both copying
+operations because copying this type must not silently allocate a second payload
+or manufacture a second release obligation.</p>
+<p><code>ByteBuffer(ByteBuffer&amp;&amp;)</code> constructs a new object from a source.
+<code>ByteBuffer&amp; operator=(ByteBuffer&amp;&amp;)</code> changes an already-existing object and returns
+a reference to that destination. The two operations have different cleanup
+requirements. A destructor, copy constructor, copy assignment, move constructor,
+and move assignment are the five special operations whose interaction you must
+consider here; “consider all five” does not mean implement all five as permitted
+operations. The <a href="https://eel.is/c++draft/class.copy.assign">assignment rules</a>
+explain generated and deleted assignments.</p>
+<p>The view accessors have another qualifier: <code>bytes() &amp;</code> is callable on an lvalue
+owner, while <code>bytes() const &amp;</code> supplies read-only elements when the owner is
+observed as const. We delete the corresponding <code>&amp;&amp;</code> overloads, preventing a
+call such as <code>ByteBuffer(3).bytes()</code> from borrowing a temporary that is about to
+die. These are <em>ref-qualified member functions</em>; the qualifier belongs to the
+object on which the method is called, not to its returned span. See
+<a href="https://eel.is/c++draft/class.mfct.non.static">member-function qualifiers</a>.
+This blocks one easy mistake, not every dangling borrow.</p>
+<p>Append the full interface:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">AllocationCounts</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">acquired</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">released</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ByteBuffer</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">ByteBuffer</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="p">);</span>
+<span class="w">    </span><span class="o">~</span><span class="n">ByteBuffer</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">ByteBuffer</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ByteBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ByteBuffer</span><span class="p">(</span><span class="n">ByteBuffer</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ByteBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">ByteBuffer</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">size</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">empty</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bytes</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bytes</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">reset</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">AllocationCounts</span><span class="w"> </span><span class="nf">allocations</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">[]</span><span class="o">&gt;</span><span class="w"> </span><span class="n">data_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="kr">inline</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="n">AllocationCounts</span><span class="w"> </span><span class="n">counts_</span><span class="p">{};</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>size() const</code> can inspect but not change ordinary members through that access
+path. Its returned integer owns its value and needs no lifetime restriction.
+A static member function, <code>allocations()</code>, has no particular buffer as its target;
+call it as <code>ByteBuffer::allocations()</code>. The <code>inline static</code> data member supplies
+one shared counter object, rather than a counter in every buffer. <code>inline</code> here
+permits the definition in the class; it is not an instruction to inline machine
+code. The <a href="https://eel.is/c++draft/class.static.data">static-data-member rules</a>
+cover these declarations. Returning counts by value prevents a caller from
+modifying the instrumentation through the result.</p>
+<p>An explicitly declared destructor or copy operation changes which move operations
+are implicitly supplied. Do not add a logging destructor to an otherwise
+rule-of-zero type and assume that its move behavior is unchanged. Here all five
+choices are visible rather than left to accidental generation.</p>
+<h2 id="acquire-once-and-make-release-idempotent">Acquire once, and make release idempotent</h2>
+<p>Define construction outside the class. <code>ByteBuffer::</code> identifies the member
+being defined, just as a namespace qualifier identified a function in Chapter 1.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">ByteBuffer</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">data_</span><span class="p">(</span><span class="n">size</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">[]</span><span class="o">&gt;</span><span class="p">{}</span>
+<span class="w">                      </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">[]</span><span class="o">&gt;</span><span class="p">(</span><span class="n">size</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">size_</span><span class="p">(</span><span class="n">size</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">data_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="o">++</span><span class="n">counts_</span><span class="p">.</span><span class="n">acquired</span><span class="p">;</span>
+<span class="w">        </span><span class="o">++</span><span class="n">counts_</span><span class="p">.</span><span class="n">live</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">ByteBuffer</span><span class="o">::~</span><span class="n">ByteBuffer</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">reset</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">reset</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">data_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">data_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="o">++</span><span class="n">counts_</span><span class="p">.</span><span class="n">released</span><span class="p">;</span>
+<span class="w">        </span><span class="o">--</span><span class="n">counts_</span><span class="p">.</span><span class="n">live</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">size_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">AllocationCounts</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">counts_</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The conditional expression selects exactly one initializer. A size of zero uses
+an empty unique pointer and performs no array allocation. Otherwise,
+<code>std::make_unique&lt;std::byte[]&gt;(size)</code> value-initializes the array, so every byte
+starts at zero. The <a href="https://eel.is/c++draft/unique.ptr.create">creation functions</a>
+specify this array initialization. <code>ByteBuffer(0)</code> and <code>ByteBuffer{}</code> therefore
+reach the same empty representation; we do not depend on how a zero-length
+<code>new[]</code> allocation might be represented.</p>
+<p>Acquisition is counted only after initialization succeeds. The size-taking
+constructor is deliberately <strong>not</strong> <code>noexcept</code>: allocation can fail. No counter
+is incremented before the allocation, and the remaining constructor body only
+updates the counters. If a constructor fails before completion, the complete
+object's destructor is not the cleanup mechanism; its fully constructed member
+subobjects are cleaned up. Making the resource a smart-pointer member puts that
+release responsibility in a constructed subobject. The
+<a href="https://eel.is/c++draft/except.ctor">construction-failure rules</a> underpin this
+behavior. Chapter 4 will add explicit handling and deterministic failure tests;
+these tiny successful allocations are not an allocation-failure experiment.</p>
+<p><code>data_.reset()</code> releases its currently owned array and makes the pointer empty.
+Our outer <code>reset()</code> also updates the length and instrumentation. Calling it twice
+is safe: the second call observes no pointer, releases nothing, and leaves length
+zero. This property is called <strong>idempotence</strong>: repeating the operation has the
+same final state as doing it once.</p>
+<p>Do not substitute <code>data_.release()</code>. The similarly named smart-pointer operation
+detaches and returns a raw pointer <strong>without deleting the resource</strong>. Ignoring
+that return value would leak the array. Nor should a borrower call <code>delete[]</code>
+on <code>data_.get()</code>: the owning pointer would still believe it must delete the same
+array. The <a href="https://eel.is/c++draft/unique.ptr.single.modifiers">unique-pointer modifiers</a>
+and <a href="https://eel.is/c++draft/unique.ptr.runtime">array interface</a> distinguish
+observing, releasing responsibility, and destroying a resource.</p>
+<p>The destructor calls our reset once; after its body, member destruction still
+runs. <code>data_</code> is then empty, so its destructor has no second array to release.
+There is no throwing callback, allocation, or stream output in this cleanup
+path. A real file's successful flush is different from merely releasing its
+handle: important completion errors need an explicit operation, not a destructor
+that tries to report success by throwing.</p>
+<h2 id="a-view-exposes-bytes-not-release-authority">A view exposes bytes, not release authority</h2>
+<p>Append the size and view operations:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">ByteBuffer::size</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">size_</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">ByteBuffer::empty</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">size_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">bytes</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">empty</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">data_</span><span class="p">.</span><span class="n">get</span><span class="p">(),</span><span class="w"> </span><span class="n">size_</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">empty</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">data_</span><span class="p">.</span><span class="n">get</span><span class="p">(),</span><span class="w"> </span><span class="n">size_</span><span class="p">};</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>get()</code> observes the stored pointer; it transfers nothing. A mutable owner gives
+out a writable span. A const access path gives out a span of const bytes.
+Constness of a unique pointer by itself would not make its pointee const; our
+chosen return type supplies the read-only access contract.</p>
+<p>The explicit empty branch returns a default empty span. It requires no pointer
+arithmetic and no attempt to describe three elements through a null pointer.
+For the nonempty case, the constructor-established pointer/count invariant makes
+the range valid. This accessor does not perform a separate allocation check.</p>
+<p>A caller may keep the span only while the particular array it refers to is
+alive. Resetting or destroying its current owner invalidates that borrow.
+Replacing an owning destination invalidates views into the destination's <strong>old</strong>
+array. In contrast, moving our pointer/count pair to a different owner leaves
+the same array alive, so a view into the <strong>transferred</strong> array remains valid.
+This is a property of our implementation and contract, not a promise that any
+operation named “move” preserves every kind of view.</p>
+<p>Deleting rvalue accessors is only a guardrail. A span obtained from a named local
+can still be returned from a function that then destroys that owner. A caller
+can also keep a span and reset the owner. Neither mistake becomes safe because
+the original <code>bytes()</code> call was permitted by the type system.</p>
+<h2 id="transfer-both-fields-not-just-the-pointer">Transfer both fields, not just the pointer</h2>
+<p>The source of a move is still a live object and will eventually have its own
+destructor called. The move must leave it with no responsibility for the
+transferred allocation. <code>std::unique_ptr</code> handles that obligation for its member;
+we must also handle the length.</p>
+<p><code>std::exchange(object, replacement)</code>, from <code>&lt;utility&gt;</code>, stores the replacement
+and returns the old value. For a length of three,
+<code>std::exchange(other.size_, 0)</code> returns 3 and leaves <code>other.size_</code> equal to zero.
+This is not an atomic operation; see the
+<a href="https://eel.is/c++draft/utility.exchange">exchange specification</a>. Its role here
+is to make the old-value/new-state transition explicit.</p>
+<p>Append the complete move constructor:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">ByteBuffer</span><span class="p">(</span><span class="n">ByteBuffer</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">data_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">data_</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">size_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">size_</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The members initialize in declaration order: the destination's <code>data_</code> receives
+the source's owning pointer, then <code>size_</code> receives the source's previous count.
+The source has become <code>(nullptr, 0)</code> by the time construction completes. No
+payload loop, array allocation, or counter adjustment is needed. There are
+brief internal intermediate states between those initializers, but nothing in
+this single-threaded code observes them or invokes a callback. Our invariant is
+promised at operation boundaries, not after every machine instruction.</p>
+<p>The <code>std::move</code> on <code>other.data_</code> is necessary. Merely writing <code>data_(other.data_)</code>
+would try to copy a unique pointer, because the named expression is an lvalue.
+Deleting that copy is a useful compile-time failure, not a reason to add a raw
+pointer escape hatch.</p>
+<p>Move construction has no old destination resource. Move assignment does:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">ByteBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">ByteBuffer</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="k">this</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="n">data_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">data_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">size_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">size_</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>this</code> is the pointer to the object receiving the member call. <code>&amp;other</code> is the
+address of the source object. <code>*this</code> names the destination object; returning it
+as <code>ByteBuffer&amp;</code> returns a reference, not a new owner. A call
+<code>destination = std::move(source)</code> selects this function when both have the
+appropriate types.</p>
+<p>The identity check handles aliases: <code>other</code> may be another reference to the very
+same destination. If so, we preserve the object, payload, and counts. Without
+that check, our reset-first algorithm would erase the object before trying to
+move it from itself. That might avoid a double deletion, yet it would still
+violate our stronger no-op self-move contract.</p>
+<p>For different objects, reset destroys the destination's previous allocation and
+accounts for the release. Only then do we take the source's pointer and length.
+The <a href="https://eel.is/c++draft/unique.ptr.single.asgn">unique-pointer assignment</a>
+already knows how to release its old pointer; our explicit reset also maintains
+the enclosing buffer's counters and invariant. After reset the pointer is empty,
+so the member assignment has no second old allocation to release.</p>
+<p>A swap-based assignment is another possible policy. It would leave the source
+owning the destination's old payload until later cleanup, rather than empty.
+That can be valid, but it is not the policy promised here. “Moved from” describes
+an operation that happened; it is not a complete state specification.</p>
+<h3 id="why-these-moves-can-honestly-be-noexcept">Why these moves can honestly be <code>noexcept</code></h3>
+<p>They transfer a default-deleter unique pointer, assign scalar fields, and possibly
+release a byte array. None of those operations needs a new allocation or a
+throwing element destructor. This reasoning, not the attractiveness of a faster
+container path, justifies the declaration.</p>
+<p>When a vector needs new element storage, it must construct elements there while
+preserving its specified failure behavior. A nonthrowing move gives it a transfer
+path that cannot fail after some old elements have been moved from. For some
+copyable types a potentially throwing move motivates copying instead; a move-only
+type has no such fallback. The <a href="https://eel.is/c++draft/vector.capacity">vector capacity contract</a>
+and <a href="https://eel.is/c++draft/vector.modifiers">insertion guarantees</a> specify the
+relevant exceptions rather than promising that every move-looking expression
+is cheap.</p>
+<p>Add compile-time checks using standard <em>type traits</em>: the <code>_v</code> forms are boolean
+questions about a type, not function calls on a buffer. <code>static_assert</code> rejects
+the translation unit when a condition is false. The
+<a href="https://eel.is/c++draft/meta.unary.prop">type-property specification</a> defines
+these queries.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">static_assert</span><span class="p">(</span><span class="o">!</span><span class="n">std</span><span class="o">::</span><span class="n">is_copy_constructible_v</span><span class="o">&lt;</span><span class="n">ByteBuffer</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="o">!</span><span class="n">std</span><span class="o">::</span><span class="n">is_copy_assignable_v</span><span class="o">&lt;</span><span class="n">ByteBuffer</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_nothrow_move_constructible_v</span><span class="o">&lt;</span><span class="n">ByteBuffer</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_nothrow_move_assignable_v</span><span class="o">&lt;</span><span class="n">ByteBuffer</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_nothrow_destructible_v</span><span class="o">&lt;</span><span class="n">ByteBuffer</span><span class="o">&gt;</span><span class="p">);</span>
+</code></pre></figure>
+<p>These checks verify the type's declared interface, not that a body never leaks or
+violates an invariant. A wrongly written <code>noexcept</code> function can still terminate.
+Runtime state checks are still necessary.</p>
+<h2 id="follow-two-allocations-through-three-owners">Follow two allocations through three owners</h2>
+<p>Use logical allocation names rather than platform-dependent addresses. Let <code>Q</code>
+be the one-byte destination's original array and <code>P</code> the three-byte source array.
+The trace within one test is:</p>
+<table>
+<thead>
+<tr>
+<th>Operation completed</th>
+<th><code>source</code></th>
+<th><code>moved</code></th>
+<th><code>destination</code></th>
+<th><span class="math-input" data-display="false">A</span> count / <span class="math-input" data-display="false">R</span> count / <span class="math-input" data-display="false">L</span> count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Construct destination and source</td>
+<td>Owns array P, length 3</td>
+<td>Not constructed</td>
+<td>Owns array Q, length 1</td>
+<td>2 / 0 / 2</td>
+</tr>
+<tr>
+<td>Move-construct <code>moved</code></td>
+<td>Empty</td>
+<td>Owns array P, length 3</td>
+<td>Owns array Q, length 1</td>
+<td>2 / 0 / 2</td>
+</tr>
+<tr>
+<td>Move-assign destination</td>
+<td>Empty</td>
+<td>Empty</td>
+<td>Owns array P, length 3; Q released</td>
+<td>2 / 1 / 1</td>
+</tr>
+<tr>
+<td>Self-move destination</td>
+<td>Empty</td>
+<td>Empty</td>
+<td>Still owns array P</td>
+<td>2 / 1 / 1</td>
+</tr>
+<tr>
+<td>Leave the inner scope</td>
+<td>Destroyed, no release</td>
+<td>Destroyed, no release</td>
+<td>Still owns array P</td>
+<td>2 / 1 / 1</td>
+</tr>
+<tr>
+<td>Leave the outer scope</td>
+<td>—</td>
+<td>—</td>
+<td>Destroyed; P released</td>
+<td>2 / 2 / 0</td>
+</tr>
+</tbody>
+</table>
+<p>Here <span class="math-input" data-display="false">A</span>, <span class="math-input" data-display="false">R</span>, and <span class="math-input" data-display="false">L</span> are the acquisition, release, and live-array counters;
+P and Q are only labels for the two resources. The increments are relative to
+the counters before this test. This example requires no claim about an
+allocator's physical address reuse.</p>
+<p>First append two complete fixture predicates:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">empty_state</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">buffer</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">buffer</span><span class="p">.</span><span class="n">empty</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">buffer</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">           </span><span class="n">buffer</span><span class="p">.</span><span class="n">bytes</span><span class="p">().</span><span class="n">empty</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">buffer</span><span class="p">.</span><span class="n">bytes</span><span class="p">().</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">has_fixture</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">buffer</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">buffer</span><span class="p">.</span><span class="n">bytes</span><span class="p">();</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">view</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">view</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">4</span><span class="p">}</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">           </span><span class="n">view</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">5</span><span class="p">}</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">view</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">6</span><span class="p">};</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Both receive read-only references to owners and retain no borrow after returning.
+The size check precedes the element reads. <code>empty_state</code> checks the documented
+null/zero representation, rather than assuming “safe to destroy” means empty.</p>
+<p>Start the transfer test with an outer destination and an inner source. The
+inner span expires before the destination releases the transferred allocation:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_transfers</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">baseline</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">ByteBuffer</span><span class="w"> </span><span class="n">destination</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="n">destination</span><span class="p">.</span><span class="n">bytes</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">99</span><span class="p">};</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">ByteBuffer</span><span class="w"> </span><span class="n">source</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>
+<span class="w">            </span><span class="k">auto</span><span class="w"> </span><span class="n">borrowed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">source</span><span class="p">.</span><span class="n">bytes</span><span class="p">();</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">borrowed</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">borrowed</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">0</span><span class="p">}</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">borrowed</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">0</span><span class="p">}</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">borrowed</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="s">"new bytes are initialized"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="n">borrowed</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">4</span><span class="p">};</span>
+<span class="w">            </span><span class="n">borrowed</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">5</span><span class="p">};</span>
+<span class="w">            </span><span class="n">borrowed</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">6</span><span class="p">};</span>
+
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before_move</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">            </span><span class="n">ByteBuffer</span><span class="w"> </span><span class="n">moved</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">source</span><span class="p">));</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">after_move</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">empty_state</span><span class="p">(</span><span class="n">source</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_fixture</span><span class="p">(</span><span class="n">moved</span><span class="p">),</span>
+<span class="w">                       </span><span class="s">"move construction transfers value and empties source"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">                </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">moved</span><span class="p">.</span><span class="n">bytes</span><span class="p">().</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">borrowed</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">borrowed</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">5</span><span class="p">},</span><span class="w"> </span><span class="s">"borrow survives transfer"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">                </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">after_move</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before_move</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">after_move</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before_move</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">after_move</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before_move</span><span class="p">.</span><span class="n">live</span><span class="p">,</span>
+<span class="w">                       </span><span class="s">"move construction changes no allocation count"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"move construction: source="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">source</span><span class="p">.</span><span class="n">size</span><span class="p">()</span>
+<span class="w">                      </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" destination="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">moved</span><span class="p">.</span><span class="n">size</span><span class="p">()</span>
+<span class="w">                      </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after_move</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+</code></pre></figure>
+<p>This block intentionally leaves <code>check_transfers</code> and both scopes open. The next
+block continues the same function. The address comparison is between pointers
+into a <strong>still-live array</strong>. We never keep a pointer into the destination's old
+array for use after replacement.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">            </span><span class="n">destination</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">moved</span><span class="p">);</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">after_assign</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">empty_state</span><span class="p">(</span><span class="n">moved</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_fixture</span><span class="p">(</span><span class="n">destination</span><span class="p">),</span>
+<span class="w">                       </span><span class="s">"move assignment transfers value and empties source"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">                </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">destination</span><span class="p">.</span><span class="n">bytes</span><span class="p">().</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">borrowed</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">borrowed</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">6</span><span class="p">},</span><span class="w"> </span><span class="s">"borrow follows live array"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">                </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">after_assign</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">after_move</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">after_assign</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">after_move</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">after_assign</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">after_move</span><span class="p">.</span><span class="n">live</span><span class="p">,</span>
+<span class="w">                       </span><span class="s">"assignment releases exactly the old destination"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"move assignment: source="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">moved</span><span class="p">.</span><span class="n">size</span><span class="p">()</span>
+<span class="w">                      </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" destination="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">destination</span><span class="p">.</span><span class="n">size</span><span class="p">()</span>
+<span class="w">                      </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after_assign</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+
+<span class="w">            </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">same_object</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">destination</span><span class="p">;</span>
+<span class="w">            </span><span class="n">destination</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">same_object</span><span class="p">);</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">after_self</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">has_fixture</span><span class="p">(</span><span class="n">destination</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">destination</span><span class="p">.</span><span class="n">bytes</span><span class="p">().</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">borrowed</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span>
+<span class="w">                       </span><span class="s">"self-move preserves payload"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">                </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">after_self</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">after_assign</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">after_self</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">after_assign</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">after_self</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">after_assign</span><span class="p">.</span><span class="n">live</span><span class="p">,</span>
+<span class="w">                       </span><span class="s">"self-move changes no allocation count"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"self-move: payload preserved; no allocation</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">has_fixture</span><span class="p">(</span><span class="n">destination</span><span class="p">),</span><span class="w"> </span><span class="s">"new owner outlives source"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">after</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">after</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">after</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">after</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">live</span><span class="p">,</span><span class="w"> </span><span class="s">"both transfer-test arrays released"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"transfer cleanup: acquired="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">acquired</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" released="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">released</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>same_object</code> is an alias, not a copied owner. Self-move through an alias is a
+real possibility in a generic algorithm; the test should not depend on the
+compiler noticing the spelling <code>x = std::move(x)</code>.</p>
+<p>On any failing <code>check</code>, returning <code>false</code> still exits the active scopes. Live
+local owners are destroyed along that return path. The test does not require a
+handwritten cleanup label or a special branch for each failure. Main will also
+inspect the final live count even when a helper reports failure.</p>
+<h2 id="empty-objects-and-reusable-moved-from-sources">Empty objects and reusable moved-from sources</h2>
+<p>A valid empty state is useful only if normal operations handle it. Test default
+construction, size-zero construction, moving from empty, assigning empty over a
+nonempty destination, reusing a previously moved-from object, and repeated reset.
+No view from this test survives an operation that releases its array.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_empty_paths</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">baseline</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">ByteBuffer</span><span class="w"> </span><span class="n">empty</span><span class="p">;</span>
+<span class="w">        </span><span class="n">ByteBuffer</span><span class="w"> </span><span class="n">zero</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+<span class="w">        </span><span class="n">ByteBuffer</span><span class="w"> </span><span class="n">moved_empty</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">zero</span><span class="p">));</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">empty_state</span><span class="p">(</span><span class="n">empty</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">empty_state</span><span class="p">(</span><span class="n">zero</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">empty_state</span><span class="p">(</span><span class="n">moved_empty</span><span class="p">),</span><span class="w"> </span><span class="s">"empty construction and move"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">().</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">acquired</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"empty owners do not allocate"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="n">ByteBuffer</span><span class="w"> </span><span class="n">occupied</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="w">        </span><span class="n">occupied</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">empty</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">empty_state</span><span class="p">(</span><span class="n">occupied</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">empty_state</span><span class="p">(</span><span class="n">empty</span><span class="p">),</span>
+<span class="w">                   </span><span class="s">"empty source clears occupied destination"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">().</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">live</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"empty assignment releases old allocation"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="n">zero</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>
+<span class="w">        </span><span class="n">empty</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">zero</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">empty_state</span><span class="p">(</span><span class="n">zero</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">empty</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">empty</span><span class="p">.</span><span class="n">bytes</span><span class="p">()[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+<span class="w">                   </span><span class="s">"moved-from owner can receive a new buffer"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">empty</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="n">empty</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">same_empty</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zero</span><span class="p">;</span>
+<span class="w">        </span><span class="n">zero</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">same_empty</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">empty_state</span><span class="p">(</span><span class="n">empty</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">empty_state</span><span class="p">(</span><span class="n">zero</span><span class="p">),</span>
+<span class="w">                   </span><span class="s">"repeated reset and empty self-move"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">after</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">after</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">after</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">after</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">live</span><span class="p">,</span><span class="w"> </span><span class="s">"empty-path allocations balance"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"empty paths: acquired="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">acquired</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" released="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">released</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>In <code>zero = ByteBuffer(3)</code>, the right side is a temporary owner. Its allocation is
+transferred by assignment; the temporary is empty before its destruction at the
+end of that full expression. The subsequent move into <code>empty</code> transfers that
+same allocation again. Neither transfer creates another array.</p>
+<p>Notice the difference between assigning from a temporary and borrowing from it.
+Taking ownership before it dies is safe. Returning a span to its bytes without
+transferring ownership would not keep those bytes alive; the deleted rvalue
+accessors reject that particular spelling.</p>
+<h2 id="a-return-statement-still-crosses-the-lifetime-boundary">A return statement still crosses the lifetime boundary</h2>
+<p>Append a function with an early-return branch and a success branch, followed by
+a check of both:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">probe_with_early_return</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">accept</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">ByteBuffer</span><span class="w"> </span><span class="n">scratch</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">accept</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">scratch</span><span class="p">.</span><span class="n">bytes</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">42</span><span class="p">};</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">scratch</span><span class="p">.</span><span class="n">bytes</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">42</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">check_early_return</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">baseline</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">rejected</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe_with_early_return</span><span class="p">(</span><span class="nb">false</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">accepted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe_with_early_return</span><span class="p">(</span><span class="nb">true</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">after</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="o">!</span><span class="n">rejected</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">accepted</span><span class="p">,</span><span class="w"> </span><span class="s">"both return paths produce their result"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">after</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">after</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">after</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">live</span><span class="p">,</span><span class="w"> </span><span class="s">"both return paths clean up"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"early return: rejected="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">rejected</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" accepted="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">accepted</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">after</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The returned boolean is evaluated before local cleanup. It is an independent
+value, not a reference to <code>scratch</code>. Both paths destroy the local owner; neither
+returns its allocation. The same discipline applies when a future parser rejects
+a malformed record halfway through its work.</p>
+<p>Do not generalize scope cleanup into a crash-recovery guarantee. Normal returns
+and exception unwinding toward a handler can run destructors; abrupt termination,
+process killing, and power loss are different events. Nor does releasing a
+buffer undo a disk write. The storage chapters will need a durable recovery
+protocol rather than an assumption that cleanup always executes.</p>
+<h2 id="relocating-owners-is-different-from-relocating-their-arrays">Relocating owners is different from relocating their arrays</h2>
+<p>A <code>std::vector&lt;ByteBuffer&gt;</code> owns storage for its <strong>buffer objects</strong>. Each buffer
+in turn owns a separate byte array. If vector growth relocates the buffer
+objects, references to those objects are invalidated. Our buffers' move
+constructors nevertheless keep their separately allocated arrays alive at the
+same addresses. A view to those bytes is therefore a different dependency from
+a reference to a vector element.</p>
+<p>Append a forced relocation check. As in Chapter 2, request more than the observed
+capacity rather than assuming a particular growth factor:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_vector_relocation</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">baseline</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ByteBuffer</span><span class="o">&gt;</span><span class="w"> </span><span class="n">buffers</span><span class="p">;</span>
+<span class="w">        </span><span class="n">buffers</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">ByteBuffer</span><span class="p">(</span><span class="mi">3</span><span class="p">));</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">buffers</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">bytes</span><span class="p">();</span>
+<span class="w">        </span><span class="n">payload</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">7</span><span class="p">};</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">old_capacity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">buffers</span><span class="p">.</span><span class="n">capacity</span><span class="p">();</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">old_capacity</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">buffers</span><span class="p">.</span><span class="n">max_size</span><span class="p">(),</span><span class="w"> </span><span class="s">"room for capacity probe"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">buffers</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="n">old_capacity</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">after</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">buffers</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">buffers</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">bytes</span><span class="p">().</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">payload</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">payload</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="mi">7</span><span class="p">},</span><span class="w"> </span><span class="s">"payload survives owner relocation"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">after</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">after</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">after</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">live</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"owner relocation allocates no new payload array"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"vector relocation: payload preserved; new payload arrays=0</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">after</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">check</span><span class="p">(</span><span class="n">after</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                 </span><span class="n">after</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                 </span><span class="n">after</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">baseline</span><span class="p">.</span><span class="n">live</span><span class="p">,</span><span class="w"> </span><span class="s">"vector-owned payload released"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The vector did allocate new <strong>element storage</strong>; the output deliberately says
+“new payload arrays,” not “no allocation.” No reference or pointer to an old
+<code>ByteBuffer</code> object is kept across reserve. <code>payload</code> is declared after <code>buffers</code>,
+so its local scope ends before vector destruction releases the live array.
+A successful reserve leaves our view usable. A future owner that stores bytes
+inline, rather than separately allocating them, would need a different promise.</p>
+<p>There is no timing claim here. Counting payload acquisitions tells us which
+mechanism ran; it does not measure allocator overhead, cache behavior, or total
+process memory. Those measurements need larger, controlled workloads later.</p>
+<h2 id="connect-the-checks-to-the-existing-build">Connect the checks to the existing build</h2>
+<p>Close the namespace and append the complete <code>main</code>. The separate <code>drained</code> check
+runs even when the earlier <code>&amp;&amp;</code> chain stops at a failed helper:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-03/buffer_owner.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="p">}</span><span class="w"> </span><span class="c1">// namespace strata</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">check_scope_order</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                    </span><span class="n">strata</span><span class="o">::</span><span class="n">check_standard_owners</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                    </span><span class="n">strata</span><span class="o">::</span><span class="n">check_transfers</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                    </span><span class="n">strata</span><span class="o">::</span><span class="n">check_empty_paths</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                    </span><span class="n">strata</span><span class="o">::</span><span class="n">check_early_return</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                    </span><span class="n">strata</span><span class="o">::</span><span class="n">check_vector_relocation</span><span class="p">();</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">counts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">ByteBuffer</span><span class="o">::</span><span class="n">allocations</span><span class="p">();</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">drained</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">check</span><span class="p">(</span>
+<span class="w">        </span><span class="n">counts</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">released</span><span class="p">,</span>
+<span class="w">        </span><span class="s">"all ByteBuffer payloads released"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ok</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="o">!</span><span class="n">drained</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"final: acquired="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">acquired</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" released="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">counts</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"foundation-03: all checks passed</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>There are seven counted nonempty arrays: two in the transfer test, two in the
+empty-path test, two in the return-path test, and one in the vector test. The
+lifetime markers allocate none; the standard-owner comparison is outside this
+class's instrumentation. Every successful normal path returns to zero live
+<code>ByteBuffer</code> payloads before the final report.</p>
+<p>Append, rather than replace, this block in the root CMake file:</p>
+<figure class="code-block"><figcaption><span class="code-title">CMakeLists.txt</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nb">add_executable</span><span class="p">(</span><span class="s">foundation-03</span><span class="w"> </span><span class="s">exercises/chapter-03/buffer_owner.cpp</span><span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span><span class="s">foundation-03</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">cxx_std_20</span><span class="p">)</span>
+<span class="nb">if</span><span class="p">(</span><span class="s">CMAKE_CXX_COMPILER_ID</span><span class="w"> </span><span class="s">MATCHES</span><span class="w"> </span><span class="s2">"Clang|GNU"</span><span class="p">)</span>
+<span class="w">    </span><span class="nb">target_compile_options</span><span class="p">(</span><span class="s">foundation-03</span><span class="w"> </span><span class="s">PRIVATE</span>
+<span class="w">        </span><span class="s">-Wall</span><span class="w"> </span><span class="s">-Wextra</span><span class="w"> </span><span class="s">-Wpedantic</span><span class="w"> </span><span class="s">-Wconversion</span><span class="w"> </span><span class="s">-Wsign-conversion</span>
+<span class="w">    </span><span class="p">)</span>
+<span class="nb">endif</span><span class="p">()</span>
+<span class="nb">add_test</span><span class="p">(</span><span class="s">NAME</span><span class="w"> </span><span class="s">foundation-03</span><span class="w"> </span><span class="s">COMMAND</span><span class="w"> </span><span class="s">foundation-03</span><span class="p">)</span>
+</code></pre></figure>
+<p>This target has no dependency on the earlier statistics library. Its helpers and
+<code>main</code> form one independent executable, just as Chapter 2's did. Keep the existing
+<code>CMAKE_CXX_EXTENSIONS OFF</code> and <code>enable_testing()</code> settings from Chapter 1.</p>
+<p>Run the cumulative Debug configuration:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — Debug build and checks</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/debug<span class="w"> </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Debug<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span>
+cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span>
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>--output-on-failure
+./build/debug/foundation-03
+</code></pre></figure>
+<p>Expected output of the last command, with the source exactly as written:</p>
+<figure class="code-block"><figcaption><span class="code-title">Expected foundation-03 output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>lifetime: 1 2 3 4 -4 -3 -2 -1
+standard owners: independent copy; unique source empty
+move construction: source=0 destination=3 live=2
+move assignment: source=0 destination=3 live=1
+self-move: payload preserved; no allocation
+transfer cleanup: acquired=2 released=2 live=0
+empty paths: acquired=2 released=2 live=0
+early return: rejected=0 accepted=1 live=0
+vector relocation: payload preserved; new payload arrays=0
+final: acquired=7 released=7 live=0
+foundation-03: all checks passed
+</code></pre></figure>
+<p>The cumulative CTest suite now has <strong>four</strong> tests: <code>foundation-01</code>,
+<code>cxx20-probe</code>, <code>foundation-02</code>, and <code>foundation-03</code>. Then build and test Release
+separately, preserving the compiler selection and existing configuration:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — Release build and checks</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/release<span class="w"> </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Release<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span>
+cmake<span class="w"> </span>--build<span class="w"> </span>build/release<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span>
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>--output-on-failure
+./build/release/foundation-03
+</code></pre></figure>
+<p>The logical output should be the same. No required operation or validation is
+inside an <code>assert</code> that disappears with <code>NDEBUG</code>. These are expected native
+commands and output, not a claim about a particular installed macOS release.</p>
+<h2 id="diagnose-an-ownership-mistake-at-the-right-boundary">Diagnose an ownership mistake at the right boundary</h2>
+<p>Keep the passing program as the baseline. The next edits are separate, temporary
+experiments; undo each one before trying the next. They are not additional
+permanent statements in <code>check_transfers</code>.</p>
+<h3 id="ask-for-a-forbidden-copy">Ask for a forbidden copy</h3>
+<p>Immediately after <code>ByteBuffer destination(1);</code> in <code>check_transfers</code>, temporarily
+insert:</p>
+<figure class="code-block"><figcaption><span class="code-title">Temporary diagnostic edit — forbidden copy</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">ByteBuffer</span><span class="w"> </span><span class="nf">forbidden</span><span class="p">(</span><span class="n">destination</span><span class="p">);</span>
+</code></pre></figure>
+<p>Compile without linking:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — check a temporary negative edit</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-fsyntax-only<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>exercises/chapter-03/buffer_owner.cpp
+<span class="nb">echo</span><span class="w"> </span><span class="s2">"compiler exit status=</span><span class="nv">$?</span><span class="s2">"</span>
+</code></pre></figure>
+<p>Expected behavior: a nonzero status and a diagnostic identifying the deleted copy
+constructor. Exact diagnostic wording varies by compiler. The error should name
+the attempted copy, not a missing include or syntax error elsewhere. Even an
+empty buffer is noncopyable; copyability is a type-level interface choice, not a
+runtime branch based on its current size. Remove the inserted line.</p>
+<h3 id="a-const-source-is-not-permission-to-change-ownership">A const source is not permission to change ownership</h3>
+<p>At the same location, instead insert these two lines:</p>
+<figure class="code-block"><figcaption><span class="code-title">Temporary diagnostic edit — move from a const access path</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">frozen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">destination</span><span class="p">;</span>
+<span class="n">ByteBuffer</span><span class="w"> </span><span class="nf">forbidden</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">frozen</span><span class="p">));</span>
+</code></pre></figure>
+<p>Run the same compile-only command. <code>std::move</code> does not remove <code>const</code>, so the
+non-const <code>ByteBuffer&amp;&amp;</code> move constructor cannot accept that expression. The
+copy constructor can bind a const reference, but it is deleted. The expected
+result is therefore another compilation failure, not a silent transfer.</p>
+<p>Do not fix this by casting constness away. When the caller truly gives up a
+mutable owner's resource, express that through the appropriate mutable object.
+When it merely borrows, use the view/reference interface. Remove both lines.</p>
+<h3 id="reject-a-borrow-from-a-temporary">Reject a borrow from a temporary</h3>
+<p>At the same location, temporarily insert:</p>
+<figure class="code-block"><figcaption><span class="code-title">Temporary diagnostic edit — temporary owner borrow</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">auto</span><span class="w"> </span><span class="n">forbidden_view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ByteBuffer</span><span class="p">(</span><span class="mi">3</span><span class="p">).</span><span class="n">bytes</span><span class="p">();</span>
+</code></pre></figure>
+<p>The compile-only command should reject the deleted rvalue-qualified accessor.
+Without that guard, the temporary owner would normally be destroyed at the
+semicolon while a copied span remained. Naming an owner whose scope covers the
+use of its view is the fix; a longer-lived variable containing only the span is
+not. Remove this line too.</p>
+<h3 id="test-the-self-move-promise-not-just-absence-of-a-crash">Test the self-move promise, not just absence of a crash</h3>
+<p>In the definition of <code>ByteBuffer::operator=</code>, temporarily change only
+<code>if (this != &amp;other)</code> to <code>if (true)</code>. Rebuild the Chapter 3 target and run its test:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — deliberate self-move defect</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--target<span class="w"> </span>foundation-03<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span>
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>-R<span class="w"> </span><span class="s1">'^foundation-03$'</span><span class="w"> </span>--output-on-failure
+<span class="nb">echo</span><span class="w"> </span><span class="s2">"CTest exit status=</span><span class="nv">$?</span><span class="s2">"</span>
+</code></pre></figure>
+<p>Expected behavior: a failing test containing <code>FAIL self-move preserves payload</code>.
+The defective algorithm resets the destination, which is also its own source,
+then transfers an empty state. This is a semantic failure even if every
+allocation is eventually released.</p>
+<p>This particular diagnostic remains safe: <code>has_fixture(destination)</code> first checks
+that the now-empty view has three bytes. It returns false, so <code>&amp;&amp;</code> does <strong>not</strong>
+evaluate the subsequent comparison with the old borrow. The test returns without
+reading freed bytes. Restore the identity condition immediately, then rebuild
+and rerun both complete Debug and Release suites. Do not retain the defect as a
+normal example of acceptable moved-from behavior.</p>
+<h3 id="run-a-focused-memory-diagnostic-on-the-restored-program">Run a focused memory diagnostic on the restored program</h3>
+<p>Use the supported sanitizer runtime associated with the selected native compiler:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — ownership checks with sanitizers</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>build/diagnostics
+<span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-Wconversion<span class="w"> </span>-Wsign-conversion<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-g<span class="w"> </span>-O1<span class="w"> </span>-fsanitize<span class="o">=</span>address,undefined<span class="w"> </span>-fno-omit-frame-pointer<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-fno-sanitize-recover<span class="o">=</span>undefined<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>exercises/chapter-03/buffer_owner.cpp<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-o<span class="w"> </span>build/diagnostics/foundation-03-sanitized
+./build/diagnostics/foundation-03-sanitized
+</code></pre></figure>
+<p>Expected behavior: the same successful output and no sanitizer report.
+<a href="https://clang.llvm.org/docs/AddressSanitizer.html">AddressSanitizer</a> instruments
+memory accesses and can expose use-after-free or double deletion on executed
+paths. It must be enabled at compilation and final linking, which this single
+compiler invocation does. On macOS, its documentation notes that <code>dsymutil</code> may
+be needed for source-file/line symbolization. For example, run
+<code>dsymutil build/diagnostics/foundation-03-sanitized</code> when a report lacks those
+locations, then rerun.</p>
+<p><a href="https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html">UndefinedBehaviorSanitizer</a>
+adds selected language checks; the no-recovery option makes a diagnosed undefined
+operation stop the run. Neither tool proves an ownership contract, and optional
+leak-detection availability is separate from basic address instrumentation. Do
+not label a missing compiler runtime as a successful sanitizer run. Use the
+explicit allocation checks regardless of the platform's diagnostic support.</p>
+<p>The examples above distinguish three boundaries: illegal interfaces are rejected
+by compilation, broken state promises fail ordinary tests, and invalid memory
+access needs a memory diagnostic when the path is exercised. The right response
+to a failure is not always “add another smart pointer.”</p>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Inspect first</th>
+<th>Correction to the design or implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A supposed move tries to call a deleted copy</td>
+<td>The source expression's value category and constness</td>
+<td>Move the mutable owning member; do not remove const with a cast</td>
+</tr>
+<tr>
+<td>Moved-from size is still three</td>
+<td>The scalar field in the move operation</td>
+<td>Transfer the count and reset the source, not just its pointer</td>
+</tr>
+<tr>
+<td>Live count stays positive after replacement</td>
+<td>Destination cleanup and any use of <code>release()</code></td>
+<td>Destroy and account for the old resource before accepting the new one</td>
+</tr>
+<tr>
+<td>Live count wraps to a huge value</td>
+<td>Decrement on an empty owner or repeated cleanup</td>
+<td>Guard release by actual ownership and make reset idempotent</td>
+</tr>
+<tr>
+<td>A borrow fails after vector growth</td>
+<td>Whether it names the owner object or its separate array</td>
+<td>Reacquire invalidated element references; preserve only borrows the actual owner contract supports</td>
+</tr>
+<tr>
+<td>Destruction events are missing after abnormal exit</td>
+<td>Whether scope exit or unwinding occurred at all</td>
+<td>Do not substitute RAII for crash recovery or explicit completion protocols</td>
+</tr>
+</tbody>
+</table>
+<h2 id="change-member-order-and-predict-the-trace">Change member order and predict the trace</h2>
+<p>For one short variation, exchange <code>first_</code> and <code>second_</code> in <code>MarkPair</code>'s <strong>member
+declarations</strong>. Before changing its constructor initializer list, compile and
+inspect any member-reordering warning: the declarations, not the written
+initializer-list order, determine what happens. Then put the initializer list
+in the same order as those declarations:</p>
+<figure class="code-block"><figcaption><span class="code-title">Variation — MarkPair member declaration order</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">LifetimeLog</span><span class="o">&amp;</span><span class="w"> </span><span class="n">log_</span><span class="p">;</span>
+<span class="n">ScopeMark</span><span class="w"> </span><span class="n">second_</span><span class="p">;</span>
+<span class="n">ScopeMark</span><span class="w"> </span><span class="n">first_</span><span class="p">;</span>
+</code></pre></figure>
+<p>The constructor's initializer line becomes
+<code>: log_(log), second_(log, 2), first_(log, 1)</code>. Its body and destructor body stay
+unchanged. Update the expected array in <code>check_scope_order</code> to:</p>
+<figure class="code-block"><figcaption><span class="code-title">Variation — expected reordered lifetime events</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">&gt;</span><span class="w"> </span><span class="n">expected</span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">-4</span><span class="p">,</span><span class="w"> </span><span class="mi">-3</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">-2</span><span class="p">};</span>
+</code></pre></figure>
+<p>Predict the result before running. The containing destructor body still records
+-3 before either member destructor, but member construction and destruction order
+have both changed. This matters when one member borrows another: declaration
+order can determine whether cleanup still has a live dependency. Here both
+members only borrow the outer log, so either order is safe.</p>
+<p>After the experiment, restore the original declarations, initializer list, and
+expected array. The next chapter assumes the original passing program, not a
+negative edit or reordered trace. Keep the five static assertions, all six
+runtime check functions, and the appended CMake target.</p>
+<h2 id="what-this-owner-does-and-does-not-promise">What this owner does and does not promise</h2>
+<p>The buffer has exclusive ownership, a known empty state, initialized payloads,
+nonthrowing transfer and cleanup, and restricted view creation. A distinct move
+empties its source; self-move preserves the value. Existing destinations release
+their old arrays. Borrowers observe the array, not release authority. The checks
+make each transition visible without deliberately dereferencing dead storage.</p>
+<p>This is not a replacement for <code>std::vector</code>, an engine memory allocator, a shared
+cache pin, or a transactional update. Ordinary values with independent member
+invariants should continue to use the rule of zero. Here custom special members
+were justified by the pointer/count relationship and accounting. Do not copy
+this single-threaded instrumentation into a concurrent engine and call it a
+memory budget.</p>
+<p>The next chapter introduces error categories and exception handling, then builds
+a replacement before committing it. That will answer a different question:
+when acquiring a proposed new resource fails, how do we preserve the old value
+without leaking either resource?</p>
+<h2 id="technical-references">Technical references</h2>
+<p>The links near the explanations identify the specific contracts used. These
+working-draft pages also contain newer language/library features; only the
+C++20 facilities used in this chapter are required.</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Primary reference and relevant passage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Object versus storage</td>
+<td><a href="https://eel.is/c++draft/basic.life">Lifetime</a>: beginning and end of lifetime, and the distinction from retained storage</td>
+</tr>
+<tr>
+<td>Construction/destruction order</td>
+<td><a href="https://eel.is/c++draft/class.base.init">Initializing members</a> and <a href="https://eel.is/c++draft/class.dtor">destructors</a>: declaration order, destructor body, and reverse member destruction</td>
+</tr>
+<tr>
+<td>Generated special members</td>
+<td><a href="https://eel.is/c++draft/class.copy.ctor">Copy/move constructors</a> and <a href="https://eel.is/c++draft/class.copy.assign">assignment</a>: generation, memberwise operations, and deletion</td>
+</tr>
+<tr>
+<td>Existing unique ownership</td>
+<td><a href="https://eel.is/c++draft/unique.ptr.runtime">Array owners</a>, <a href="https://eel.is/c++draft/unique.ptr.create">creation</a>, and <a href="https://eel.is/c++draft/unique.ptr.single.modifiers">modifiers</a>: array deletion, value initialization, reset versus release</td>
+</tr>
+<tr>
+<td>Transfer semantics</td>
+<td><a href="https://eel.is/c++draft/forward">Move helpers</a>, <a href="https://eel.is/c++draft/utility.exchange">exchange</a>, and <a href="https://eel.is/c++draft/lib.types.movedfrom">moved-from states</a>: expression conversion, old-value replacement, and type-specific postconditions</td>
+</tr>
+<tr>
+<td>Error boundaries</td>
+<td><a href="https://eel.is/c++draft/except.ctor">Construction failure</a> and <a href="https://eel.is/c++draft/except.terminate">termination</a>: subobject cleanup and nonthrowing boundaries</td>
+</tr>
+<tr>
+<td>Container interaction</td>
+<td><a href="https://eel.is/c++draft/vector.capacity">Vector capacity</a> and <a href="https://eel.is/c++draft/vector.modifiers">modifiers</a>: reallocation, invalidation, and exception guarantees</td>
+</tr>
+<tr>
+<td>Diagnostics</td>
+<td>Clang <a href="https://clang.llvm.org/docs/AddressSanitizer.html">AddressSanitizer</a> and <a href="https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html">UndefinedBehaviorSanitizer</a>: compiler/linker flags, runtime checks, and symbolization</td>
+</tr>
+</tbody>
+</table>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-02.html"><small>Previous · Chapter 2</small><span>Values, references, containers, and views</span></a><a href="chapter-04.html"><small>Next · Chapter 4</small><span>Errors and failure-safe state changes</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 3</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#one-source-file-several-observable-lifetimes">One source file, several observable lifetimes</a></li><li class="toc-h2"><a href="#storage-is-not-an-object-and-an-object-is-not-its-payload">Storage is not an object, and an object is not its payload</a></li><li class="toc-h2"><a href="#constructors-establish-state-destructors-finish-a-scope">Constructors establish state; destructors finish a scope</a></li><li class="toc-h2"><a href="#prefer-an-existing-owner-before-writing-special-members">Prefer an existing owner before writing special members</a></li><li class="toc-h3"><a href="#stdmove-permits-a-transfer-it-does-not-perform-one">std::move permits a transfer; it does not perform one</a></li><li class="toc-h2"><a href="#an-invariant-that-needs-a-custom-move">An invariant that needs a custom move</a></li><li class="toc-h3"><a href="#read-the-interface-before-its-implementation">Read the interface before its implementation</a></li><li class="toc-h2"><a href="#acquire-once-and-make-release-idempotent">Acquire once, and make release idempotent</a></li><li class="toc-h2"><a href="#a-view-exposes-bytes-not-release-authority">A view exposes bytes, not release authority</a></li><li class="toc-h2"><a href="#transfer-both-fields-not-just-the-pointer">Transfer both fields, not just the pointer</a></li><li class="toc-h3"><a href="#why-these-moves-can-honestly-be-noexcept">Why these moves can honestly be noexcept</a></li><li class="toc-h2"><a href="#follow-two-allocations-through-three-owners">Follow two allocations through three owners</a></li><li class="toc-h2"><a href="#empty-objects-and-reusable-moved-from-sources">Empty objects and reusable moved-from sources</a></li><li class="toc-h2"><a href="#a-return-statement-still-crosses-the-lifetime-boundary">A return statement still crosses the lifetime boundary</a></li><li class="toc-h2"><a href="#relocating-owners-is-different-from-relocating-their-arrays">Relocating owners is different from relocating their arrays</a></li><li class="toc-h2"><a href="#connect-the-checks-to-the-existing-build">Connect the checks to the existing build</a></li><li class="toc-h2"><a href="#diagnose-an-ownership-mistake-at-the-right-boundary">Diagnose an ownership mistake at the right boundary</a></li><li class="toc-h3"><a href="#ask-for-a-forbidden-copy">Ask for a forbidden copy</a></li><li class="toc-h3"><a href="#a-const-source-is-not-permission-to-change-ownership">A const source is not permission to change ownership</a></li><li class="toc-h3"><a href="#reject-a-borrow-from-a-temporary">Reject a borrow from a temporary</a></li><li class="toc-h3"><a href="#test-the-self-move-promise-not-just-absence-of-a-crash">Test the self-move promise, not just absence of a crash</a></li><li class="toc-h3"><a href="#run-a-focused-memory-diagnostic-on-the-restored-program">Run a focused memory diagnostic on the restored program</a></li><li class="toc-h2"><a href="#change-member-order-and-predict-the-trace">Change member order and predict the trace</a></li><li class="toc-h2"><a href="#what-this-owner-does-and-does-not-promise">What this owner does and does not promise</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></aside>
+</div></body></html>

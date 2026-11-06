@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 23 · Part 2 — Remove work without changing the answer · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-23-part-2.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html" aria-current="page"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 23 · Part 2</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/56">Read on GitHub</a><a href="source/chapter-23-part-2.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-2-remove-work-without-changing-the-answer">Part 2 — Remove work without changing the answer</a></li><li class="toc-h2"><a href="#start-with-a-hypothesis-not-a-preferred-speedup">Start with a hypothesis, not a preferred speedup</a></li><li class="toc-h2"><a href="#make-instrumentation-optional-and-thread-local">Make instrumentation optional and thread-local</a></li><li class="toc-h2"><a href="#derive-the-table-recurrence">Derive the table recurrence</a></li><li class="toc-h2"><a href="#define-the-experiment-before-running-variants">Define the experiment before running variants</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-23-profiling-optimization-and-the-final-demonstration">Chapter 23 — Profiling, optimization, and the final demonstration</h1>
+<h2 id="part-2-remove-work-without-changing-the-answer">Part 2 — Remove work without changing the answer</h2>
+<p>Part 1 makes equivalent query shapes observable. This part adds two independent
+controls: optional instrumentation to locate checksum work, and an optimized
+checksum recurrence that preserves every format byte. It then supplies the
+measurement harness. Keep the Part 1 files and all Chapter 22 prerequisites.</p>
+<h2 id="start-with-a-hypothesis-not-a-preferred-speedup">Start with a hypothesis, not a preferred speedup</h2>
+<p>Every table frame and spill frame uses the same CRC-32 routine. With bounded
+blocks, a query repeatedly validates existing frames, creates new ones, and
+verifies intermediate replacements. The bitwise routine performs eight state
+updates per input byte. This makes it a plausible CPU cost, not proof that it is
+the dominant cost on every workload.</p>
+<p>On a native Mac with Instruments available, use a <code>RelWithDebInfo</code> build, select
+the <strong>Time Profiler</strong> template, choose <code>strata-measure</code> as the executable, and
+supply the same database, temporary directory, output directory, variant, and
+numeric arguments used below. Record several repetitions. Inspect the interval
+covering query work, not only program launch. Use the call tree to distinguish
+a function's own work from work attributed through its callees. A CPU profile
+alone does not count exact invocations or explain elapsed time spent blocked.
+Apple's <a href="https://developer.apple.com/tutorials/instruments/determining-execution-frequency">execution-frequency tutorial</a>
+explicitly separates those questions.</p>
+<p>For command-line discovery, inspect the installed tools rather than assuming a
+particular Xcode release or an Instruments installation:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — optional native profiling tools</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>xcrun<span class="w"> </span>--find<span class="w"> </span>xctrace
+man<span class="w"> </span>xctrace
+xcrun<span class="w"> </span>xctrace<span class="w"> </span>list<span class="w"> </span>templates
+</code></pre></figure>
+<p>The <a href="https://developer.apple.com/documentation/xcode/xcode-command-line-tool-reference">Apple command-line reference</a>
+identifies <code>xctrace</code> as the trace recording/export tool and directs users to its
+installed manual. The course's ordinary command-line build does not require
+installing full Xcode solely to reproduce a screenshot. The scoped timer below
+provides an additional reproducible, narrower measurement.</p>
+<p>On Linux, an available GNU gprofng can sample the same optimized executable:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — optional Linux sampling profile, after preparing measure-run</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>gprofng<span class="w"> </span>collect<span class="w"> </span>app<span class="w"> </span>-p<span class="w"> </span>hi<span class="w"> </span>-o<span class="w"> </span>crc-baseline.er<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>build-baseline/strata-measure<span class="w"> </span>measure-run/database<span class="w"> </span>measure-run/temporary<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>measure-run/results<span class="w"> </span>profile.csv<span class="w"> </span>batch<span class="w"> </span><span class="m">256</span><span class="w"> </span><span class="m">512</span><span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">7</span><span class="w"> </span><span class="m">100</span>
+gprofng<span class="w"> </span>display<span class="w"> </span>text<span class="w"> </span>-header<span class="w"> </span>-limit<span class="w"> </span><span class="m">20</span><span class="w"> </span>-functions<span class="w"> </span>crc-baseline.er
+</code></pre></figure>
+<p>The <a href="https://sourceware.org/binutils/docs/gprofng.html">GNU manual</a> explains
+sampling, inclusive/exclusive metrics, and these commands. Check the experiment
+header before interpreting its function table. In the Linux check accompanying
+this chapter, the collector warned that its interval timer changed to zero.
+Its displayed percentages were <strong>not accepted as reliable attribution</strong>. A large
+number in a profiler window does not override the profiler's own warning.</p>
+<p>Use separate observations for separate questions: sampling for likely CPU paths;
+scoped timings for a bounded region; allocation counters for ownership costs;
+file-transfer counters for I/O volume; and waiting/rendezvous state for resource
+admission or locks. A large elapsed-minus-CPU gap is a clue, not proof of disk
+waiting: scheduling and unrelated contention can also create it.</p>
+<h2 id="make-instrumentation-optional-and-thread-local">Make instrumentation optional and thread-local</h2>
+<p>Add these declarations to <code>table.hpp</code>. <code>CrcProfile</code> is a copyable observation,
+not an owning resource. Reset and read it on the thread running the measured
+synchronous query. No cross-thread aggregation is promised.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/table.hpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- a/include/strata/storage/table.hpp</span>
+<span class="gi">+++ b/include/strata/storage/table.hpp</span>
+<span class="gu">@@ -27,6 +27,13 @@</span>
+<span class="w"> </span>inline constexpr std::uint64_t max_file_bytes = 64 * 1024 * 1024;
+<span class="w"> </span>inline constexpr std::uint32_t bloom_probes = 6;
+<span class="w"> </span>
+<span class="gi">+// Optional same-thread instrumentation; not a concurrent aggregate.</span>
+<span class="gi">+struct CrcProfile {</span>
+<span class="gi">+    std::uint64_t calls = 0, bytes = 0, elapsed_ns = 0;</span>
+<span class="gi">+    bool saturated = false;</span>
+<span class="gi">+};</span>
+<span class="gi">+CrcProfile crc_profile() noexcept;</span>
+<span class="gi">+void reset_crc_profile() noexcept;</span>
+<span class="w"> </span>std::uint32_t crc32(std::span&lt;const std::byte&gt; input,
+<span class="w"> </span>                    std::uint32_t previous = 0) noexcept;
+<span class="w"> </span>void bloom_add(std::span&lt;std::byte&gt; bits, Key key);
+</code></pre></figure>
+<p>The following exact <code>table.cpp</code> patch adds the profiling helper and the selectable
+CRC implementation. Read its three mechanisms separately.</p>
+<p>First, <code>thread_local</code> gives each calling thread its own counters. It does not
+make a returned snapshot a live cross-thread view. <code>CrcTimer</code> records a
+<code>steady_clock</code> point at entry and updates saturating counters at destruction.
+No allocation or stream output occurs in the timed path. The saturation flag
+turns an unusable observation into an explicit failure in the driver.</p>
+<p>Second, <code>make_crc_table</code> is a <code>constexpr</code> function: the initialized array can be
+computed during translation. Each entry applies the old eight-step recurrence
+to one possible byte. The array occupies <span class="math-input" data-display="false">256\times4=1024</span> read-only data bytes;
+it is not charged heap storage. <code>[[maybe_unused]]</code> avoids a warning when the
+baseline build does not reference it. This attribute does not remove correctness
+checks or change object lifetime.</p>
+<p>Third, preprocessing selects one recurrence. <code>STRATA_CRC32_TABLE=0</code> retains the
+original eight bit steps; <code>=1</code> uses one table lookup per byte.
+<code>STRATA_PROFILE_CRC=0</code> removes the clock/counter path. Part 3's CMake options define
+both macros as numeric 0 or 1. These controls are independent.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/table.cpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- a/src/storage/table.cpp</span>
+<span class="gi">+++ b/src/storage/table.cpp</span>
+<span class="gu">@@ -4,24 +4,83 @@</span>
+<span class="w"> </span>#include &lt;algorithm&gt;
+<span class="w"> </span>#include &lt;array&gt;
+<span class="w"> </span>#include &lt;cstring&gt;
+<span class="gi">+#include &lt;chrono&gt;</span>
+<span class="gi">+#include &lt;limits&gt;</span>
+<span class="w"> </span>#include &lt;stdexcept&gt;
+<span class="w"> </span>#include &lt;utility&gt;
+<span class="w"> </span>
+<span class="w"> </span>namespace strata::storage {
+<span class="w"> </span>namespace table_format {
+<span class="gi">+namespace {</span>
+<span class="gi">+#if STRATA_PROFILE_CRC</span>
+<span class="gi">+thread_local CrcProfile current_profile;</span>
+<span class="gi">+void profile_add(std::uint64_t&amp; value, std::uint64_t delta) noexcept {</span>
+<span class="gi">+    constexpr auto maximum = std::numeric_limits&lt;std::uint64_t&gt;::max();</span>
+<span class="gi">+    if (delta &gt; maximum - value) {</span>
+<span class="gi">+        value = maximum; current_profile.saturated = true;</span>
+<span class="gi">+    } else { value += delta; }</span>
+<span class="gi">+}</span>
+<span class="gi">+struct CrcTimer {</span>
+<span class="gi">+    using Clock = std::chrono::steady_clock;</span>
+<span class="gi">+    Clock::time_point start = Clock::now();</span>
+<span class="gi">+    std::size_t bytes;</span>
+<span class="gi">+    ~CrcTimer() noexcept {</span>
+<span class="gi">+        const auto elapsed = std::chrono::duration_cast&lt;std::chrono::nanoseconds&gt;(Clock::now() - start).count();</span>
+<span class="gi">+        profile_add(current_profile.calls, 1);</span>
+<span class="gi">+        profile_add(current_profile.bytes, bytes);</span>
+<span class="gi">+        profile_add(current_profile.elapsed_ns, static_cast&lt;std::uint64_t&gt;(elapsed));</span>
+<span class="gi">+    }</span>
+<span class="gi">+};</span>
+<span class="gi">+#endif</span>
+<span class="gi">+constexpr std::array&lt;std::uint32_t, 256&gt; make_crc_table() noexcept {</span>
+<span class="gi">+    std::array&lt;std::uint32_t, 256&gt; result{};</span>
+<span class="gi">+    for (std::size_t i = 0; i &lt; result.size(); ++i) {</span>
+<span class="gi">+        auto state = static_cast&lt;std::uint32_t&gt;(i);</span>
+<span class="gi">+        for (unsigned bit = 0; bit &lt; 8; ++bit) {</span>
+<span class="gi">+            const bool low = (state &amp; 1U) != 0;</span>
+<span class="gi">+            state &gt;&gt;= 1;</span>
+<span class="gi">+            if (low) { state ^= 0xedb88320U; }</span>
+<span class="gi">+        }</span>
+<span class="gi">+        result[i] = state;</span>
+<span class="gi">+    }</span>
+<span class="gi">+    return result;</span>
+<span class="gi">+}</span>
+<span class="gi">+[[maybe_unused]] constexpr auto crc_table = make_crc_table();</span>
+<span class="gi">+}  // namespace</span>
+<span class="gi">+CrcProfile crc_profile() noexcept {</span>
+<span class="gi">+#if STRATA_PROFILE_CRC</span>
+<span class="gi">+    return current_profile;</span>
+<span class="gi">+#else</span>
+<span class="gi">+    return {};</span>
+<span class="gi">+#endif</span>
+<span class="gi">+}</span>
+<span class="gi">+void reset_crc_profile() noexcept {</span>
+<span class="gi">+#if STRATA_PROFILE_CRC</span>
+<span class="gi">+    current_profile = {};</span>
+<span class="gi">+#endif</span>
+<span class="gi">+}</span>
+<span class="w"> </span>std::uint32_t crc32(std::span&lt;const std::byte&gt; input,
+<span class="w"> </span>                    std::uint32_t previous) noexcept {
+<span class="gi">+    #if STRATA_PROFILE_CRC</span>
+<span class="gi">+    const CrcTimer timer{CrcTimer::Clock::now(), input.size()};</span>
+<span class="gi">+#endif</span>
+<span class="w"> </span>    std::uint32_t state = previous ^ 0xffffffffU;
+<span class="w"> </span>    for (const auto byte : input) {
+<span class="gi">+#if STRATA_CRC32_TABLE</span>
+<span class="gi">+        const auto index = (state ^ std::to_integer&lt;std::uint32_t&gt;(byte)) &amp; 0xffU;</span>
+<span class="gi">+        state = (state &gt;&gt; 8) ^ crc_table[index];</span>
+<span class="gi">+#else</span>
+<span class="w"> </span>        state ^= std::to_integer&lt;std::uint32_t&gt;(byte);
+<span class="w"> </span>        for (unsigned bit = 0; bit &lt; 8; ++bit) {
+<span class="w"> </span>            const bool low = (state &amp; 1U) != 0;
+<span class="w"> </span>            state &gt;&gt;= 1;
+<span class="w"> </span>            if (low) { state ^= 0xedb88320U; }
+<span class="w"> </span>        }
+<span class="gi">+#endif</span>
+<span class="w"> </span>    }
+<span class="w"> </span>    return state ^ 0xffffffffU;
+<span class="w"> </span>}
+<span class="gi">+</span>
+<span class="w"> </span>namespace {
+<span class="w"> </span>bool valid_filter_size(std::size_t size) noexcept {
+<span class="w"> </span>    return size &gt;= 8 &amp;&amp; size &lt;= max_filter_bytes &amp;&amp; (size &amp; (size - 1)) == 0;
+</code></pre></figure>
+<p>A scope timer measures elapsed time <strong>including any descheduling during the
+scope</strong>. Clock reads and counter updates have costs. Consequently its sum is not
+an exact CPU-time partition, and an instrumented binary is not one of the
+unprofiled timing-comparison builds. The harness rejects an instrumented record.
+The code uses one start/end pair per CRC call, not per input byte.</p>
+<h2 id="derive-the-table-recurrence">Derive the table recurrence</h2>
+<p>Let <span class="math-input" data-display="false">s</span> be the current unsigned 32-bit internal state, <span class="math-input" data-display="false">b</span> the next input byte,
+and <span class="math-input" data-display="false">P=\texttt{0xedb88320}</span> the reflected polynomial already used by the file
+format. One bit update is</p>
+<div class="math-input" data-display="true">f(x)=(x\mathbin{\gg}1)\mathbin{\oplus}
+\begin{cases}
+P,&amp;x\mathbin{\&amp;}1=1,\\
+0,&amp;x\mathbin{\&amp;}1=0.
+\end{cases}</div>
+<p>Here <span class="math-input" data-display="false">\gg</span> is logical right shift, <span class="math-input" data-display="false">\oplus</span> is bitwise exclusive-or, and <span class="math-input" data-display="false">\&amp;</span> is
+bitwise and. The old byte step is <span class="math-input" data-display="false">f^8(s\oplus b)</span>, where <span class="math-input" data-display="false">f^8</span> means applying
+<span class="math-input" data-display="false">f</span> eight times. Define a 256-entry array by <span class="math-input" data-display="false">T[i]=f^8(i)</span> for byte values
+<span class="math-input" data-display="false">0\le i&lt;256</span>.</p>
+<p>Write <span class="math-input" data-display="false">s\oplus b=(s\gg8)2^8+i</span>, with
+<span class="math-input" data-display="false">i=(s\oplus b)\mathbin{\&amp;}255</span>. During those eight shifts, the original upper
+24 bits move down eight positions. Their original low eight bits are zero, so
+they cause no feedback on these first eight steps. The feedback from <span class="math-input" data-display="false">i</span> is
+exactly <span class="math-input" data-display="false">T[i]</span>. Exclusive-or is linear over these bit operations, giving</p>
+<div class="math-input" data-display="true">s&#x27;=(s\gg8)\oplus T[(s\oplus b)\mathbin{\&amp;}255].</div>
+<p>For an initially empty checksum, the internal state is <code>0xffffffff</code>. The first
+ASCII byte of <code>&quot;123456789&quot;</code> is <code>0x31</code>. Its index is <code>0xce</code>, and the generated
+entry is <code>T[0xce] = 0x7cdcefb7</code>. Thus</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>state &gt;&gt; 8                 = 0x00ffffff
+xor T[0xce]                = 0x7c231048
+final xor for this one byte = 0x83dcefb7
+</code></pre></figure>
+<p>The initial and final xor remain <code>0xffffffff</code>. A caller passing the previous
+returned checksum therefore resumes the same internal state. Empty inputs and
+split-buffer chaining are unchanged. CRC still detects certain accidental
+changes; it is neither authentication nor a repair mechanism. Do not remove
+checksums, persistence barriers, or required-file validation to obtain a faster
+number.</p>
+<h2 id="define-the-experiment-before-running-variants">Define the experiment before running variants</h2>
+<p>Create <code>scripts/measure.py</code>. The workload is Chapter 21's documented periodic
+recipe: by default 20,000 events, 257 accounts, ten days, eight regions, seed 23,
+60 percent hot-account lanes, and 256 operations per input batch. Query days are
+<span class="math-input" data-display="false">[2,7)</span>. The generator also writes a delta, but the timed comparison loads only
+the base. Final-demo scenarios exercise the delta separately.</p>
+<p>With chunk capacity <span class="math-input" data-display="false">C=512</span>, the first sort receives 10,000 selected rows in the
+early plans and 20,000 in the late plan. Their initial run counts are</p>
+<div class="math-input" data-display="true">R_{\mathrm{early}}=\lceil10000/512\rceil=20,\qquad
+R_{\mathrm{late}}=\lceil20000/512\rceil=40.</div>
+<p>For fan-in four, the materialized passes reduce <span class="math-input" data-display="false">20\to5\to2</span> or <span class="math-input" data-display="false">40\to10\to3</span>.
+The remaining two or three runs stream into the next operator. Both sorts
+therefore genuinely spill, even though this is a deliberately small reproducible
+experiment. The account stream exceeds its configured batch capacity.</p>
+<p>The run catalog still allows at most 128 initial runs. The harness checks the
+unfiltered row count against <span class="math-input" data-display="false">128C</span> because the late plan sorts every event.
+This bound is necessary, not sufficient: memory, disk, source metadata, and
+compaction limits can reject a configuration earlier. The executable's maximum
+chunk parameter does not promise that every allowed parameter fits its budget.</p>
+<p>The first block imports the independent formula and defines the empirical
+nearest-rank percentile. For <span class="math-input" data-display="false">n</span> sorted observations and integer percentile <span class="math-input" data-display="false">p</span>,</p>
+<div class="math-input" data-display="true">k=\lceil pn/100\rceil,\qquad Q_p=x_{k-1}.</div>
+<p>The array index is zero-based. With five observations, the empirical 95th
+percentile is simply the maximum because <span class="math-input" data-display="false">\lceil4.75\rceil=5</span>. It is not evidence
+of a stable production tail. All summaries retain the sample count.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/measure.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="ch">#!/usr/bin/env python3</span>
+<span class="sd">"""Measure fresh-process queries on one prepared corpus; verify every answer."""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">platform</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">statistics</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">reference_query</span><span class="w"> </span><span class="kn">import</span> <span class="n">compare</span><span class="p">,</span> <span class="n">formula</span>
+
+<span class="n">HERE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span>
+<span class="n">VARIANTS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"row"</span><span class="p">,</span> <span class="s2">"batch"</span><span class="p">,</span> <span class="s2">"fused"</span><span class="p">,</span> <span class="s2">"late"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">nearest_rank</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">percent</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">values</span> <span class="ow">or</span> <span class="ow">not</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">percent</span> <span class="o">&lt;=</span> <span class="mi">100</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"nonempty samples and percentile 1..100 required"</span><span class="p">)</span>
+    <span class="n">ordered</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ordered</span><span class="p">[(</span><span class="n">percent</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">ordered</span><span class="p">)</span> <span class="o">+</span> <span class="mi">99</span><span class="p">)</span> <span class="o">//</span> <span class="mi">100</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+</code></pre></figure>
+<p>Capture actual build settings and a representative compilation command. The
+experiment requires <code>CMAKE_EXPORT_COMPILE_COMMANDS=ON</code>; a directory name such as
+<code>release</code> is not evidence of its flags. Equivalent compilers are allowed, but
+two builds compared for one code change should otherwise use matching flags.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/measure.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">build_description</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span>
+    <span class="n">cache</span> <span class="o">=</span> <span class="n">directory</span> <span class="o">/</span> <span class="s2">"CMakeCache.txt"</span>
+    <span class="n">commands</span> <span class="o">=</span> <span class="n">directory</span> <span class="o">/</span> <span class="s2">"compile_commands.json"</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">cache</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">commands</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"build needs CMakeCache.txt and CMAKE_EXPORT_COMPILE_COMMANDS=ON"</span><span class="p">)</span>
+    <span class="n">selected</span> <span class="o">=</span> <span class="p">[</span><span class="n">line</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">cache</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">((</span><span class="s2">"CMAKE_BUILD_TYPE:"</span><span class="p">,</span> <span class="s2">"CMAKE_CXX_COMPILER:"</span><span class="p">,</span>
+                                    <span class="s2">"CMAKE_CXX_FLAGS"</span><span class="p">,</span> <span class="s2">"STRATA_CRC32_TABLE:"</span><span class="p">,</span> <span class="s2">"STRATA_PROFILE_CRC:"</span><span class="p">))]</span>
+    <span class="n">entries</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">commands</span><span class="o">.</span><span class="n">read_text</span><span class="p">())</span>
+    <span class="n">command</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">entries</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="s2">"file"</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">"src/storage/table.cpp"</span><span class="p">))</span>
+    <span class="n">compiler</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"="</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">selected</span> <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"CMAKE_CXX_COMPILER:"</span><span class="p">))</span>
+    <span class="n">banner</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="n">compiler</span><span class="p">,</span> <span class="s2">"--version"</span><span class="p">],</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                            <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">directory</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">directory</span><span class="p">),</span> <span class="n">compiler_banner</span><span class="o">=</span><span class="n">banner</span><span class="p">,</span>
+                <span class="n">cache</span><span class="o">=</span><span class="n">selected</span><span class="p">,</span> <span class="n">representative_compile</span><span class="o">=</span><span class="n">command</span><span class="p">)</span>
+</code></pre></figure>
+<p>Run commands as argument arrays without a shell. Time the parent-observed process
+interval separately from the query's internal interval. Keep stdout, stderr,
+return code, and argument values when a command fails; never continue as though
+a missing answer were a fast query. Python's
+<a href="https://docs.python.org/3/library/subprocess.html#subprocess.run"><code>subprocess.run</code> contract</a>
+describes timeout handling and reaping of the immediate child. The timeout is a
+diagnostic bound, not an asynchronous job service or a performance target.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/measure.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">report</span><span class="p">,</span> <span class="n">timeout</span><span class="p">):</span>
+    <span class="n">command</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">command</span><span class="p">]</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter_ns</span><span class="p">()</span>
+    <span class="n">completed</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+    <span class="n">elapsed</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter_ns</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1e9</span>
+    <span class="p">(</span><span class="n">root</span> <span class="o">/</span> <span class="p">(</span><span class="n">label</span> <span class="o">+</span> <span class="s2">".stdout"</span><span class="p">))</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">completed</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">root</span> <span class="o">/</span> <span class="p">(</span><span class="n">label</span> <span class="o">+</span> <span class="s2">".stderr"</span><span class="p">))</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">completed</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+    <span class="n">report</span><span class="p">[</span><span class="s2">"commands"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span> <span class="n">argv</span><span class="o">=</span><span class="n">command</span><span class="p">,</span> <span class="n">wall_seconds</span><span class="o">=</span><span class="n">elapsed</span><span class="p">,</span>
+                                   <span class="n">returncode</span><span class="o">=</span><span class="n">completed</span><span class="o">.</span><span class="n">returncode</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">completed</span><span class="o">.</span><span class="n">returncode</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2"> exited </span><span class="si">{</span><span class="n">completed</span><span class="o">.</span><span class="n">returncode</span><span class="si">}</span><span class="s2">; retained stdout/stderr"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">completed</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="n">elapsed</span>
+</code></pre></figure>
+<p>Parse exactly one JSON line. A profiling run with multiple repetitions is not
+silently averaged here. Reject failed charge invariants and instrumentation-enabled
+records before they enter a comparison. RSS conversion is an explicit parameter;
+<code>null</code> normalized bytes with <code>rss_unit=&quot;raw&quot;</code> means the unit was not established,
+not zero memory.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/measure.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">parse_record</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">rss_unit</span><span class="p">):</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"expected one measurement JSON record"</span><span class="p">)</span>
+    <span class="n">row</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"open_seconds"</span><span class="p">,</span> <span class="s2">"query_seconds"</span><span class="p">,</span> <span class="s2">"query_cpu_seconds"</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">),</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">))</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="ow">or</span> <span class="n">row</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"invalid </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="s2">"final_charged"</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">row</span><span class="p">[</span><span class="s2">"peak_charged"</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">row</span><span class="p">[</span><span class="s2">"query_cap"</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"charge invariant"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="s2">"crc_profile_enabled"</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"timed comparisons require STRATA_PROFILE_CRC=OFF"</span><span class="p">)</span>
+    <span class="n">row</span><span class="p">[</span><span class="s2">"rss_unit"</span><span class="p">]</span> <span class="o">=</span> <span class="n">rss_unit</span>
+    <span class="n">row</span><span class="p">[</span><span class="s2">"rss_max_bytes"</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span> <span class="k">if</span> <span class="n">rss_unit</span> <span class="o">==</span> <span class="s2">"raw"</span> <span class="k">else</span>
+                             <span class="n">row</span><span class="p">[</span><span class="s2">"rss_max_raw"</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1024</span> <span class="k">if</span> <span class="n">rss_unit</span> <span class="o">==</span> <span class="s2">"kib"</span> <span class="k">else</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">row</span>
+</code></pre></figure>
+<p>The experiment generates, loads/settles, explicitly compacts, and reopens in
+separate commands. <code>load-and-settle</code> includes parsing, WAL synchronization,
+concurrent maintenance, settlement, shutdown, and process overhead. Its throughput
+is a named end-to-end ingestion measure, not the speed of one memtable loop.
+The explicit compaction command prints that process's job traffic. Earlier
+loading may have performed several jobs; its <code>last_job</code> counters are not their
+sum and must not be advertised as total write amplification.</p>
+<p>Warmup and measured rounds both execute <strong>all</strong> build/variant pairs. A seeded
+shuffle changes their order per round rather than always giving the same variant
+the warmest cache. Each child starts with a fresh private engine cache. The
+operating-system cache is not cleared: call these repeated, OS-cache-uncontrolled
+runs, not cold-device tests. Do not use privileged cache-dropping commands as a
+hidden prerequisite.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/measure.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">experiment</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">report</span><span class="p">):</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"temporary"</span><span class="p">,</span> <span class="s2">"results"</span><span class="p">):</span>
+        <span class="p">(</span><span class="n">root</span> <span class="o">/</span> <span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">mkdir</span><span class="p">()</span>
+    <span class="n">builds</span> <span class="o">=</span> <span class="p">[(</span><span class="s2">"baseline"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">resolve</span><span class="p">())]</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">candidate</span><span class="p">:</span>
+        <span class="n">builds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s2">"candidate"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">candidate</span><span class="o">.</span><span class="n">resolve</span><span class="p">()))</span>
+    <span class="n">report</span><span class="p">[</span><span class="s2">"builds"</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">label</span><span class="p">:</span> <span class="n">build_description</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">builds</span><span class="p">}</span>
+    <span class="n">executable</span> <span class="o">=</span> <span class="n">builds</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="s2">"strata"</span>
+    <span class="n">generated</span><span class="p">,</span> <span class="n">generation_seconds</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span>
+        <span class="p">[</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">,</span> <span class="n">HERE</span> <span class="o">/</span> <span class="s2">"generate_data.py"</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"data"</span><span class="p">,</span> <span class="s2">"--events"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">events</span><span class="p">,</span>
+         <span class="s2">"--accounts"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">accounts</span><span class="p">,</span> <span class="s2">"--seed"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span> <span class="s2">"--days"</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">"--regions"</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span>
+         <span class="s2">"--hot-percent"</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="s2">"--batch"</span><span class="p">,</span> <span class="mi">256</span><span class="p">],</span> <span class="s2">"generation"</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">report</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+    <span class="n">metadata</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">generated</span><span class="p">)</span>
+    <span class="n">report</span><span class="p">[</span><span class="s2">"workload"</span><span class="p">]</span> <span class="o">=</span> <span class="n">metadata</span>
+    <span class="n">expected</span> <span class="o">=</span> <span class="n">formula</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="s2">"base"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">load_seconds</span> <span class="o">=</span> <span class="n">run</span><span class="p">([</span><span class="n">executable</span><span class="p">,</span> <span class="s2">"load"</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"database"</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"data/base.ops"</span><span class="p">,</span> <span class="s2">"stream"</span><span class="p">],</span>
+                          <span class="s2">"load-and-settle"</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">report</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+    <span class="n">run</span><span class="p">([</span><span class="n">executable</span><span class="p">,</span> <span class="s2">"compact"</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"database"</span><span class="p">,</span> <span class="s2">"stream"</span><span class="p">],</span> <span class="s2">"explicit-compaction"</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">report</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+    <span class="n">run</span><span class="p">([</span><span class="n">executable</span><span class="p">,</span> <span class="s2">"inspect"</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"database"</span><span class="p">,</span> <span class="s2">"stream"</span><span class="p">],</span> <span class="s2">"reopen-and-verify"</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">report</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+    <span class="n">report</span><span class="p">[</span><span class="s2">"load"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">logical_bytes</span><span class="o">=</span><span class="n">metadata</span><span class="p">[</span><span class="s2">"base"</span><span class="p">][</span><span class="s2">"logical_bytes"</span><span class="p">],</span>
+                           <span class="n">logical_bytes_per_second</span><span class="o">=</span><span class="n">metadata</span><span class="p">[</span><span class="s2">"base"</span><span class="p">][</span><span class="s2">"logical_bytes"</span><span class="p">]</span> <span class="o">/</span> <span class="n">load_seconds</span><span class="p">,</span>
+                           <span class="n">includes</span><span class="o">=</span><span class="s2">"spawn, parse, WAL sync, concurrent maintenance, settle, shutdown"</span><span class="p">)</span>
+    <span class="n">report</span><span class="p">[</span><span class="s2">"generation_seconds"</span><span class="p">]</span> <span class="o">=</span> <span class="n">generation_seconds</span>
+    <span class="n">report</span><span class="p">[</span><span class="s2">"samples"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="p">[(</span><span class="n">label</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">variant</span><span class="p">)</span> <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">builds</span> <span class="k">for</span> <span class="n">variant</span> <span class="ow">in</span> <span class="n">VARIANTS</span><span class="p">]</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">seed</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">round_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="n">args</span><span class="o">.</span><span class="n">warmups</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">repeats</span><span class="p">):</span>
+        <span class="n">order</span> <span class="o">=</span> <span class="n">pairs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">rng</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">variant</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">variant</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">round_index</span><span class="si">}</span><span class="s2">"</span>
+            <span class="n">text</span><span class="p">,</span> <span class="n">wall</span> <span class="o">=</span> <span class="n">run</span><span class="p">([</span><span class="n">path</span> <span class="o">/</span> <span class="s2">"strata-measure"</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"database"</span><span class="p">,</span> <span class="n">root</span> <span class="o">/</span> <span class="s2">"temporary"</span><span class="p">,</span>
+                             <span class="n">root</span> <span class="o">/</span> <span class="s2">"results"</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">".csv"</span><span class="p">,</span> <span class="n">variant</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">chunk</span><span class="p">,</span>
+                             <span class="n">args</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">name</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">report</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="n">parse_record</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">rss_unit</span><span class="p">)</span>
+            <span class="n">compare</span><span class="p">(</span><span class="n">root</span> <span class="o">/</span> <span class="s2">"results"</span> <span class="o">/</span> <span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="s2">".csv"</span><span class="p">),</span> <span class="n">expected</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">((</span><span class="n">root</span> <span class="o">/</span> <span class="s2">"temporary"</span><span class="p">)</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"query left a spill name"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="s2">"sequence"</span><span class="p">]</span> <span class="o">!=</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"base"</span><span class="p">][</span><span class="s2">"last_sequence"</span><span class="p">]</span> <span class="ow">or</span> <span class="n">row</span><span class="p">[</span><span class="s2">"groups"</span><span class="p">]</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">expected</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"measurement history or group count mismatch"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">row</span><span class="p">[</span><span class="s2">"event_runs"</span><span class="p">]</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">row</span><span class="p">[</span><span class="s2">"group_runs"</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"measurement did not force both sorts to spill; enlarge input or reduce chunk"</span><span class="p">)</span>
+            <span class="n">row</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">build</span><span class="o">=</span><span class="n">label</span><span class="p">,</span> <span class="nb">round</span><span class="o">=</span><span class="n">round_index</span><span class="p">,</span> <span class="n">warmup</span><span class="o">=</span><span class="n">round_index</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">process_seconds</span><span class="o">=</span><span class="n">wall</span><span class="p">)</span>
+            <span class="n">report</span><span class="p">[</span><span class="s2">"samples"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+            <span class="c1"># A later failure retains all prior observations, without declaring completion.</span>
+            <span class="p">(</span><span class="n">root</span> <span class="o">/</span> <span class="s2">"report.json"</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">report</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></figure>
+<p>Answer comparison and spill-directory inspection happen after the timed child
+returns. Every sample must have the expected sequence and group count, no residual
+spill names, and nonzero initial runs in both sorts. Reducing a filter until the
+whole answer fits in memory would no longer satisfy this experiment's stated
+purpose.</p>
+<p>The report is saved incrementally with <code>complete=false</code>. A later failure retains
+prior observations but produces no success claim. A report is ordinary measurement
+data, not a publication journal. The summary below excludes every warmup.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/measure.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>    <span class="n">summary</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">variant</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">:</span>
+        <span class="n">samples</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">report</span><span class="p">[</span><span class="s2">"samples"</span><span class="p">]</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">"build"</span><span class="p">]</span> <span class="o">==</span> <span class="n">label</span> <span class="ow">and</span> <span class="n">r</span><span class="p">[</span><span class="s2">"variant"</span><span class="p">]</span> <span class="o">==</span> <span class="n">variant</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">r</span><span class="p">[</span><span class="s2">"warmup"</span><span class="p">]]</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">"query_seconds"</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">samples</span><span class="p">]</span>
+        <span class="n">item</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">build</span><span class="o">=</span><span class="n">label</span><span class="p">,</span> <span class="n">variant</span><span class="o">=</span><span class="n">variant</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">),</span> <span class="n">minimum</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">values</span><span class="p">),</span>
+                    <span class="n">median</span><span class="o">=</span><span class="n">statistics</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">values</span><span class="p">),</span> <span class="n">maximum</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">values</span><span class="p">),</span>
+                    <span class="n">sample_p95_nearest_rank</span><span class="o">=</span><span class="n">nearest_rank</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="mi">95</span><span class="p">),</span>
+                    <span class="n">tail_claim</span><span class="o">=</span><span class="s2">"none; these are empirical ranks, not production tail estimates"</span><span class="p">)</span>
+        <span class="n">summary</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+    <span class="n">report</span><span class="p">[</span><span class="s2">"summary"</span><span class="p">]</span> <span class="o">=</span> <span class="n">summary</span>
+    <span class="n">report</span><span class="p">[</span><span class="s2">"complete"</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+</code></pre></figure>
+<p>Finish argument validation and the entry point. A fresh output directory is
+required so a rerun cannot overwrite its prior evidence or a completed database.
+<code>perf_counter_ns</code> avoids floating subtraction of large absolute timestamps; it
+does not guarantee nanosecond physical resolution. The
+<a href="https://docs.python.org/3/library/time.html#time.perf_counter">Python clock documentation</a>
+also supplies the queried implementation and resolution fields recorded here.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/measure.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="vm">__doc__</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--build"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--candidate"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--output"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--events"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">20000</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--accounts"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">257</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--seed"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">23</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--rows"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--chunk"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">512</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--begin"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--end"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">7</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--warmups"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--repeats"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--timeout"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--rss-unit"</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">(</span><span class="s2">"raw"</span><span class="p">,</span> <span class="s2">"bytes"</span><span class="p">,</span> <span class="s2">"kib"</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="s2">"raw"</span><span class="p">)</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">events</span> <span class="o">&lt;=</span> <span class="mi">128</span> <span class="o">*</span> <span class="n">args</span><span class="o">.</span><span class="n">chunk</span> <span class="ow">and</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">accounts</span> <span class="o">&lt;=</span> <span class="mi">4096</span> <span class="ow">and</span>
+            <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">rows</span> <span class="o">&lt;=</span> <span class="mi">4096</span> <span class="ow">and</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">chunk</span> <span class="o">&lt;=</span> <span class="mi">131072</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">seed</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">64</span> <span class="ow">and</span>
+            <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">begin</span> <span class="o">&lt;</span> <span class="n">args</span><span class="o">.</span><span class="n">end</span> <span class="o">&lt;=</span> <span class="mi">10</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">warmups</span> <span class="o">&lt;=</span> <span class="mi">10</span> <span class="ow">and</span>
+            <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">repeats</span> <span class="o">&lt;=</span> <span class="mi">1000</span> <span class="ow">and</span> <span class="n">math</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span> <span class="ow">and</span> <span class="n">args</span><span class="o">.</span><span class="n">timeout</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"invalid workload/measurement bounds; late sort also needs &lt;=128 initial runs"</span><span class="p">)</span>
+    <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">mkdir</span><span class="p">()</span>  <span class="c1"># Refuse an existing experiment; never delete it automatically.</span>
+    <span class="n">report</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">complete</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">platform</span><span class="o">=</span><span class="n">platform</span><span class="o">.</span><span class="n">platform</span><span class="p">(),</span> <span class="n">machine</span><span class="o">=</span><span class="n">platform</span><span class="o">.</span><span class="n">machine</span><span class="p">(),</span>
+                  <span class="n">python</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">Path</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span>
+                                                 <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">(</span><span class="n">args</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">()},</span> <span class="n">commands</span><span class="o">=</span><span class="p">[],</span>
+                  <span class="n">clock</span><span class="o">=</span><span class="n">time</span><span class="o">.</span><span class="n">get_clock_info</span><span class="p">(</span><span class="s2">"perf_counter"</span><span class="p">)</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">,</span>
+                  <span class="n">cache_policy</span><span class="o">=</span><span class="s2">"fresh private engine cache per query; OS cache not cleared; balanced shuffled order"</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">experiment</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">report</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">,</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">SubprocessError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+        <span class="n">report</span><span class="p">[</span><span class="s2">"failure"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"measurement failed: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">; observations retained in </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output</span> <span class="o">/</span> <span class="s2">"report.json"</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">report</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">report</span><span class="p">[</span><span class="s2">"summary"</span><span class="p">]:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+    <span class="k">return</span> <span class="mi">0</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">SystemExit</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</code></pre></figure>
+<p>The report contains both process elapsed time and internal query elapsed time.
+Subtracting the latter from the former does not isolate a single subsystem:
+startup, opening, shutdown, JSON output, scheduling, and parent overhead remain.
+Use the separately measured <code>open_seconds</code> to discuss reopening, while keeping
+its verification work distinct from crash recovery correctness.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-23.html"><small>Previous · Chapter 23 · Part 1</small><span>Profiling, optimization, and the final demonstration</span></a><a href="chapter-23-part-3.html"><small>Next · Chapter 23 · Part 3</small><span>Verify, repeat, and explain the result</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 23 · Part 2</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-2-remove-work-without-changing-the-answer">Part 2 — Remove work without changing the answer</a></li><li class="toc-h2"><a href="#start-with-a-hypothesis-not-a-preferred-speedup">Start with a hypothesis, not a preferred speedup</a></li><li class="toc-h2"><a href="#make-instrumentation-optional-and-thread-local">Make instrumentation optional and thread-local</a></li><li class="toc-h2"><a href="#derive-the-table-recurrence">Derive the table recurrence</a></li><li class="toc-h2"><a href="#define-the-experiment-before-running-variants">Define the experiment before running variants</a></li></ul></aside>
+</div></body></html>

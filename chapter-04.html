@@ -1,0 +1,1363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 4 — Errors and failure-safe state changes · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-04.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html" aria-current="page"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 4</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/5">Read on GitHub</a><a href="source/chapter-04.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#one-file-and-an-explicit-failure-boundary">One file and an explicit failure boundary</a></li><li class="toc-h2"><a href="#give-each-failure-a-meaning">Give each failure a meaning</a></li><li class="toc-h2"><a href="#an-exception-changes-the-control-path">An exception changes the control path</a></li><li class="toc-h2"><a href="#an-optional-value-is-not-a-hidden-error-code">An optional value is not a hidden error code</a></li><li class="toc-h2"><a href="#fail-an-allocation-by-its-position-not-by-consuming-all-ram">Fail an allocation by its position, not by consuming all RAM</a></li><li class="toc-h2"><a href="#put-accounting-next-to-the-owning-pointer">Put accounting next to the owning pointer</a></li><li class="toc-h2"><a href="#values-and-prefix-totals-form-one-invariant">Values and prefix totals form one invariant</a></li><li class="toc-h2"><a href="#construct-and-validate-the-candidate-completely">Construct and validate the candidate completely</a></li><li class="toc-h2"><a href="#return-absence-without-losing-the-distinction-from-zero">Return absence without losing the distinction from zero</a></li><li class="toc-h2"><a href="#prepare-first-commit-with-a-nonthrowing-exchange">Prepare first; commit with a nonthrowing exchange</a></li><li class="toc-h3"><a href="#keeping-the-old-state-has-a-memory-cost">Keeping the old state has a memory cost</a></li><li class="toc-h2"><a href="#translate-exceptions-only-at-a-boundary-that-can-classify-them">Translate exceptions only at a boundary that can classify them</a></li><li class="toc-h2"><a href="#observe-the-failed-second-allocation">Observe the failed second allocation</a></li><li class="toc-h2"><a href="#retry-replace-from-an-alias-and-clear-without-allocating">Retry, replace from an alias, and clear without allocating</a></li><li class="toc-h2"><a href="#reject-before-allocation-and-after-partial-construction">Reject before allocation and after partial construction</a></li><li class="toc-h2"><a href="#move-the-handler-outward-and-follow-the-scopes">Move the handler outward and follow the scopes</a></li><li class="toc-h2"><a href="#connect-the-program-to-the-existing-build">Connect the program to the existing build</a></li><li class="toc-h2"><a href="#make-the-weaker-guarantee-fail-visibly">Make the weaker guarantee fail visibly</a></li><li class="toc-h3"><a href="#check-normal-memory-use-separately">Check normal memory use separately</a></li><li class="toc-h2"><a href="#cleanup-is-not-successful-completion-of-external-io">Cleanup is not successful completion of external I/O</a></li><li class="toc-h2"><a href="#what-carries-forward">What carries forward</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-4-errors-and-failure-safe-state-changes">Chapter 4 — Errors and failure-safe state changes</h1>
+<p>A replacement can fail after it has acquired <strong>some</strong>, but not all, of the
+resources it needs. Releasing those temporary resources is only half the
+problem. The caller may still need the old value, its associated metadata, and
+its existing read-only view to remain usable.</p>
+<p>We will build an owned numeric record buffer with two arrays: record values and
+cached prefix totals. The initial value is <code>{4, 5}</code>, whose total is 9. A proposed
+replacement is <code>{8, 9, 10}</code>, whose total is 27. We will deliberately fail the
+<strong>second allocation within that replacement</strong>, after the new value array exists
+but before its prefix array exists. The old buffer must still contain <code>{4, 5}</code>;
+the incomplete candidate must release its one acquired array. A subsequent
+attempt will succeed without special repair code in the caller.</p>
+<p>The starting workspace is the restored code from
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-03.html">Chapter 3</a>, including
+all earlier CMake targets. You need Chapter 2's arrays, spans, and references,
+and Chapter 3's member initialization, unique ownership, and destruction rules.
+This chapter adds an independent executable. It does <strong>not</strong> include a <code>.cpp</code>
+containing another <code>main</code>, extract a hidden header, or modify <code>ByteBuffer</code>.</p>
+<blockquote>
+<p><strong>Learning objectives</strong></p>
+<p>Distinguish absence from invalid input and resource exhaustion; follow an
+exception through construction and stack unwinding; define the state protected
+by a failure guarantee; build and validate a candidate before nonthrowing
+commit; inject allocation failure without exhausting the machine; distinguish
+memory cleanup from completion of external I/O.</p>
+</blockquote>
+<p>The allocation remains <strong>2.0 implementation hours</strong>: 0.5 for error handling,
+1.0 for the replacement mechanism, and 0.5 for failure checks and diagnosis.
+Reading is separate. This is a foundation exercise in compound ownership, not
+an implementation of the engine's persistent records or transaction protocol.</p>
+<h2 id="one-file-and-an-explicit-failure-boundary">One file and an explicit failure boundary</h2>
+<p>Create the directory in the existing learner workspace. Retain the compatible
+native compiler selected in Chapter 1; the following selects Apple's compiler
+when that is your working choice:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — prepare the exercise</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nv">CXX</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span>exercises/chapter-04
+</code></pre></figure>
+<p>Every C++ block labelled <strong><code>exercises/chapter-04/transactional_buffer.cpp</code></strong>, in
+reading order, appends to that one file. Together they form its complete
+contents. The CMake block appends a target to the existing root file. The later
+block labelled <strong>Temporary diagnostic edit</strong> replaces one function only while
+testing a weaker guarantee; restore it before continuing to the next chapter.</p>
+<p>There is no new package dependency or newer language mode. <code>std::optional</code> is
+part of the C++20 library baseline, as are the exception and ownership facilities
+used here. We use standard library templates, but do not yet write a generic
+allocator or our own function template.</p>
+<p>Start the file with all required headers and the active check helper:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;exception&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;new&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="w"> </span><span class="p">{</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">condition</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"FAIL "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_records</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+</code></pre></figure>
+<p><code>&lt;new&gt;</code> declares <code>std::bad_alloc</code>; <code>&lt;stdexcept&gt;</code> supplies
+<code>std::invalid_argument</code>; <code>&lt;exception&gt;</code> declares their common standard exception
+interface. <code>&lt;optional&gt;</code> supplies a value that can be absent. These headers are
+explicit: do not depend on another library header happening to include them.
+<code>max_records</code> is a compile-time constant for this small fixture, not a limit on
+the eventual database.</p>
+<h2 id="give-each-failure-a-meaning">Give each failure a meaning</h2>
+<p>A missing record is not an allocation failure. An invalid argument is not an
+uncertain disk write. Begin with the semantic cases before choosing syntax:</p>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Meaning in this chapter</th>
+<th>Representation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No record at an index</td>
+<td>The buffer is valid; that position has no value</td>
+<td>Empty <code>std::optional&lt;std::uint64_t&gt;</code></td>
+</tr>
+<tr>
+<td>Too many records, or an unrepresentable total</td>
+<td>The proposed buffer is outside the accepted input domain</td>
+<td><code>std::invalid_argument</code>, translated at the replacement boundary</td>
+</tr>
+<tr>
+<td>Candidate allocation cannot be obtained</td>
+<td>The request is valid enough to reach allocation, but storage is unavailable</td>
+<td><code>std::bad_alloc</code>, translated at the replacement boundary</td>
+</tr>
+<tr>
+<td>External I/O fails</td>
+<td>A different boundary must report the operation and what may already have happened</td>
+<td>Not implemented by this memory-only exercise</td>
+</tr>
+</tbody>
+</table>
+<p>The caller must still supply a valid readable span throughout its use, and must
+not concurrently mutate the source or destination. Exceptions do not validate a
+dangling pointer, repair an out-of-bounds access, or synchronize a data race.
+Checking the span's count cannot prove that its address names live elements.</p>
+<p>For this operation, <strong>the old state</strong> means the destination's values, prefix
+totals, size, and owned-array identities. Failure must preserve all of them.
+Diagnostic counters and the failure injector are deliberately outside that
+state: they must change to record the attempt. Temporary resource acquisition is
+also allowed, provided those resources are released before the failure reaches
+the caller.</p>
+<p>It helps to distinguish three guarantees:</p>
+<table>
+<thead>
+<tr>
+<th>Guarantee</th>
+<th>What the caller can conclude after failure</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Basic guarantee</td>
+<td>Invariants still hold and owned resources do not leak, but the value may have changed</td>
+</tr>
+<tr>
+<td>Strong guarantee for this replacement</td>
+<td>The old destination state remains intact; temporary resources are gone</td>
+</tr>
+<tr>
+<td>Nonthrowing operation</td>
+<td>No exception escapes the operation; its specified state transition still has to be correct</td>
+</tr>
+</tbody>
+</table>
+<p>The strong guarantee is not “nothing happened anywhere.” Nor is <code>noexcept</code> a
+rollback mechanism. The replacement itself is allowed to throw; its commit and
+cleanup steps will be nonthrowing. We prove the guarantee from their ordering.</p>
+<h2 id="an-exception-changes-the-control-path">An exception changes the control path</h2>
+<p><code>throw std::bad_alloc{};</code> constructs an exception object of type
+<code>std::bad_alloc</code> and transfers control toward a matching handler. <code>throw std::invalid_argument(&quot;too many records&quot;);</code> supplies a different type and a
+message. The type, not a string comparison, selects a <code>catch</code> handler. These
+standard exception types are specified under
+<a href="https://eel.is/c++draft/bad.alloc">allocation errors</a> and
+<a href="https://eel.is/c++draft/invalid.argument">invalid arguments</a>.</p>
+<p>The block after <code>try</code> is the region whose escaping exceptions its handlers can
+receive. A handler such as <code>catch (const std::bad_alloc&amp;)</code> receives a read-only
+reference to the exception object. The omitted parameter name is intentional:
+we only need the type. A named handler parameter can call <code>error.what()</code> to
+obtain a diagnostic message while the exception object is alive.</p>
+<p>A handler does not resume at the failed line. When its block finishes normally,
+execution continues after the entire <code>try</code>/<code>catch</code> statement. Statements after
+the throwing operation inside the <code>try</code> block were skipped. A function that
+cannot handle the failure can let it propagate; it need not write a <code>catch</code>
+just to perform resource cleanup.</p>
+<p>Before entering a matching handler, C++ destroys completed automatic objects
+whose scopes the exception leaves. This is <strong>stack unwinding</strong>. It runs their
+ordinary destructors; it does not restore old values in arbitrary variables.
+A separately allocated array is released only because a destroyed owner releases
+it. The language does not search for every raw allocation. The
+<a href="https://eel.is/c++draft/except.throw">throwing rules</a>,
+<a href="https://eel.is/c++draft/except.handle">handler matching</a>, and
+<a href="https://eel.is/c++draft/except.ctor">unwinding rules</a> define these boundaries.</p>
+<p>Our <code>RecordBuffer</code> will contain owning members. If construction fails, completed
+members are destroyed even though the enclosing buffer was never completely
+constructed. That is why responsibility must enter a member owner immediately,
+not wait for the enclosing object's destructor to notice an unfinished job.</p>
+<h2 id="an-optional-value-is-not-a-hidden-error-code">An optional value is not a hidden error code</h2>
+<p><code>std::optional&lt;T&gt;</code> stores either a <code>T</code> or no <code>T</code>. The optional itself tracks which
+case holds. For <code>std::optional&lt;std::uint64_t&gt;</code>, the integer storage is part of the
+optional; using it does not require a separate heap allocation. An optional of
+some other type may contain a type that allocates its own resources. The
+<a href="https://eel.is/c++draft/optional.general">optional object model</a> describes that
+separation.</p>
+<p><code>std::nullopt</code> denotes the no-value case. <code>has_value()</code> and a condition such as
+<code>if (result)</code> test <strong>presence</strong>, not the numerical truth of the contained value.
+An optional containing zero is present. <code>*result</code> accesses the contained value
+and requires that it exists. Short-circuiting <code>result.has_value() &amp;&amp; *result == 0</code>
+checks that precondition first. The checked <code>result.value()</code> alternative throws
+<code>std::bad_optional_access</code> when no value exists; we will not use that as normal
+lookup control flow. See the
+<a href="https://eel.is/c++draft/optional.observe">optional observers</a>.</p>
+<p>The buffer's <code>value_at(index)</code> will return a copied optional integer. Keeping
+that result does not borrow the buffer. Its <code>values()</code> method will instead
+return a read-only span, with the lifetime rules from Chapter 2. The return type
+makes that ownership distinction visible.</p>
+<p>We will also use an optional in the test injector: no value means “not armed,”
+and a present positive count means “fail after this many allocation attempts.”
+That is absence of a configured action, not absence of a record. The type alone
+does not choose the domain meaning; the enclosing interface does.</p>
+<h2 id="fail-an-allocation-by-its-position-not-by-consuming-all-ram">Fail an allocation by its position, not by consuming all RAM</h2>
+<p>The failure <strong>seam</strong> is a small explicit call immediately before each tracked
+payload allocation. Arming it with 2 permits the next attempt, then throws on
+the following one. It counts from the moment it is armed, regardless of earlier
+successful allocations. No global allocator is replaced and no large memory
+request is needed to provoke the failure.</p>
+<p>Append the complete probe:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">AllocationProbe</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">attempts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">acquired</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">released</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">peak_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">countdown</span><span class="p">{};</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">fail_on</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">ordinal</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ordinal</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"allocation ordinal starts at one"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">countdown</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ordinal</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">before_allocation</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="o">++</span><span class="n">attempts</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">countdown</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="o">--*</span><span class="n">countdown</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">countdown</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">countdown</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="p">{};</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">disarm</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">countdown</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>countdown = ordinal</code> gives the optional a value. <code>--*countdown</code> decreases the
+contained integer, not the optional's address. The preceding presence check
+makes dereferencing legal. <code>fail_on</code> rejects zero, so decrementing an armed
+count cannot wrap from zero. Once the count reaches zero, <code>reset()</code> removes it
+<strong>before</strong> the exception is thrown. Thus the injected failure is one-shot.</p>
+<p><code>attempts</code> increases even for an attempt deliberately failed before allocation.
+<code>acquired</code> will increase only after an actual array allocation succeeds.
+<code>released</code> will increase when such an array is relinquished. These are separate
+quantities. Treating a failed attempt as an acquisition would conceal a leak or
+force a fictitious release.</p>
+<p>The probe is finite, single-threaded test instrumentation. Its counters are not
+atomic, not overflow-hardened telemetry, and not a process-memory budget. It
+counts neither the exception runtime's own storage nor allocations performed by
+streams or exception messages. An ordinary allocation can still fail on its own;
+only the explicitly injected failure automatically clears this countdown.
+<code>disarm()</code> is available when ending another experiment deliberately.</p>
+<p>The probe's lifetime is a precondition: it must outlive every array whose
+release it records. Each test will declare the probe outside its owners' scopes.
+Copying the probe into <code>const auto before</code> later produces a value snapshot of its
+counters and countdown. Owners still point to the original probe, not that copy.</p>
+<h2 id="put-accounting-next-to-the-owning-pointer">Put accounting next to the owning pointer</h2>
+<p>Two arrays need two independent cleanup obligations. <code>WordArray</code> will own one
+<code>std::uint64_t[]</code> and borrow the probe that accounts for it. It has no public
+length or indexing contract; the enclosing <code>RecordBuffer</code> supplies those. This
+small helper is specific to the exercise, not a replacement for <code>std::vector</code>.</p>
+<p>We need to exchange resources, not move or copy these helper objects into other
+containers. Copying and moving them are therefore explicitly disabled here.
+An object can still expose a member <code>swap</code> that exchanges its private resources.
+This differs from the general <code>std::swap(object_a, object_b)</code> algorithm, which
+normally requires move construction and move assignment. Chapter 3's move-only
+owner and all its tests remain unchanged.</p>
+<p>Append the helper:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">WordArray</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">WordArray</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">WordArray</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">,</span><span class="w"> </span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">probe_</span><span class="p">(</span><span class="o">&amp;</span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">probe</span><span class="p">.</span><span class="n">before_allocation</span><span class="p">();</span>
+<span class="w">        </span><span class="n">data_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">[]</span><span class="o">&gt;</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<span class="w">        </span><span class="o">++</span><span class="n">probe</span><span class="p">.</span><span class="n">acquired</span><span class="p">;</span>
+<span class="w">        </span><span class="o">++</span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">peak_live</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">probe</span><span class="p">.</span><span class="n">peak_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="o">~</span><span class="n">WordArray</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">data_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">data_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">            </span><span class="o">++</span><span class="n">probe_</span><span class="o">-&gt;</span><span class="n">released</span><span class="p">;</span>
+<span class="w">            </span><span class="o">--</span><span class="n">probe_</span><span class="o">-&gt;</span><span class="n">live</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">WordArray</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">WordArray</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WordArray</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">WordArray</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WordArray</span><span class="p">(</span><span class="n">WordArray</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WordArray</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">WordArray</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">*</span><span class="w"> </span><span class="nf">data</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">data_</span><span class="p">.</span><span class="n">get</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">*</span><span class="w"> </span><span class="nf">data</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">data_</span><span class="p">.</span><span class="n">get</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">swap</span><span class="p">(</span><span class="n">WordArray</span><span class="o">&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">data_</span><span class="p">.</span><span class="n">swap</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">data_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">swap</span><span class="p">(</span><span class="n">probe_</span><span class="p">,</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">probe_</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">[]</span><span class="o">&gt;</span><span class="w"> </span><span class="n">data_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">AllocationProbe</span><span class="o">*</span><span class="w"> </span><span class="n">probe_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>The constructor first records which probe will account for the resource. A
+zero-length request performs no allocation and consumes no failure countdown.
+For a nonempty request, <code>before_allocation()</code> runs immediately before
+<code>std::make_unique&lt;std::uint64_t[]&gt;(count)</code>. That array form creates initialized
+integer elements and returns their unique owner; see
+<a href="https://eel.is/c++draft/unique.ptr.create">unique-pointer creation</a>.</p>
+<p>Only after the unique pointer owns the array do the acquisition counters change.
+If the seam or allocation throws, the successful-acquisition counters have not
+changed. The already-constructed empty unique-pointer member is still cleaned
+up as construction unwinds. There is no raw pointer waiting for manual rescue.</p>
+<p>The destructor calls <code>data_.reset()</code> to release the array, then updates its
+probe. The subsequent automatic destruction of the now-empty unique pointer
+releases nothing again; see the <a href="https://eel.is/c++draft/class.dtor">body/member destruction order</a>. There is no stream output, new allocation, or throwing
+element destructor on this path. Integer-array destruction and the
+<a href="https://eel.is/c++draft/unique.ptr.runtime.modifiers">unique-pointer reset contract</a>
+are sufficient for this cleanup policy.</p>
+<p><code>probe_-&gt;released</code> means access the member of the pointed-to probe, equivalently
+<code>(*probe_).released</code>. A nonempty <code>data_</code> must always have its live probe attached.
+The default empty object has neither. <code>data_.swap(other.data_)</code> exchanges the
+owning pointers without copying their arrays. We must also swap <code>probe_</code>:
+accounting responsibility follows the allocation, not the helper object's old
+address. Neither pointer exchange allocates. The
+<a href="https://eel.is/c++draft/unique.ptr.single.modifiers">unique-pointer swap contract</a>
+and <a href="https://eel.is/c++draft/utility.swap">scalar swap contract</a> support the
+nonthrowing declaration for these particular member types and default deleters.</p>
+<p>These exchanges are not a concurrency protocol. Between their individual
+statements, another thread must not observe the helper. The same exclusive-use
+rule will apply to the buffer's larger commit.</p>
+<h2 id="values-and-prefix-totals-form-one-invariant">Values and prefix totals form one invariant</h2>
+<p>Let <span class="math-input" data-display="false">n</span> be the number of records and <span class="math-input" data-display="false">v_i</span> the unsigned 64-bit value at zero-based
+index <span class="math-input" data-display="false">i</span>, for <span class="math-input" data-display="false">0 \le i &lt; n</span>. For a nonempty buffer, the value array has shape
+<span class="math-input" data-display="false">[n]</span> and its prefix array has shape <span class="math-input" data-display="false">[n+1]</span>. Define <span class="math-input" data-display="false">P_k</span> as the sum of the first
+<span class="math-input" data-display="false">k</span> values, with the empty prefix explicitly represented:</p>
+<div class="math-input" data-display="true">P_0 = 0, \qquad P_{i+1} = P_i + v_i.</div>
+<p>For the proposed <code>{8, 9, 10}</code> input, the construction loop produces:</p>
+<table>
+<thead>
+<tr>
+<th>Loop index <span class="math-input" data-display="false">i</span></th>
+<th style="text-align:right">Read <span class="math-input" data-display="false">v_i</span></th>
+<th style="text-align:right">Existing <span class="math-input" data-display="false">P_i</span></th>
+<th style="text-align:right">Write <span class="math-input" data-display="false">P_{i+1}</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td style="text-align:right">8</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">8</td>
+</tr>
+<tr>
+<td>1</td>
+<td style="text-align:right">9</td>
+<td style="text-align:right">8</td>
+<td style="text-align:right">17</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:right">10</td>
+<td style="text-align:right">17</td>
+<td style="text-align:right">27</td>
+</tr>
+</tbody>
+</table>
+<p>The two arrays are <code>{8, 9, 10}</code> and <code>{0, 8, 17, 27}</code>. Keeping a prefix array makes
+a prefix-total request a single indexed read rather than a fresh loop. It also
+creates a meaningful compound invariant: replacing the values without replacing
+the prefixes could make the same object report contradictory answers.</p>
+<p>The accepted domain is at most <code>max_records</code> entries, with every prefix total
+representable in <code>std::uint64_t</code>. Let <span class="math-input" data-display="false">U = 2^{64}-1</span>, the largest such value.
+All inputs are nonnegative, so a partial total never needs to decrease. Before
+an addition, rearrange the mathematical bound:</p>
+<div class="math-input" data-display="true">P_i + v_i \le U \quad\Longleftrightarrow\quad v_i \le U - P_i.</div>
+<p>The loop invariant already gives <span class="math-input" data-display="false">0 \le P_i \le U</span>, so the right-side
+subtraction is representable. We test that right side <strong>before</strong> adding.
+For input <code>{U, 1}</code>, the first prefix becomes <span class="math-input" data-display="false">U</span>. At the next step, <span class="math-input" data-display="false">U-P_1=0</span>,
+so the value 1 is rejected. <code>{U, 0}</code> is valid: its second prefix is still <span class="math-input" data-display="false">U</span>.</p>
+<p>Unsigned addition in C++ is modular; it does not raise an arithmetic exception
+when the mathematical result exceeds the type's range. See
+<a href="https://eel.is/c++draft/basic.fundamental">unsigned integer arithmetic</a>.
+A post-addition comparison against <code>max()</code> would be too late: the stored result
+would already be a representable, wrapped integer. Our exception is an explicit
+application-level rejection, not a hardware overflow trap.</p>
+<p>For zero records we use <strong>no arrays</strong>. The logical prefix total at count zero
+is still zero; the accessor will return that constant without dereferencing a
+null pointer. At completed public operations, a nonempty buffer owns both
+arrays with matching sizes and valid prefixes, or an empty buffer owns neither.</p>
+<p>Append the complete buffer declaration:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">RecordBuffer</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="o">~</span><span class="n">RecordBuffer</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="p">(</span><span class="n">RecordBuffer</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">RecordBuffer</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">size</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">values</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">values</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">value_at</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">prefix_total</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">swap</span><span class="p">(</span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">replace</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">checked_size</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">);</span>
+
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WordArray</span><span class="w"> </span><span class="n">values_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">WordArray</span><span class="w"> </span><span class="n">prefixes_</span><span class="p">{};</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>Only read-only access to the stored values escapes the class. A mutable span
+would let a caller alter <code>v_i</code> without repairing later prefixes. <code>value_at</code> and
+<code>prefix_total</code> return copied values, so they do not need borrow restrictions.
+<code>values()</code> returns a borrowed span and rejects an rvalue receiver just as Chapter
+3's view API did. Those ref qualifiers still do not supply full borrow checking.</p>
+<p><code>size_</code> is declared <strong>before</strong> the two owners. Its checked initialization will
+therefore finish before either array requests storage, following the
+<a href="https://eel.is/c++draft/class.base.init">member-initialization order</a>. <code>values_</code> is declared
+before <code>prefixes_</code>, so it acquires the first allocation. This member order is
+part of the failure experiment, not incidental formatting.</p>
+<p>We deliberately make this aggregate owner noncopyable and nonmovable, while
+providing the exact exchange operation it needs. No object is returned by value
+or relocated in this exercise. Adding movement later would require preserving
+the coupled empty-state invariant, as Chapter 3 taught; it is not needed to
+establish replacement safety now.</p>
+<h2 id="construct-and-validate-the-candidate-completely">Construct and validate the candidate completely</h2>
+<p>Append the size check and constructor:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">RecordBuffer::checked_size</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">max_records</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"too many records"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">count</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">RecordBuffer</span><span class="o">::</span><span class="n">RecordBuffer</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">size_</span><span class="p">(</span><span class="n">checked_size</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">size</span><span class="p">())),</span>
+<span class="w">      </span><span class="n">values_</span><span class="p">(</span><span class="n">size_</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">),</span>
+<span class="w">      </span><span class="n">prefixes_</span><span class="p">(</span><span class="n">size_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">size_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">size_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="o">*</span><span class="w"> </span><span class="n">totals</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">prefixes_</span><span class="p">.</span><span class="n">data</span><span class="p">();</span>
+<span class="w">    </span><span class="n">totals</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">();</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">size_</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">totals</span><span class="p">[</span><span class="n">i</span><span class="p">])</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"record total overflows uint64_t"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">values_</span><span class="p">.</span><span class="n">data</span><span class="p">()[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="w">        </span><span class="n">totals</span><span class="p">[</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">totals</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>checked_size(input.size())</code> runs as <code>size_</code> is initialized. An oversized input
+throws before either member-array constructor begins. Once the count is at most
+1024, <code>size_ + 1</code> and the small allocation sizes fit the native target's count
+and address-size domains. This fixture cap makes that arithmetic explicit; a
+future general-purpose buffer must derive its own checked size calculations.</p>
+<p>The conditional expression <code>size_ == 0 ? 0 : size_ + 1</code> allocates no prefix
+array for the empty case. Otherwise both arrays exist before the constructor
+body begins. <code>auto* totals</code> is a pointer to the owned prefix elements, not a new
+allocation. The loop reads one source value, checks its addition, copies it into
+the owned value array, and writes the next prefix. No borrow of the input is
+retained after the constructor returns.</p>
+<p>The candidate may have partially filled arrays when the overflow check throws.
+That is harmless because it has not been published as the destination. Its
+member owners already know how to release the arrays, regardless of how many
+integers the validation loop reached.</p>
+<p>Follow the four possible construction boundaries:</p>
+<table>
+<thead>
+<tr>
+<th>Failure point</th>
+<th>Candidate resources acquired</th>
+<th>Cleanup before a handler can run</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>checked_size</code> rejects the count</td>
+<td>None</td>
+<td>No candidate arrays exist</td>
+</tr>
+<tr>
+<td>First array's seam or allocation fails</td>
+<td>None</td>
+<td>Its empty smart-pointer member is cleaned up</td>
+</tr>
+<tr>
+<td>Second array's seam or allocation fails</td>
+<td>Value array only</td>
+<td>The completed <code>values_</code> member releases that array</td>
+</tr>
+<tr>
+<td>Prefix validation in the constructor body fails</td>
+<td>Both arrays</td>
+<td>Completed members release prefixes first, then values</td>
+</tr>
+</tbody>
+</table>
+<p>In the last two rows, <strong><code>RecordBuffer</code>'s destructor is not called for the
+incomplete candidate</strong>. Its completed member subobjects are destroyed instead.
+Likewise, a <code>WordArray</code> whose constructor did not finish does not run its own
+destructor, though its completed members are cleaned up. The ownership must
+already be in those members; adding a cleanup loop only to <code>~RecordBuffer</code>
+would miss construction failure.</p>
+<h2 id="return-absence-without-losing-the-distinction-from-zero">Return absence without losing the distinction from zero</h2>
+<p>Append the complete read interface:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">RecordBuffer::size</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">size_</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">RecordBuffer</span><span class="o">::</span><span class="n">values</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">values_</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">size_</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span>
+<span class="n">RecordBuffer</span><span class="o">::</span><span class="n">value_at</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">index</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">size_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">values_</span><span class="p">.</span><span class="n">data</span><span class="p">()[</span><span class="n">index</span><span class="p">];</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span>
+<span class="n">RecordBuffer</span><span class="o">::</span><span class="n">prefix_total</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">size_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">prefixes_</span><span class="p">.</span><span class="n">data</span><span class="p">()[</span><span class="n">count</span><span class="p">];</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>For <code>{4, 5}</code>, <code>value_at(0)</code> returns a present 4, <code>value_at(1)</code> a present 5, and
+<code>value_at(2)</code> an empty optional. A record whose value is zero still yields a
+present result. The boundary check uses <code>index &gt;= size_</code>, because <code>size_</code> is the
+first invalid index.</p>
+<p>A prefix <em>count</em> has a different range: zero through <code>size_</code> inclusive.
+<code>prefix_total(2)</code> for this buffer returns 9, and <code>prefix_total(3)</code> is absent.
+Count zero returns a present zero even for an empty buffer. The special branch
+prevents reading the empty buffer's nonexistent <code>prefixes_[0]</code>.</p>
+<p><code>return values_.data()[index]</code> copies one integer into an optional result. It
+does not return a reference to the array. By contrast, the span's address still
+belongs to the owner. On a failed replacement we will preserve that allocation;
+on a successful replacement it will be released before the call returns.</p>
+<p>Using <code>value_or(0)</code> at this interface would collapse “no record” and “record
+with value zero.” That is acceptable only when a caller explicitly wants that
+meaning. Our checks keep presence visible instead.</p>
+<h2 id="prepare-first-commit-with-a-nonthrowing-exchange">Prepare first; commit with a nonthrowing exchange</h2>
+<p>The replacement algorithm is short because the candidate's constructor carries
+the preparation and validation work. Append both complete functions:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">RecordBuffer::swap</span><span class="p">(</span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">values_</span><span class="p">.</span><span class="n">swap</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">values_</span><span class="p">);</span>
+<span class="w">    </span><span class="n">prefixes_</span><span class="p">.</span><span class="n">swap</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">prefixes_</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">swap</span><span class="p">(</span><span class="n">size_</span><span class="p">,</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">size_</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">RecordBuffer::replace</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="w"> </span><span class="n">candidate</span><span class="p">(</span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="n">swap</span><span class="p">(</span><span class="n">candidate</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>There are two stages. <code>RecordBuffer candidate(input, probe)</code> may fail, but it
+operates on a separate object and touches no destination member. Once it
+succeeds, <code>swap(candidate)</code> exchanges the entire representation. Array owners
+and their accounting probes travel together, then the scalar count is exchanged.
+All these operations are nonthrowing for the concrete types used here.</p>
+<p>This is a call to the buffer's <strong>member</strong> <code>swap</code>, not the generic
+<code>std::swap(current, candidate)</code>. The latter would require operations we explicitly
+deleted. Only pointer and integer exchanges inside our implementation use the
+standard swap utility.</p>
+<p>After the exchange, the destination owns the prepared arrays. <code>candidate</code> now
+owns the destination's <strong>old</strong> arrays. Its ordinary destruction at the end of
+<code>replace</code> releases them. No separate undo loop and no <code>catch</code> inside <code>replace</code>
+are necessary.</p>
+<p>Let O name the pair of old arrays and N the new pair. The names describe live
+resources, not particular numerical pointer values:</p>
+<table>
+<thead>
+<tr>
+<th>Point</th>
+<th>Destination</th>
+<th>Candidate</th>
+<th>Can this step throw out of <code>replace</code>?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before preparation</td>
+<td>Owns O: <code>{4,5}</code> and <code>{0,4,9}</code></td>
+<td>Not constructed</td>
+<td>Preparation can</td>
+</tr>
+<tr>
+<td>Candidate fully ready</td>
+<td>Still owns O</td>
+<td>Owns N: <code>{8,9,10}</code> and <code>{0,8,17,27}</code></td>
+<td>No more throwing work remains</td>
+</tr>
+<tr>
+<td>Exchange complete</td>
+<td>Owns N</td>
+<td>Owns O</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Function returns</td>
+<td>Still owns N</td>
+<td>Destroyed; O released</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>For any failure before commit, the destination was untouched and member owners
+release acquired candidate resources. After commit, no operation in this
+function can throw. Those two facts prove the strong guarantee for this
+implementation. Merely catching an exception and returning an error would not
+prove it.</p>
+<p>A successful replacement invalidates existing spans into O. Do not compare or
+read their stored pointers afterward; end their use before the success path.
+A failed replacement preserves O, so such views remain valid under the original
+lifetime preconditions. A copied optional integer remains valid in either case.</p>
+<p>Input may be a subspan of the destination's old value array. Preparation reads
+all its elements while O is still owned. Only afterward does commit exchange
+owners and cleanup release O. The implementation does not inspect <code>input</code> after
+that point. An erase-first algorithm would lose this aliasing property as well
+as its failure guarantee.</p>
+<p>This exchange is a logical commit under <strong>exclusive access</strong>, not an atomic
+machine instruction. The temporary mismatch between individual pointer and
+count swaps must not be observed by another thread or a reentrant callback.
+Concurrency will require a separately taught publication boundary.</p>
+<h3 id="keeping-the-old-state-has-a-memory-cost">Keeping the old state has a memory cost</h3>
+<p>Let <span class="math-input" data-display="false">w</span> be <code>sizeof(std::uint64_t)</code>, and <span class="math-input" data-display="false">B(n)</span> the bytes occupied by the two
+payload arrays for a nonempty <span class="math-input" data-display="false">n</span>-record buffer. Ignore owner objects, allocator
+metadata, and alignment overhead in this payload-only calculation:</p>
+<div class="math-input" data-display="true">B(n) = wn + w(n+1) = w(2n+1), \qquad n &gt; 0.</div>
+<p>For the empty representation, <span class="math-input" data-display="false">B(0)=0</span> rather than the nonempty formula.
+The target's eight-byte words give <span class="math-input" data-display="false">B(2)=8(5)=40</span> bytes and <span class="math-input" data-display="false">B(3)=8(7)=56</span> bytes.
+During a successful replacement, both old and new arrays coexist:</p>
+<div class="math-input" data-display="true">B_{\mathrm{peak}} = B(2) + B(3) = 40 + 56 = 96\ \mathrm{bytes}.</div>
+<p>On the injected second-allocation failure, only the new three-word value array
+has been acquired, so that attempt reaches <span class="math-input" data-display="false">40+3(8)=64</span> payload bytes. Cleanup
+returns to 40. The next successful attempt peaks at 96, then retains 56 after
+the old arrays are released. The probe will record <strong>array counts</strong>, not these
+byte totals: three simultaneous arrays during the failed attempt, four during
+a successful one, and two afterward.</p>
+<p>The old/new coexistence is the cost of this particular strong-guarantee design,
+not a theorem that every failure-safe algorithm must double memory. A later
+bounded-memory system must reserve its preparation cost before starting, use a
+different representation, or reject work. Releasing the old allocation early
+just to reduce this peak silently changes the operation's guarantee.</p>
+<h2 id="translate-exceptions-only-at-a-boundary-that-can-classify-them">Translate exceptions only at a boundary that can classify them</h2>
+<p>Inside the constructor, failure stops construction by throwing. At the caller's
+replacement boundary we want a small status that says what happened. A scoped
+enumeration, written <code>enum class</code>, gives distinct named values. Use the scope
+qualifier in <code>ReplaceStatus::ok</code>; these values do not silently become booleans
+or ordinary integers. The <a href="https://eel.is/c++draft/dcl.enum">enumeration rules</a>
+define this behavior.</p>
+<p>Append the vocabulary and its complete adapter:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">ReplaceStatus</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">ok</span><span class="p">,</span>
+<span class="w">    </span><span class="n">invalid_input</span><span class="p">,</span>
+<span class="w">    </span><span class="n">resource_exhausted</span>
+<span class="p">};</span>
+
+<span class="p">[[</span><span class="na">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">destination</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">    </span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">destination</span><span class="p">.</span><span class="n">replace</span><span class="p">(</span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">ok</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">invalid_input</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">resource_exhausted</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The <a href="https://eel.is/c++draft/dcl.attr.nodiscard"><code>[[nodiscard]]</code> attribute</a> asks
+the compiler to diagnose an ignored returned result. It is
+a warning aid, not a substitute for handling a status. Tests will store the
+status and compare it explicitly. The attribute does not change control flow.</p>
+<p><code>try_replace</code> returns <code>ok</code> only if <code>replace</code> completed. By the time a matching
+handler is entered, any incomplete candidate has already released its resources.
+The handler therefore translates a known failure; it does not perform rollback.
+<code>const std::invalid_argument&amp;</code> and <code>const std::bad_alloc&amp;</code> avoid copying exception
+objects, and neither handler needs to keep an exception alive after returning.</p>
+<p>There is deliberately no <code>catch (...)</code> here. An unrelated exception must not be
+silently relabelled “out of memory” or “bad input.” The adapter is not declared
+<code>noexcept</code>, so an unclassified exception can propagate to the program's outer
+failure boundary. Nor should constructors throughout a subsystem each catch and
+rethrow the same error just to print it repeatedly.</p>
+<p>The classifications describe the exception that actually occurred. The <a href="https://eel.is/c++draft/res.on.exception.handling">library exception-handling rules</a>
+allow storage-allocation failure during exception-object construction. An
+<code>invalid_argument</code> message may itself need storage; if that fails with
+<code>bad_alloc</code>, the adapter reports resource exhaustion instead. The deterministic
+probe does not interfere with such message storage. A test with controlled
+payload-allocation failures is not a claim that every possible global
+out-of-memory condition is recoverable.</p>
+<p>Exceptions and statuses are not competing ownership models. Either can report
+failure while RAII supplies cleanup. The useful questions are where a decision
+can be made, what state remains valid, and whether the returned information lets
+the caller make that decision. In this example, absent lookup values do not need
+an exception or a replacement status at all.</p>
+<h2 id="observe-the-failed-second-allocation">Observe the failed second allocation</h2>
+<p>The test helpers compare both the stored values and the cached totals. A test
+that only checks the status would miss a destination accidentally cleared before
+failure. A test that only checks for leaks would miss the same bug.</p>
+<p>Append two complete predicates:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">same_values</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">buffer</span><span class="p">,</span>
+<span class="w">                 </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">expected</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">actual</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">buffer</span><span class="p">.</span><span class="n">values</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">actual</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">expected</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">actual</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">actual</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">expected</span><span class="p">[</span><span class="n">i</span><span class="p">])</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">has_total</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">RecordBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">buffer</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">,</span>
+<span class="w">               </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">expected</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">buffer</span><span class="p">.</span><span class="n">prefix_total</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">has_value</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">*</span><span class="n">result</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">expected</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>same_values</code> checks the count before indexing. <code>has_total</code> tests optional
+presence before dereferencing. Neither retains a view, allocates storage, or
+modifies the buffer.</p>
+<p>The first check creates the old buffer <strong>before</strong> arming failure. Its two
+allocations therefore do not consume the requested countdown. The following
+block starts a function; the next labelled block continues that same function.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_replacement</span><span class="p">(</span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">old_value</span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="o">&gt;</span><span class="w"> </span><span class="n">new_value</span><span class="p">{</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="p">};</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="w"> </span><span class="n">current</span><span class="p">(</span><span class="n">old_value</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">copied_old</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">current</span><span class="p">.</span><span class="n">value_at</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">same_values</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">old_value</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">),</span>
+<span class="w">               </span><span class="s">"initial value and prefix"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"initial: values=4 5 total=9 live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">borrowed_old</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">current</span><span class="p">.</span><span class="n">values</span><span class="p">();</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe</span><span class="p">;</span>
+<span class="w">        </span><span class="n">probe</span><span class="p">.</span><span class="n">fail_on</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">new_value</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">status</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">resource_exhausted</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">same_values</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">old_value</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">),</span>
+<span class="w">                   </span><span class="s">"second-allocation failure preserves value and prefix"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">current</span><span class="p">.</span><span class="n">values</span><span class="p">().</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">borrowed_old</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">borrowed_old</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="s">"failed replacement preserves borrow"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">probe</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">probe</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">probe</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">probe</span><span class="p">.</span><span class="n">countdown</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"partial candidate released; failure seam disarmed"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"second allocation failed: values=4 5 total=9"</span>
+<span class="w">                     </span><span class="s">" candidate acquired=1 released=1 live="</span>
+<span class="w">                  </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+</code></pre></figure>
+<p><code>const auto before = probe</code> makes an independent value snapshot. No owner is
+copied, and the snapshot's counter changes are not connected to later updates.
+Arming 2 is therefore relative to the two allocation calls of the candidate,
+not “the second allocation since process startup.”</p>
+<p>The state trace is now concrete:</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th style="text-align:right">Successful acquisitions</th>
+<th style="text-align:right">Releases</th>
+<th style="text-align:right">Live arrays</th>
+<th style="text-align:right">Destination total</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Construct <code>{4,5}</code></td>
+<td style="text-align:right">2</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">2</td>
+<td style="text-align:right">9</td>
+</tr>
+<tr>
+<td>Allocate candidate values</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">9</td>
+</tr>
+<tr>
+<td>Fail candidate prefixes</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">9</td>
+</tr>
+<tr>
+<td>Unwind completed candidate value owner</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">2</td>
+<td style="text-align:right">9</td>
+</tr>
+</tbody>
+</table>
+<p>The failed prefix constructor never records an acquisition, so it owes no
+release of a prefix array. Its empty unique-pointer member can still be destroyed
+normally. The completed <code>values_</code> member owes exactly one release and performs
+it before the <code>resource_exhausted</code> result reaches this check.</p>
+<p>The first <code>check</code> verifies the status and old logical state. Only when that
+passes do we inspect the retained view into the old live allocation. This
+ordering also lets the later erase-first diagnostic fail without reading its
+invalidated old view. The <code>||</code> chain short-circuits at a failed check.</p>
+<p>The extra scope ends the borrow's use before the next successful replacement.
+The copied <code>copied_old</code> optional intentionally survives; it owns its integer.</p>
+<h2 id="retry-replace-from-an-alias-and-clear-without-allocating">Retry, replace from an alias, and clear without allocating</h2>
+<p>Continue the open <code>check_replacement</code> function:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">retried</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">new_value</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">retried</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">ok</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">same_values</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">new_value</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">17</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">27</span><span class="p">),</span>
+<span class="w">               </span><span class="s">"retry installs value and every prefix"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">copied_old</span><span class="p">.</span><span class="n">has_value</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">*</span><span class="n">copied_old</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"optional result owns its copied value"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"retry: values=8 9 10 total=27 copied-old=5 live="</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">suffix</span><span class="p">{</span><span class="mi">9</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">aliased</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">.</span><span class="n">values</span><span class="p">().</span><span class="n">subspan</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">aliased</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">ok</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">same_values</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">suffix</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">19</span><span class="p">),</span><span class="w"> </span><span class="s">"input may borrow the old payload"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"aliased input: values=9 10 total=19</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before_clear</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">attempts</span><span class="p">;</span>
+<span class="w">    </span><span class="n">probe</span><span class="p">.</span><span class="n">fail_on</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">cleared</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="p">{},</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">cleared</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">ok</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">current</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">current</span><span class="p">.</span><span class="n">values</span><span class="p">().</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">nullptr</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">current</span><span class="p">.</span><span class="n">value_at</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">current</span><span class="p">.</span><span class="n">prefix_total</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+<span class="w">               </span><span class="s">"empty is valid; zero total is not absence"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">probe</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before_clear</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">countdown</span><span class="p">.</span><span class="n">has_value</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">*</span><span class="n">probe</span><span class="p">.</span><span class="n">countdown</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"clearing consumes no allocation attempt"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">probe</span><span class="p">.</span><span class="n">disarm</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"clear: absent record; present zero total; live=0</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The injected failure disarmed itself, so the retry can attempt both allocations.
+The test checks all four prefixes <code>{0,8,17,27}</code>, not only the final sum. The old
+copied value remains 5 after its source array is gone. That is a copied value's
+lifetime, not a surviving span.</p>
+<p><code>current.values().subspan(1)</code> denotes the currently owned suffix <code>{9,10}</code>.
+Passing it directly keeps the source alive during preparation and avoids keeping
+a named old view for accidental later use. A successful return gives a new
+owned suffix with prefix totals <code>{0,9,19}</code>. The input view is not a snapshot or
+an owner; this is safe because of the precise read-before-commit order.</p>
+<p>For the clear operation, <code>{}</code> constructs an empty input span. Failure is armed
+on the next allocation, yet clearing succeeds because empty construction requests
+no array. Swapping with an empty candidate moves the old arrays into that
+candidate, whose destructor releases them. The still-armed count confirms that
+no hidden tracked allocation was consumed. We explicitly disarm it afterward
+so it cannot spill into another test.</p>
+<p>The empty buffer distinguishes absent record zero from present prefix total
+zero. It also has no allocation merely to represent its empty-prefix value.</p>
+<h2 id="reject-before-allocation-and-after-partial-construction">Reject before allocation and after partial construction</h2>
+<p>A good replacement boundary must also handle invalid input, not just simulated
+allocation errors. The next function first checks the cheap length rule and the
+first-allocation failure. Its second block checks arithmetic validation after
+both member arrays exist.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_rejection</span><span class="p">(</span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">old_value</span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="o">&gt;</span><span class="w"> </span><span class="n">new_value</span><span class="p">{</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="n">max_records</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="o">&gt;</span><span class="w"> </span><span class="n">oversized</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="w"> </span><span class="n">current</span><span class="p">(</span><span class="n">old_value</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">probe</span><span class="p">.</span><span class="n">fail_on</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">too_large</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">oversized</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">too_large</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">invalid_input</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">same_values</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">old_value</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">countdown</span><span class="p">.</span><span class="n">has_value</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="o">*</span><span class="n">probe</span><span class="p">.</span><span class="n">countdown</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="s">"length rejected before allocation"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">no_storage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">new_value</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">no_storage</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">resource_exhausted</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">same_values</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">old_value</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">live</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"first-allocation failure acquires nothing"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"early rejection: size checked first; first allocation acquired=0</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+</code></pre></figure>
+<p>The 1025-element fixture is a real initialized <code>std::array</code>, not a falsely sized
+span over a smaller object. Length validation rejects it without reaching the
+probe. The armed failure therefore remains pending and rejects the very next
+valid request at its <strong>first</strong> allocation. That request acquires no candidate
+resource and leaves the old buffer intact.</p>
+<p>Continue the same function with the late-rejection and numeric-boundary cases:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">();</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">overflowing</span><span class="p">{</span><span class="n">limit</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before_overflow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">invalid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">overflowing</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">invalid</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">invalid_input</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">same_values</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">old_value</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">),</span>
+<span class="w">               </span><span class="s">"validation failure preserves the old value"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">probe</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before_overflow</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before_overflow</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before_overflow</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before_overflow</span><span class="p">.</span><span class="n">live</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"both members released after constructor-body failure"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"late rejection: candidate acquired=2 released=2; old total=9</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">boundary</span><span class="p">{</span><span class="n">limit</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">accepted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">try_replace</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">boundary</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">zero</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">current</span><span class="p">.</span><span class="n">value_at</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">accepted</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ReplaceStatus</span><span class="o">::</span><span class="n">ok</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">same_values</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="n">boundary</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">limit</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">has_total</span><span class="p">(</span><span class="n">current</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">limit</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">zero</span><span class="p">.</span><span class="n">has_value</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">*</span><span class="n">zero</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">current</span><span class="p">.</span><span class="n">value_at</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span>
+<span class="w">               </span><span class="s">"maximum plus zero is valid; absent is different from zero"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"overflow boundary: maximum plus zero accepted; no wrapped total</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>For <code>{U,1}</code>, the two candidate arrays were constructed before the loop detected
+that the second prefix would not fit. Two acquisitions and two releases must
+therefore be observed, with the destination's two old arrays still live. The
+old total remains 9 because none of the candidate's partial state was committed.</p>
+<p>For <code>{U,0}</code>, every addition is representable and commit succeeds. The stored
+zero at index 1 is present, while index 2 is absent. This makes the overflow
+check and optional presence test exercise their exact boundaries rather than
+only typical positive values.</p>
+<p>This constructor chooses one copy-and-prefix pass after allocation. It could
+validate all sums in a separate pass before allocating, at the cost of another
+input pass; that would change the failure-order trace but can be a valid design.
+The important requirement is that all potentially failing work finishes before
+the destination changes, not that every design must validate at the same line.</p>
+<h2 id="move-the-handler-outward-and-follow-the-scopes">Move the handler outward and follow the scopes</h2>
+<p>So far, <code>try_replace</code> caught the candidate failure while the caller's <code>current</code>
+object remained in scope. What happens when the caller does not use that adapter
+and its whole local scope is exited instead?</p>
+<p>Append this check of the throwing interface itself:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_unwinding</span><span class="p">(</span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">before</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">old_value</span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="o">&gt;</span><span class="w"> </span><span class="n">new_value</span><span class="p">{</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="p">};</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">caught</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">reached_after_call</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">RecordBuffer</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">old_value</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">        </span><span class="n">probe</span><span class="p">.</span><span class="n">fail_on</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="w">        </span><span class="n">local</span><span class="p">.</span><span class="n">replace</span><span class="p">(</span><span class="n">new_value</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">        </span><span class="n">reached_after_call</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">caught</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">caught</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">reached_after_call</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">attempts</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">               </span><span class="n">probe</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">released</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">before</span><span class="p">.</span><span class="n">live</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"outer handler sees candidate and local resources released"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"unwind: caught bad_alloc; continuation skipped; live="</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Here the handler is outside the scope containing <code>local</code>. On the injected
+failure, the incomplete candidate first releases its acquired value array.
+Unwinding then destroys the fully constructed <code>local</code>, releasing its two old
+arrays. The handler sees three acquisitions and three releases relative to its
+baseline. The assignment to <code>reached_after_call</code> is skipped.</p>
+<p>There is no contradiction with the strong guarantee. <code>replace</code> did not mutate
+the old buffer, but the caller chose a control path that ended that buffer's
+lifetime. Preserving an object's value on operation failure does not preserve
+the object beyond its enclosing scope. If a caller needs to keep and use the old
+buffer after failure, its handler must be inside that buffer's lifetime, as the
+earlier status-based check was.</p>
+<p>These cleanup paths rely on ordinary exception handling reaching a handler.
+Do not generalize them to forced process termination, a power failure, or every
+call to <code>std::terminate</code>. An exception escaping a <code>noexcept</code> function, or an
+exception escaping destruction during active unwinding, can terminate the
+program rather than produce the result we tested. With no matching handler,
+unwinding before termination is not universally guaranteed. See the
+<a href="https://eel.is/c++draft/except.terminate">termination rules</a>.</p>
+<h2 id="connect-the-program-to-the-existing-build">Connect the program to the existing build</h2>
+<p>Close the namespace and add the complete entry point:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-04/transactional_buffer.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="p">}</span><span class="w"> </span><span class="c1">// namespace strata</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">strata</span><span class="o">::</span><span class="n">AllocationProbe</span><span class="w"> </span><span class="n">probe</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">check_replacement</span><span class="p">(</span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">             </span><span class="n">strata</span><span class="o">::</span><span class="n">check_rejection</span><span class="p">(</span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">             </span><span class="n">strata</span><span class="o">::</span><span class="n">check_unwinding</span><span class="p">(</span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exception</span><span class="o">&amp;</span><span class="w"> </span><span class="n">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"UNEXPECTED "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">error</span><span class="p">.</span><span class="n">what</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"UNEXPECTED nonstandard exception</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">drained</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">check</span><span class="p">(</span>
+<span class="w">        </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">acquired</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">released</span><span class="p">,</span>
+<span class="w">        </span><span class="s">"all tracked arrays released"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ok</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="o">!</span><span class="n">drained</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"final: attempts="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">attempts</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" acquired="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">acquired</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" released="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">released</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">live</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" peak-live="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">peak_live</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"foundation-04: all checks passed</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>std::exception</code> is a standard base interface shared by the standard exception
+classes used here. Catching it by <code>const</code> reference permits a final diagnostic
+without copying a base-only object and discarding more specific type information.
+<code>what()</code> supplies a message; its pointer is not retained after the handler. See
+<a href="https://eel.is/c++draft/exception">the standard exception interface</a>.</p>
+<p>The final <code>catch (...)</code> is actual C++ syntax for a handler matching any exception
+not already matched. It belongs last. Here it ends the test program with failure;
+it does not convert an unknown error into a successful test or pretend to recover
+the computation. The <code>ok</code> flag remains false if any exception exits the combined
+checks before the assignment completes.</p>
+<p><code>probe</code> is outside the <code>try</code> block. Any local record buffers unwind before the
+outer handlers run, while their accounting probe remains alive. The final
+<code>drained</code> check runs even when a previous check returned false or an exception
+escaped it. No required check or operation lives inside an <code>assert</code> that
+vanishes in Release.</p>
+<p>Append this CMake block <strong>after</strong> all existing targets:</p>
+<figure class="code-block"><figcaption><span class="code-title">CMakeLists.txt</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nb">add_executable</span><span class="p">(</span><span class="s">foundation-04</span><span class="w"> </span><span class="s">exercises/chapter-04/transactional_buffer.cpp</span><span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span><span class="s">foundation-04</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">cxx_std_20</span><span class="p">)</span>
+<span class="nb">if</span><span class="p">(</span><span class="s">CMAKE_CXX_COMPILER_ID</span><span class="w"> </span><span class="s">MATCHES</span><span class="w"> </span><span class="s2">"Clang|GNU"</span><span class="p">)</span>
+<span class="w">    </span><span class="nb">target_compile_options</span><span class="p">(</span><span class="s">foundation-04</span><span class="w"> </span><span class="s">PRIVATE</span>
+<span class="w">        </span><span class="s">-Wall</span><span class="w"> </span><span class="s">-Wextra</span><span class="w"> </span><span class="s">-Wpedantic</span><span class="w"> </span><span class="s">-Wconversion</span><span class="w"> </span><span class="s">-Wsign-conversion</span>
+<span class="w">    </span><span class="p">)</span>
+<span class="nb">endif</span><span class="p">()</span>
+<span class="nb">add_test</span><span class="p">(</span><span class="s">NAME</span><span class="w"> </span><span class="s">foundation-04</span><span class="w"> </span><span class="s">COMMAND</span><span class="w"> </span><span class="s">foundation-04</span><span class="p">)</span>
+</code></pre></figure>
+<p>The <a href="https://cmake.org/cmake/help/latest/command/add_executable.html">executable target</a>
+contains only this chapter's file. It does not link another foundation executable
+or compile its <code>main</code>. Keep the root <code>enable_testing()</code> and language-extension
+policy established in Chapter 1.</p>
+<p>Reconfigure and run the cumulative Debug suite using the native compiler already
+selected. A newly created tree uses the same single-configuration generator and
+ARM64 target as the earlier chapters:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — Debug build and cumulative tests</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/debug<span class="w"> </span>-G<span class="w"> </span><span class="s2">"Unix Makefiles"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Debug<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_OSX_ARCHITECTURES<span class="o">=</span>arm64
+cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+./build/debug/foundation-04
+</code></pre></figure>
+<p>If the existing tree uses Ninja or another compatible generator, retain it
+rather than changing its cached generator. Stop on an unexpected configuration
+or build error instead of executing an old surviving binary.</p>
+<p>Repeat with the separate Release tree:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — Release build and cumulative tests</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/release<span class="w"> </span>-G<span class="w"> </span><span class="s2">"Unix Makefiles"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Release<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_OSX_ARCHITECTURES<span class="o">=</span>arm64
+cmake<span class="w"> </span>--build<span class="w"> </span>build/release<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+./build/release/foundation-04
+</code></pre></figure>
+<p>The cumulative suite now contains <strong>five</strong> tests: <code>foundation-01</code>, <code>cxx20-probe</code>,
+<code>foundation-02</code>, <code>foundation-03</code>, and <code>foundation-04</code>. All should pass in both
+configurations. The new executable's expected output is:</p>
+<figure class="code-block"><figcaption><span class="code-title">Expected foundation-04 output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>initial: values=4 5 total=9 live=2
+second allocation failed: values=4 5 total=9 candidate acquired=1 released=1 live=2
+retry: values=8 9 10 total=27 copied-old=5 live=2
+aliased input: values=9 10 total=19
+clear: absent record; present zero total; live=0
+early rejection: size checked first; first allocation acquired=0
+late rejection: candidate acquired=2 released=2; old total=9
+overflow boundary: maximum plus zero accepted; no wrapped total
+unwind: caught bad_alloc; continuation skipped; live=0
+final: attempts=19 acquired=16 released=16 live=0 peak-live=4
+foundation-04: all checks passed
+</code></pre></figure>
+<p>The attempts exceed acquisitions by three: two injected second-allocation
+failures and one injected first-allocation failure. The oversize rejection
+consumes no attempt. The arithmetic rejection consumes two successful array
+allocations, both released. Final live count zero means the instrumented owners
+released all 16 of their acquired arrays; it is not a measurement of process
+memory or a claim about every allocation in the C++ runtime.</p>
+<h2 id="make-the-weaker-guarantee-fail-visibly">Make the weaker guarantee fail visibly</h2>
+<p>Temporarily replace <strong>only</strong> <code>RecordBuffer::replace</code> with this complete function:</p>
+<figure class="code-block"><figcaption><span class="code-title">Temporary diagnostic edit — weaker RecordBuffer::replace</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">RecordBuffer::replace</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">AllocationProbe</span><span class="o">&amp;</span><span class="w"> </span><span class="n">probe</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="w"> </span><span class="n">discarded</span><span class="p">;</span>
+<span class="w">    </span><span class="n">swap</span><span class="p">(</span><span class="n">discarded</span><span class="p">);</span>
+<span class="w">    </span><span class="n">RecordBuffer</span><span class="w"> </span><span class="n">candidate</span><span class="p">(</span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">);</span>
+<span class="w">    </span><span class="n">swap</span><span class="p">(</span><span class="n">candidate</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>This version moves the old state into <code>discarded</code> and makes the destination
+empty <strong>before</strong> preparation. If preparation fails, <code>discarded</code> is destroyed as
+control leaves the function, releasing the old arrays. The destination remains
+a valid empty buffer and no tracked array leaks, but the old value is gone.
+It offers only the basic guarantee for this failure path.</p>
+<p>Predict the first failing check, then build and run the focused test in both
+configurations:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — a leak-free implementation can still violate the contract</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>-R<span class="w"> </span><span class="s1">'^foundation-04$'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">        </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+cmake<span class="w"> </span>--build<span class="w"> </span>build/release<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>-R<span class="w"> </span><span class="s1">'^foundation-04$'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">        </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+</code></pre></figure>
+<p>Both must report the diagnostic:</p>
+<figure class="code-block"><figcaption><span class="code-title">Expected failure from the weaker replacement</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>FAIL second-allocation failure preserves value and prefix
+</code></pre></figure>
+<p>The executable returns nonzero. The first logical-state check stops the test
+before its old-view check, so this diagnostic does not intentionally dereference
+a stale borrow. A memory sanitizer can be silent for this incorrect algorithm:
+it releases resources correctly while breaking a higher-level state promise.</p>
+<p>Restore the original two-statement <code>replace</code>, rebuild, and return both full
+CTest suites to passing. This controlled variation is inside the chapter's test
+allocation, not a retained alternate implementation.</p>
+<h3 id="check-normal-memory-use-separately">Check normal memory use separately</h3>
+<p>After restoring the function, compile the standalone normal program with the
+selected compatible compiler and sanitizer runtime:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — focused address and undefined-behavior checks</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>build/diagnostics
+<span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-O1<span class="w"> </span>-g<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-Wconversion<span class="w"> </span>-Wsign-conversion<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-fsanitize<span class="o">=</span>address,undefined<span class="w"> </span>-fno-omit-frame-pointer<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-fno-sanitize-recover<span class="o">=</span>undefined<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>exercises/chapter-04/transactional_buffer.cpp<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-o<span class="w"> </span>build/diagnostics/foundation-04
+./build/diagnostics/foundation-04
+</code></pre></figure>
+<p>Expected behavior is the normal eleven-line output and exit status zero, without
+a sanitizer report. The explicit counter checks still matter: sanitizer support
+and leak-detection defaults vary by platform and installed runtime. Do not turn
+an unsupported diagnostic option into a requirement to change the entire
+working toolchain. The official
+<a href="https://clang.llvm.org/docs/AddressSanitizer.html">AddressSanitizer instructions</a>
+and <a href="https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html">UndefinedBehaviorSanitizer instructions</a>
+describe compiler and linking flags and their scope.</p>
+<p>In particular, the usual <code>undefined</code> sanitizer group does not reject ordinary
+unsigned modular addition. The <code>{U,1}</code> rejection is established by our explicit
+range check and test, not by expecting a sanitizer to recognize an application
+sum as too large.</p>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Boundary to inspect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>First replacement unexpectedly succeeds</td>
+<td>Was failure armed before the call, and is the ordinal relative to the candidate's two allocations?</td>
+</tr>
+<tr>
+<td>Retry fails at the same injected point</td>
+<td>Was the countdown cleared before throwing? Is this an actual allocator failure instead?</td>
+</tr>
+<tr>
+<td>Candidate count remains live after failure</td>
+<td>Did acquired storage immediately enter a completed owning member? Are acquisition and attempt counters confused?</td>
+</tr>
+<tr>
+<td>Old values remain but totals change</td>
+<td>Did all candidate validation happen off to the side, and does swap exchange every representation member?</td>
+</tr>
+<tr>
+<td>Failed replacement returns a status but the old value is empty</td>
+<td>Was old state cleared before preparing the candidate?</td>
+</tr>
+<tr>
+<td>The process terminates instead of reaching a handler</td>
+<td>Was a throwing operation incorrectly declared <code>noexcept</code>, or did cleanup throw during unwinding?</td>
+</tr>
+<tr>
+<td>Empty lookup appears identical to stored zero</td>
+<td>Was optional presence replaced with a default-zero shortcut?</td>
+</tr>
+</tbody>
+</table>
+<h2 id="cleanup-is-not-successful-completion-of-external-io">Cleanup is not successful completion of external I/O</h2>
+<p>The strong guarantee above applies to one in-memory destination. No persistent
+file, peer, device, or other externally visible system was changed. This is why
+we can prove unchanged old state simply by keeping it alive until commit.</p>
+<p>Consider instead a storage operation that appends a record, requests persistence,
+and then installs a new in-memory index entry. Suppose the file append has
+modified external state, but the persistence request reports failure or the
+index installation cannot finish. Destroying a local buffer releases its memory.
+Destroying a file-handle owner may release a handle. Neither act is a general
+undo operation for bytes already written. Even an attempted truncation would
+be a new fallible I/O operation, not the automatic inverse of a C++ exception.</p>
+<p>A useful API therefore separates cleanup from <strong>explicit completion</strong>. The
+explicit operation, such as a checked flush or commit in a later chapter, must
+report a failure while the caller can still decide what to do. A destructor
+supplies nonthrowing fallback cleanup; it cannot report reliable completion by
+throwing on a path that may already be unwinding.</p>
+<p>The memory exercise also gives a precise contrast in retry behavior:</p>
+<table>
+<thead>
+<tr>
+<th>Boundary</th>
+<th>What a failure means</th>
+<th>What must be established before retry</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>This <code>replace</code> before commit</td>
+<td>Destination unchanged; candidate cleaned up</td>
+<td>The caller may retry with a valid input; resources may still be unavailable</td>
+</tr>
+<tr>
+<td>A future write rejected before any external effect</td>
+<td>Nothing accepted under that boundary's contract</td>
+<td>Rejection and retry rules must be explicit</td>
+</tr>
+<tr>
+<td>A future failure after external effects may have occurred</td>
+<td>Completion may be uncertain</td>
+<td>Recovery or another protocol must resolve effects; repeating blindly may duplicate work</td>
+</tr>
+</tbody>
+</table>
+<p>This is a reasoning example, not an implemented file API or a power-loss test.
+The storage chapters will need actual write ordering, record validation, recovery,
+and publication rules. They cannot inherit durability from a <code>try</code> block or a
+nonthrowing destructor. Likewise, a function that logs or invokes arbitrary
+callbacks <strong>after</strong> its in-memory swap would need to reconsider what it can
+promise if that later work throws.</p>
+<h2 id="what-carries-forward">What carries forward</h2>
+<p>Keep <code>transactional_buffer.cpp</code>, its appended CMake target, and the restored
+prepare-then-swap implementation. Earlier foundation files remain unchanged.
+The completed program has a checked input domain, an explicit absence type,
+a narrow exception-to-status adapter, two independently owned candidate
+resources, and tests at failures before and after each acquisition boundary.</p>
+<p>The reusable method is not “put a catch around everything.” Establish a valid
+candidate privately, give each acquired resource an owner immediately, identify
+the exact commit operation, and keep every operation after that commit within
+the promised failure model. State what the caller retains on failure, what it
+loses on success, and which external effects are outside the guarantee.</p>
+<p>The <a href="https://25d-228.github.io/cplusplus-learning/index.html">roadmap</a> next turns
+to templates, concepts, and ordering contracts. That chapter can return owned
+results while accepting borrowed inputs without guessing what a failed
+construction does to its caller's previous state. It will not depend on an
+unwritten engine subsystem or a generic error framework.</p>
+<h2 id="technical-references">Technical references</h2>
+<p>These are primary specifications or official tool documentation for the
+facilities used here. The live working draft also contains newer features;
+only the C++20-compatible operations shown in this chapter are required.</p>
+<ul>
+<li>C++ working draft: <a href="https://eel.is/c++draft/except.throw">throwing exceptions</a>,
+<a href="https://eel.is/c++draft/except.handle">handler matching and references</a>,
+<a href="https://eel.is/c++draft/except.ctor">stack unwinding and incomplete construction</a>,
+<a href="https://eel.is/c++draft/class.base.init">member initialization</a>,
+<a href="https://eel.is/c++draft/class.dtor">destruction</a>, and
+<a href="https://eel.is/c++draft/except.terminate">termination</a>.</li>
+<li>C++ working draft: <a href="https://eel.is/c++draft/bad.alloc"><code>bad_alloc</code></a>,
+<a href="https://eel.is/c++draft/invalid.argument"><code>invalid_argument</code></a>,
+<a href="https://eel.is/c++draft/exception">the <code>exception</code> interface</a>, and
+<a href="https://eel.is/c++draft/res.on.exception.handling">library allocation-failure rules</a>.</li>
+<li>C++ working draft: <a href="https://eel.is/c++draft/optional.general">optional storage</a>,
+<a href="https://eel.is/c++draft/optional.observe">optional observers</a>, and
+<a href="https://eel.is/c++draft/dcl.enum">scoped enumerations</a>, and
+<a href="https://eel.is/c++draft/dcl.attr.nodiscard">the <code>nodiscard</code> attribute</a>.</li>
+<li>C++ working draft: <a href="https://eel.is/c++draft/unique.ptr.create">unique-pointer creation</a>,
+<a href="https://eel.is/c++draft/unique.ptr.runtime.modifiers">array reset</a>,
+<a href="https://eel.is/c++draft/unique.ptr.single.modifiers">pointer swap and default-owner modifiers</a>,
+<a href="https://eel.is/c++draft/utility.swap">scalar swap</a>, and
+<a href="https://eel.is/c++draft/basic.fundamental">unsigned arithmetic</a>.</li>
+<li>CMake: <a href="https://cmake.org/cmake/help/latest/command/add_executable.html"><code>add_executable</code></a>.
+Clang: <a href="https://clang.llvm.org/docs/AddressSanitizer.html">AddressSanitizer</a> and
+<a href="https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html">UndefinedBehaviorSanitizer</a>.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-03.html"><small>Previous · Chapter 3</small><span>Lifetime, RAII, and move-only owners</span></a><a href="chapter-05.html"><small>Next · Chapter 5</small><span>Templates, concepts, and ordering contracts</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 4</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#one-file-and-an-explicit-failure-boundary">One file and an explicit failure boundary</a></li><li class="toc-h2"><a href="#give-each-failure-a-meaning">Give each failure a meaning</a></li><li class="toc-h2"><a href="#an-exception-changes-the-control-path">An exception changes the control path</a></li><li class="toc-h2"><a href="#an-optional-value-is-not-a-hidden-error-code">An optional value is not a hidden error code</a></li><li class="toc-h2"><a href="#fail-an-allocation-by-its-position-not-by-consuming-all-ram">Fail an allocation by its position, not by consuming all RAM</a></li><li class="toc-h2"><a href="#put-accounting-next-to-the-owning-pointer">Put accounting next to the owning pointer</a></li><li class="toc-h2"><a href="#values-and-prefix-totals-form-one-invariant">Values and prefix totals form one invariant</a></li><li class="toc-h2"><a href="#construct-and-validate-the-candidate-completely">Construct and validate the candidate completely</a></li><li class="toc-h2"><a href="#return-absence-without-losing-the-distinction-from-zero">Return absence without losing the distinction from zero</a></li><li class="toc-h2"><a href="#prepare-first-commit-with-a-nonthrowing-exchange">Prepare first; commit with a nonthrowing exchange</a></li><li class="toc-h3"><a href="#keeping-the-old-state-has-a-memory-cost">Keeping the old state has a memory cost</a></li><li class="toc-h2"><a href="#translate-exceptions-only-at-a-boundary-that-can-classify-them">Translate exceptions only at a boundary that can classify them</a></li><li class="toc-h2"><a href="#observe-the-failed-second-allocation">Observe the failed second allocation</a></li><li class="toc-h2"><a href="#retry-replace-from-an-alias-and-clear-without-allocating">Retry, replace from an alias, and clear without allocating</a></li><li class="toc-h2"><a href="#reject-before-allocation-and-after-partial-construction">Reject before allocation and after partial construction</a></li><li class="toc-h2"><a href="#move-the-handler-outward-and-follow-the-scopes">Move the handler outward and follow the scopes</a></li><li class="toc-h2"><a href="#connect-the-program-to-the-existing-build">Connect the program to the existing build</a></li><li class="toc-h2"><a href="#make-the-weaker-guarantee-fail-visibly">Make the weaker guarantee fail visibly</a></li><li class="toc-h3"><a href="#check-normal-memory-use-separately">Check normal memory use separately</a></li><li class="toc-h2"><a href="#cleanup-is-not-successful-completion-of-external-io">Cleanup is not successful completion of external I/O</a></li><li class="toc-h2"><a href="#what-carries-forward">What carries forward</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></aside>
+</div></body></html>

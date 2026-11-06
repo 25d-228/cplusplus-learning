@@ -1,0 +1,1042 @@
+# Chapter 17 — Grouping, checked aggregates, and complete queries
+
+## Part 3 — Boundary, failure, and two-sort checks
+
+This part turns the implementations from
+[Part 1](https://25d-228.github.io/cplusplus-learning/chapter-17.html) and
+[Part 2](https://25d-228.github.io/cplusplus-learning/chapter-17-part-2.html) into
+runnable checks. Append every segment for a named file in order. Keep every earlier
+test. No database/query implementation is supplied by Python: it independently
+computes expected answers and decodes the actual native temporary files.
+
+The test oracle is deliberately allowed to use `std::map` and ordinary vectors.
+The production pipeline is not. We use small inputs to compare values exactly;
+this is not a claim that the oracle follows the engine's memory bound. Its separate
+storage also lets a test reserve the engine's remaining budget without preventing
+the test harness from recording an answer.
+
+## Define the harness and its borrowing contract
+
+The temporary-directory helper owns only paths it just created and removes them
+on normal scope exit. Its cleanup is test convenience, not the production sink's
+error-reporting contract. The `check` function remains active in Release builds;
+none of the required checks depends on `assert` surviving `NDEBUG`.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 1"
+#include "strata/query/complete_query.hpp"
+#include "strata/storage/database.hpp"
+#include "strata/storage/table.hpp"
+#include "strata/core/codec.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cerrno>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <exception>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <limits>
+#include <map>
+#include <memory>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+namespace {
+using namespace strata;
+using namespace strata::query;
+using namespace strata::storage;
+namespace fs = std::filesystem;
+void check(bool condition, const char* message) {
+    if (!condition) { throw std::runtime_error(message); }
+}
+template<class Error, class F> void expect(F&& action) {
+    try { action(); } catch (const Error&) { return; }
+    throw std::runtime_error("expected exception missing");
+}
+class TemporaryDirectory {
+public:
+    TemporaryDirectory() {
+        char pattern[] = "/tmp/strata-aggregate-test-XXXXXX";
+        const auto p = ::mkdtemp(pattern);
+        if (!p) { throw std::system_error(errno, std::generic_category(), "fixture directory"); }
+        path_ = p;
+    }
+    ~TemporaryDirectory() noexcept { std::error_code ignored; fs::remove_all(path_, ignored); }
+    const std::string& name() const noexcept { return path_; }
+private:
+    std::string path_;
+};
+```
+
+`Source` borrows its input span from a fixture that outlives the plan. It copies
+rows into the output, can interleave empty progress batches, and can violate the
+EOF protocol deliberately. A `Probe` counts calls, making it possible to prove
+that preflight rejection happens before consumption. In production, the sources
+are the owning scans/sorts/join from the preceding parts.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 2"
+struct Probe { std::size_t calls = 0; bool throw_next = false, nonempty_end = false; };
+class Source {
+public:
+    Source(std::shared_ptr<memory::Budget> budget, std::span<const JoinedRow> rows,
+           bool empties = false, Probe* probe = nullptr)
+        : budget_(std::move(budget)), rows_(rows), empties_(empties), probe_(probe) {}
+    std::shared_ptr<memory::Budget> budget() const noexcept { return budget_; }
+    Pull next(JoinedBatch& output) {
+        output.clear();
+        if (probe_) {
+            ++probe_->calls;
+            if (probe_->throw_next) { throw std::runtime_error("injected joined source failure"); }
+            if (probe_->nonempty_end) { output.append({}); return Pull::end; }
+        }
+        if (empties_ && empty_turn_) { empty_turn_ = false; return Pull::batch; }
+        empty_turn_ = true;
+        if (at_ == rows_.size()) { return Pull::end; }
+        while (at_ < rows_.size() && output.size() < output.capacity()) { output.append(rows_[at_++]); }
+        return Pull::batch;
+    }
+private:
+    std::shared_ptr<memory::Budget> budget_;
+    std::span<const JoinedRow> rows_;
+    bool empties_, empty_turn_ = true;
+    Probe* probe_;
+    std::size_t at_ = 0;
+};
+using TestAggregate = GroupAggregate<Source>;
+static_assert(PullSource<CompleteQuery, GroupBatch>);
+static_assert(!std::is_copy_constructible_v<TestAggregate>);
+static_assert(std::is_nothrow_move_constructible_v<GroupBatch>);
+```
+
+The oracle groups by a pair independently of the streaming state machine. It
+checks arithmetic before incrementing; no expected answer is generated by calling
+`add_event`. The sorting helper spells out tuple fields independently of
+`JoinedOrder`. The drain helper limits calls so a nonprogressing state machine
+fails rather than hanging the test indefinitely.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 3"
+std::vector<GroupRow> oracle(std::span<const JoinedRow> input) {
+    std::map<std::pair<std::uint32_t, std::uint32_t>, GroupRow> groups;
+    for (const auto row : input) {
+        auto& group = groups[{row.region_id, row.event.day}];
+        group.region_id = row.region_id; group.day = row.event.day;
+        check(group.event_count != UINT64_MAX && row.event.amount_cents <= UINT64_MAX - group.total_cents,
+              "oracle overflow");
+        ++group.event_count; group.total_cents += row.event.amount_cents;
+    }
+    std::vector<GroupRow> result;
+    for (const auto& [key, value] : groups) { (void)key; result.push_back(value); }
+    return result;
+}
+void order(std::vector<JoinedRow>& rows) {
+    std::sort(rows.begin(), rows.end(), [](const JoinedRow& a, const JoinedRow& b) {
+        return std::tuple{a.region_id, a.event.day, a.event.event_id, a.event.account_id, a.event.amount_cents} <
+               std::tuple{b.region_id, b.event.day, b.event.event_id, b.event.account_id, b.event.amount_cents};
+    });
+}
+template<class Plan> std::vector<GroupRow> drain(Plan& plan, GroupBatch& output) {
+    std::vector<GroupRow> result;
+    std::size_t calls = 0;
+    for (;;) {
+        check(++calls < 100000, "aggregation stopped progressing");
+        if (plan.next(output) == Pull::end) { break; }
+        for (std::size_t i = 0; i < output.size(); ++i) { result.push_back(output.row(i)); }
+    }
+    check(output.size() == 0 && plan.next(output) == Pull::end, "aggregate end contract");
+    return result;
+}
+```
+
+Use small capacities deliberately. Three-row generation and a three-descriptor
+allowance force two-way merge passes; these are not arbitrary large buffers that
+accidentally let a whole fixture fit. The seven initial mutations reproduce the
+roadmap's accounts, matching events, unmatched event, and excluded day.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 4"
+SortOptions tiny_sort() {
+    SortOptions result; result.chunk_rows = 3; result.block_rows = 2;
+    result.file_descriptors = 3; result.workspace_bytes = 128 * 1024;
+    result.stack_allowance = 16 * 1024; result.disk_bytes = 128 * 1024;
+    return result;
+}
+QueryOptions tiny_query() {
+    QueryOptions options; options.days = {3, 4}; options.upstream_rows = 2;
+    options.join = {2, 2, 4}; options.joined_rows = 2;
+    options.event_sort = tiny_sort(); options.group_sort = tiny_sort();
+    options.aggregate = {2, 4}; options.output_rows = 1;
+    return options;
+}
+DatabaseOptions tiny_database() {
+    DatabaseOptions options; options.arena_bytes = 256 * 1024;
+    options.cache_slots = 1; options.cache_bytes = 64;
+    options.table = {128, 256, 32, 64 * 1024}; return options;
+}
+void commit(Database& db, std::span<const Mutation> changes) {
+    check(db.write(changes).outcome == WriteOutcome::committed, "fixture write");
+}
+void seed_small(Database& db) {
+    const std::array changes{Mutation::put(Account{10, 1}), Mutation::put(Account{20, 2}),
+        Mutation::put(Event{100, 10, 3, 500}), Mutation::put(Event{101, 10, 3, 250}),
+        Mutation::put(Event{102, 20, 3, 700}), Mutation::put(Event{103, 99, 3, 50}),
+        Mutation::put(Event{104, 10, 4, 100})}; commit(db, changes);
+}
+```
+
+## Check arithmetic independently of input scale
+
+To reach an unsigned 64-bit **count** overflow through real rows would exceed the
+course's explicit sort caps by many orders of magnitude. Seed the accumulator at
+the boundary and test the transition directly. Sum overflow, however, is reachable
+with two high-value events and is tested through the complete query below.
+
+The two checked values must commit together: failing the sum after computing a
+candidate count may not change the installed count. Four deterministic allocation
+failure positions cover all group columns. The exact 48-byte charge is two rows
+times 24 column bytes, not the size of the enclosing `GroupBatch` object.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 5"
+void check_arithmetic_and_batches() {
+    GroupRow group{7, 3, 0, 0}; add_event(group, UINT64_MAX); add_event(group, 0);
+    check(group == GroupRow{7, 3, 2, UINT64_MAX}, "maximum allowed sum");
+    auto before = group;
+    expect<std::overflow_error>([&] { add_event(group, 1); });
+    check(group == before, "sum failure changed count before throwing");
+    group = {7, 3, UINT64_MAX, 19}; before = group;
+    expect<std::overflow_error>([&] { add_event(group, 0); }); check(group == before, "count failure mutated group");
+    group = {7, 3, UINT64_MAX - 1, UINT64_MAX - 1}; add_event(group, 1);
+    check(group.event_count == UINT64_MAX && group.total_cents == UINT64_MAX, "last representable totals");
+    auto budget = std::make_shared<memory::Budget>(4096);
+    auto other = std::make_shared<memory::Budget>(4096);
+    {
+        GroupBatch batch{budget, 2}; batch.append({1, 3, 2, 750});
+        for (std::size_t ordinal = 1; ordinal <= 4; ++ordinal) {
+            budget->fail_allocation_on(ordinal);
+            expect<std::bad_alloc>([&] { batch.replace_capacity(3); }); budget->clear_failure();
+            check(batch.row(0) == GroupRow{1, 3, 2, 750} && budget->used() == 48, "group replacement failure");
+        }
+        GroupBatch moved{std::move(batch)}; check(batch.size() == 0 && batch.capacity() == 0, "moved group batch");
+        GroupBatch target{other, 1}; target = std::move(moved);
+        auto& alias = target; target = std::move(alias);
+        check(other->used() == 0 && target.row(0).total_cents == 750, "group assignment ledger");
+        batch.replace_capacity(1); batch.append({0, 0, 1, 0});
+        expect<std::length_error>([&] { batch.append({0, 0, 1, 0}); });
+        expect<std::out_of_range>([&] { (void)batch.row(1); });
+        target.clear(); expect<std::invalid_argument>([&] { target.append({}); });
+        expect<std::invalid_argument>([&] { GroupBatch bad{nullptr, 1}; });
+        expect<std::invalid_argument>([&] { GroupBatch bad{budget, 0}; });
+        expect<std::length_error>([&] { GroupBatch bad{budget, SIZE_MAX / 24 + 1}; });
+    }
+    check(budget->used() == 0 && other->used() == 0, "group batch cleanup");
+}
+```
+
+## Vary input, output, and work boundaries independently
+
+The 54 combinations use three input capacities, three output capacities, three
+work quotas, and the presence/absence of interleaved empty batches. The fixture
+contains a 53-row leading group, many later groups, and maximum unsigned key/ID
+fields. The expected final group is essential: there is no following key to
+trigger its emission.
+
+The separate 4097-row hot-group test gives the aggregate a two-row input buffer
+and one-row output, then reserves every remaining covered byte. Draining must
+succeed without acquiring additional engine memory. This proves the aggregate
+itself does not grow with the group, not that a full sorter can run with no spare
+workspace.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 6"
+void check_shapes() {
+    auto budget = std::make_shared<memory::Budget>(1024 * 1024);
+    std::vector<JoinedRow> rows;
+    for (std::uint64_t i = 0; i < 53; ++i) { rows.push_back({{i, 10, 3, i}, 1}); }
+    for (std::uint64_t i = 53; i < 96; ++i) {
+        rows.push_back({{i, i + 1, static_cast<std::uint32_t>(i % 7), i * 2}, static_cast<std::uint32_t>(2 + i % 5)});
+    }
+    rows.push_back({{UINT64_MAX, UINT64_MAX, UINT32_MAX, 0}, UINT32_MAX}); order(rows);
+    const auto expected = oracle(rows); std::size_t cases = 0;
+    for (std::size_t input : {1U, 3U, 16U}) for (std::size_t output : {1U, 2U, 8U}) {
+        for (std::size_t work : {1U, 7U, 1000U}) for (bool empties : {false, true}) {
+            {
+                TestAggregate plan{Source{budget, rows, empties}, {input, work}};
+                GroupBatch batch{budget, output};
+                check(drain(plan, batch) == expected, "aggregate differs from map oracle, including final group");
+                check(budget->used() == batch.capacity_bytes(), "EOF retained aggregate input");
+            }
+            check(budget->used() == 0, "shape charges"); ++cases;
+        }
+    }
+    for (std::size_t count : {0U, 1U, 4097U}) {
+        std::vector<JoinedRow> hot;
+        for (std::size_t i = 0; i < count; ++i) { hot.push_back({{i, 1, 4, 1}, 0}); }
+        TestAggregate plan{Source{budget, hot, true}, {2, 3}}; GroupBatch batch{budget, 1};
+        auto pressure = budget->reserve(budget->limit() - budget->used());
+        check(drain(plan, batch) == oracle(hot), "empty or giant group");
+    }
+    check(budget->used() == 0, "hot group charges");
+    std::cout << "aggregation shapes=" << cases << "; giant_group=4097; empty emits no row\n";
+}
+```
+
+## Fail after useful work, not only at construction
+
+One fixture first returns a valid group in a separate owning batch. A later call
+finishes another group and then overflows a third. That call's entire output
+must clear; the earlier batch remains intact. Another pull must reject as
+terminal without touching an intentionally installed sentinel.
+
+Descending keys cross one-row refills. A nonempty EOF is rejected. Foreign-budget
+output is rejected with zero source calls. A move after an empty quota-limited
+return preserves the unfinished group. Use only the moved-to plan afterward;
+the moved-from plan is for destruction or reassignment, not continued pulling.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 7"
+void check_failures_and_moves() {
+    auto budget = std::make_shared<memory::Budget>(4096);
+    const std::array<JoinedRow, 4> rows{{{{1, 1, 0, 10}, 0}, {{2, 1, 0, 20}, 1},
+                                       {{3, 1, 0, UINT64_MAX}, 2}, {{4, 1, 0, 1}, 2}}};
+    {
+        TestAggregate plan{Source{budget, rows}, {1, 100}};
+        GroupBatch prior{budget, 1}, current{budget, 8};
+        check(plan.next(prior) == Pull::batch && prior.row(0) == GroupRow{0, 0, 1, 10}, "prefix before overflow");
+        expect<std::overflow_error>([&] { plan.next(current); });
+        check(current.size() == 0 && prior.row(0).total_cents == 10, "overflow leaked partial current output");
+        current.append({9, 9, 1, 9});
+        expect<std::logic_error>([&] { plan.next(current); });
+        check(current.row(0).total_cents == 9 && budget->used() == prior.capacity_bytes() + current.capacity_bytes(),
+              "terminal state touched sentinel or retained source");
+    }
+    {
+        const std::array<JoinedRow, 2> descending{{{{1, 1, 3, 1}, 2}, {{2, 1, 3, 1}, 1}}};
+        TestAggregate plan{Source{budget, descending}, {1, 100}}; GroupBatch output{budget, 2};
+        expect<FormatError>([&] { plan.next(output); }); check(output.size() == 0, "ordering failure output");
+    }
+    {
+        Probe p; p.nonempty_end = true;
+        TestAggregate plan{Source{budget, {}, false, &p}, {1, 1}}; GroupBatch output{budget, 1};
+        expect<std::logic_error>([&] { plan.next(output); });
+    }
+    {
+        const std::array<JoinedRow, 3> ordered{{{{1, 1, 0, 10}, 0}, {{2, 1, 0, 20}, 1}, {{3, 1, 1, 30}, 1}}};
+        Probe probe;
+        TestAggregate plan{Source{budget, ordered, false, &probe}, {1, 1}};
+        auto foreign = std::make_shared<memory::Budget>(4096); GroupBatch bad{foreign, 1}; bad.append({9, 9, 1, 9});
+        expect<std::invalid_argument>([&] { plan.next(bad); });
+        check(probe.calls == 0 && bad.size() == 1, "bad output consumed source");
+        GroupBatch batch{budget, 1}; check(plan.next(batch) == Pull::batch && batch.size() == 0, "quota emitted unfinished group");
+        auto moved = std::move(plan);
+        check(drain(moved, batch) == oracle(ordered), "move lost current group");
+    }
+    check(budget->used() == 0, "aggregate failed state charges");
+}
+```
+
+## Reexercise the shared sorter with joined values
+
+The 25-row fixture produces nine initial joined runs, three materialized passes,
+and sixteen completed files. Every field participates in the independent equality
+check. Then fail each charged acquisition in turn until a complete run succeeds.
+For every failed attempt, the scope must close descriptors, release all charges,
+and remove successfully deletable private run names.
+
+The number of failing acquisition ordinals is an observation of this build, not
+a portable API promise. A different standard library can change control-block
+sizes or the allocation sequence. The invariant is cleanup and exact answers at
+every exercised position, not a hard-coded count of 40.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 8"
+std::vector<JoinedRow> joined_fixture() {
+    std::vector<JoinedRow> rows;
+    for (std::uint64_t i = 0; i < 25; ++i) {
+        rows.push_back({{i, (i * 5) % 7, static_cast<std::uint32_t>(i % 4), 100 + i},
+                         static_cast<std::uint32_t>((i * 3) % 5)});
+    }
+    return rows;
+}
+void check_joined_sort() {
+    TemporaryDirectory parent; auto budget = std::make_shared<memory::Budget>(2 * 1024 * 1024);
+    const auto rows = joined_fixture(); auto expected = rows; order(expected);
+    {
+        auto stats = make_sort_stats(budget);
+        JoinedExternalSort sorted{Source{budget, rows, true}, 2, tiny_sort(), parent.name(), stats};
+        JoinedBatch output{budget, 2}; std::vector<JoinedRow> got;
+        while (sorted.next(output) != Pull::end) {
+            for (std::size_t i = 0; i < output.size(); ++i) { got.push_back(output.row(i)); }
+        }
+        check(got == expected && stats->initial_runs == 9 && stats->merge_passes == 3 &&
+              stats->files_created == 16 && stats->disk_reserved == 0 && !stats->directory_live,
+              "joined typed run merge or cleanup");
+        std::cout << "joined sort: rows=25 runs=" << stats->initial_runs << " passes=" << stats->merge_passes
+                  << " write_bytes=" << stats->write_bytes << " read_bytes=" << stats->read_bytes << '\n';
+    }
+    std::size_t failures = 0;
+    for (std::size_t ordinal = 1; ordinal < 128; ++ordinal) {
+        bool success = false;
+        {
+            auto stats = make_sort_stats(budget); budget->fail_allocation_on(ordinal);
+            try {
+                auto sorted = JoinedExternalSort{Source{budget, rows, true}, 2, tiny_sort(), parent.name(), stats};
+                GroupAggregate plan{std::move(sorted), AggregateOptions{2, 3}}; GroupBatch output{budget, 2};
+                check(drain(plan, output) == oracle(rows), "joined allocation campaign answer"); success = true;
+            } catch (const std::bad_alloc&) { ++failures; }
+            budget->clear_failure();
+            check(stats->live_files == 0 && stats->open_run_files == 0 && !stats->directory_live,
+                  "joined allocation failure retained runs");
+        }
+        check(budget->used() == 0 && fs::is_empty(parent.name()), "joined allocation cleanup");
+        if (success) { break; }
+        check(ordinal + 1 < 128, "allocation campaign failed to terminate");
+    }
+    std::cout << "joined_aggregate_allocation_failures=" << failures << '\n';
+}
+```
+
+The next hook changes the joined run's ordering ID to the event ordering ID and
+recomputes a valid header checksum. This is not a random-bit checksum test: it
+specifically checks the typed interpretation boundary. A `reinterpret_cast` here
+lets the test stream read/write the object representation of a byte array; it does
+not reinterpret those bytes as an aligned native record. The actual decoding
+remains explicit little-endian operations.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 9"
+struct DamageJoinedHeader {
+    bool done = false;
+    static void call(void* p, SpillEvent event, const char* directory, std::uint64_t id, std::uint64_t) {
+        auto& self = *static_cast<DamageJoinedHeader*>(p);
+        if (self.done || event != SpillEvent::completed_run) { return; }
+        self.done = true; char name[32];
+        std::snprintf(name, sizeof(name), "run-%020llu.bin", static_cast<unsigned long long>(id));
+        std::fstream file(fs::path(directory) / name, std::ios::in | std::ios::out | std::ios::binary);
+        std::array<std::byte, 36> header{};
+        file.read(reinterpret_cast<char*>(header.data()), header.size());
+        check(static_cast<bool>(file), "read damage header");
+        auto bytes = std::span{header};
+        put_le<4>(bytes.subspan(20, 4), 1);  // Correct CRC, wrong ordering schema.
+        put_le<4>(bytes.last(4), table_format::crc32(bytes.first(32)));
+        file.seekp(0); file.write(reinterpret_cast<const char*>(header.data()), header.size());
+        file.close(); check(static_cast<bool>(file), "write damage header");
+    }
+};
+void check_joined_schema_rejection() {
+    TemporaryDirectory parent; auto budget = std::make_shared<memory::Budget>(2 * 1024 * 1024);
+    {
+        const auto rows = joined_fixture(); auto stats = make_sort_stats(budget);
+        DamageJoinedHeader damage;
+        JoinedExternalSort sorted{Source{budget, rows}, 2, tiny_sort(), parent.name(), stats,
+                                  {DamageJoinedHeader::call, &damage}};
+        JoinedBatch output{budget, 2};
+        expect<FormatError>([&] { sorted.next(output); });
+        check(damage.done && output.size() == 0 && stats->live_files == 0 && !stats->directory_live,
+              "wrong joined schema escaped validation or cleanup");
+        expect<std::logic_error>([&] { sorted.next(output); });
+    }
+    check(budget->used() == 0 && fs::is_empty(parent.name()), "schema failure charges");
+}
+```
+
+## Check complete query status separately from accepted rows
+
+`CollectSink` is a test consumer that retains accepted groups and records finish
+or abort. Unlike `CsvResult`, it cannot retract its vector merely by setting
+`aborted`; that is intentional. Its prefix is not a complete answer unless its
+completion flag is true. `read_text` is a test-only whole-file helper, not part of
+the streaming engine.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 10"
+class CollectSink final : public ResultSink {
+public:
+    std::vector<GroupRow> rows;
+    bool begun = false, complete = false, aborted = false;
+    std::size_t fail_after = SIZE_MAX;
+    void begin() override { begun = true; }
+    void append(GroupRow row) override {
+        if (rows.size() == fail_after) { throw std::runtime_error("consumer rejected next group"); }
+        rows.push_back(row);
+    }
+    void finish() override { complete = true; }
+    void abort() noexcept override { aborted = true; }
+};
+std::string read_text(const fs::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) { throw std::runtime_error("missing result fixture"); }
+    return {std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
+}
+```
+
+The old plan is paused after emitting `(1,3,2,750)`. By then the second sorter has
+copied every joined row and released its upstream snapshot and first-sort files.
+Write the roadmap's atomic update, flush, compact, and collect; the old plan's
+remaining answer is still `(2,3,1,700)`. The new query must emit exactly
+`(3,3,2,1400)`: two events remain in account 10's new region, with amounts 500 and
+900; event 102 is deleted.
+
+This is more than keeping the database object alive. It demonstrates that already
+materialized joined values retain their meaning after storage generations become
+reclaimable. A deliberately rejecting sink then checks the independent failure
+status and upstream release path.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 11"
+void check_snapshots_and_reports() {
+    TemporaryDirectory path, parent;
+    auto budget = std::make_shared<memory::Budget>(8 * 1024 * 1024);
+    {
+        Database db{budget, path.name(), DatabaseOpen::create, tiny_database()}; seed_small(db);
+        auto options = tiny_query(); options.event_sort.chunk_rows = options.group_sort.chunk_rows = 1;
+        auto a = make_sort_stats(budget), b = make_sort_stats(budget);
+        auto old = make_query(db.snapshot(), options, parent.name(), a, b);
+        GroupBatch prefix{budget, 1};
+        while (old.next(prefix) == Pull::batch && prefix.size() == 0) {}
+        check(prefix.size() == 1 && prefix.row(0) == GroupRow{1, 3, 2, 750}, "old complete first group");
+        check(db.retention().snapshots == 0 && a->live_files == 0 && a->open_run_files == 0,
+              "second sort did not release first-stage snapshot/files");
+        const std::array update{Mutation::put(Account{10, 3}), Mutation::put(Event{101, 10, 3, 900}),
+                               Mutation::erase({Relation::events, 102})}; commit(db, update);
+        check(db.rotate(), "update rotation"); while (db.flush_oldest()) {}
+        CompactionOptions compaction; compaction.output = tiny_database().table;
+        db.compact_prefix(db.manifest().table_count, compaction); (void)db.collect_obsolete();
+        auto moved = std::move(old); GroupBatch output{budget, 1};
+        check(drain(moved, output) == std::vector<GroupRow>{{2, 3, 1, 700}} && prefix.row(0).total_cents == 750,
+              "old aggregate mixed new data");
+        check(a->initial_runs == 4 && b->initial_runs == 3 && b->live_files == 0, "small two-sort spill");
+        CsvResult sink{parent.name(), "answer.csv"};
+        auto report = execute_query(db.snapshot(), options, parent.name(), sink);
+        check(report.completion == QueryCompletion::complete && !report.error && report.staged_groups == 1 && sink.published(),
+              "new query completion");
+        check(read_text(fs::path(parent.name()) / "answer.csv") ==
+              "region_id,day,event_count,total_cents\n3,3,2,1400\n", "new roadmap CSV");
+        // A generic sink keeps its accepted prefix, but must never mark it complete on failure.
+        CollectSink rejected; rejected.fail_after = 0;
+        auto failure = execute_query(db.snapshot(), options, parent.name(), rejected);
+        check(failure.completion == QueryCompletion::failed && failure.error && rejected.aborted && !rejected.complete &&
+              failure.staged_groups == 0 && db.retention().snapshots == 0, "sink failure result status");
+    }
+    check(budget->used() == 0, "complete query charges");
+    std::cout << "snapshot aggregates: old=(1,3,2,750),(2,3,1,700); new=(3,3,2,1400)\n";
+}
+```
+
+## Keep an old completed result through output failure
+
+The output hook can fail before a line write, before close, or before rename. In
+the write case the header and first group have already been accepted; the second
+group fails. The completed destination must remain the literal old content, and
+no new temporary may remain after successful cleanup. The staged-group report is
+one for that case and two for the two later boundaries.
+
+These hooks test the application's ordering and cleanup responses. A hook before
+close is not a physical filesystem close-error simulation, nor is a hook before
+rename a power-loss experiment. Chapter 6 separately tests partial I/O. Explicit
+unlink refusal here verifies that an unresolved temporary is reported and that
+a later cleanup retry can confirm absence.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 12"
+struct SinkFault {
+    ResultEvent event; std::size_t skip = 0; bool unlink_failure = false;
+    static void call(void* p, ResultEvent event) {
+        auto& fault = *static_cast<SinkFault*>(p);
+        if (event == ResultEvent::before_unlink && fault.unlink_failure) {
+            throw std::system_error(EACCES, std::generic_category(), "injected output cleanup refusal");
+        }
+        if (event == fault.event) {
+            if (fault.skip != 0) { --fault.skip; }
+            else { throw std::runtime_error("injected output failure"); }
+        }
+    }
+};
+void check_output_failures() {
+    TemporaryDirectory path, parent; auto budget = std::make_shared<memory::Budget>(8 * 1024 * 1024);
+    {
+        Database db{budget, path.name(), DatabaseOpen::create, tiny_database()}; seed_small(db);
+        const auto options = tiny_query();
+        for (const auto event : {ResultEvent::before_write, ResultEvent::before_close, ResultEvent::before_publish}) {
+            const auto final = fs::path(parent.name()) / "answer.csv";
+            { std::ofstream old(final); old << "old complete result\n"; }
+            SinkFault fault{event, event == ResultEvent::before_write ? 2U : 0U};
+            CsvResult sink{parent.name(), "answer.csv", {SinkFault::call, &fault}};
+            auto report = execute_query(db.snapshot(), options, parent.name(), sink);
+            check(report.completion == QueryCompletion::failed && report.error && !sink.published() &&
+                  !sink.temporary_live() && read_text(final) == "old complete result\n", "failed output replaced old result");
+            check(report.staged_groups == (event == ResultEvent::before_write ? 1 : 2), "partial group report");
+        }
+        {
+            SinkFault fault{ResultEvent::before_publish, 0, true};
+            CsvResult sink{parent.name(), "absent.csv", {SinkFault::call, &fault}};
+            auto report = execute_query(db.snapshot(), options, parent.name(), sink);
+            check(report.completion == QueryCompletion::failed && !fs::exists(fs::path(parent.name()) / "absent.csv") &&
+                  sink.temporary_live() && sink.cleanup_error() == EACCES && fs::exists(sink.temporary_path()),
+                  "cleanup failure was hidden");
+            fault.unlink_failure = false; sink.retry_cleanup(); check(!sink.temporary_live(), "cleanup retry");
+        }
+        const auto baseline = budget->used(); std::size_t failures = 0;
+        auto view = db.snapshot(); const auto retained = budget->used();
+        for (std::size_t ordinal = 1; ordinal < 192; ++ordinal) {
+            CollectSink sink; budget->fail_allocation_on(ordinal);
+            bool complete = false;
+            {
+                auto report = execute_query(view, options, parent.name(), sink);
+                budget->clear_failure(); complete = report.completion == QueryCompletion::complete;
+                if (!complete) { ++failures; check(report.error && sink.aborted && !sink.complete, "allocation report"); }
+                else { check(sink.rows == std::vector<GroupRow>{{1, 3, 2, 750}, {2, 3, 1, 700}}, "full API answer"); }
+            }
+            check(budget->used() == retained, "full API failure charge or source retention");
+            if (complete) { break; }
+            check(ordinal + 1 < 192, "full API allocation campaign exhausted");
+        }
+        view = {}; check(budget->used() >= baseline, "database accounting unexpectedly shrank");
+        std::cout << "complete_query_allocation_failures=" << failures << "; output failures preserve prior file\n";
+    }
+    check(budget->used() == 0, "output failure charges");
+}
+```
+
+The full-query allocation campaign includes statistics controls, both sorts,
+batches, and source construction. A retained caller view establishes a baseline;
+a failed temporary plan must return to that baseline after its report dies.
+Keeping the report alive could legitimately keep statistics/control allocations
+charged, so the check occurs after its scope.
+
+The next test causes **real sum overflow in the joined query**, after one earlier
+group has been accepted by the sink. The destination still contains its prior
+completed value. An independent escaped-plan test destroys both the database and
+the caller's root-budget handle before pulling; the complete ownership chain
+must support a new query operation and eventually release its last ledger owner.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 13"
+void check_late_overflow_and_escaped_plan() {
+    TemporaryDirectory path, parent;
+    auto budget = std::make_shared<memory::Budget>(8 * 1024 * 1024);
+    {
+        Database db{budget, path.name(), DatabaseOpen::create, tiny_database()}; seed_small(db);
+        const std::array update{Mutation::put(Event{102, 20, 3, UINT64_MAX}),
+                               Mutation::put(Event{105, 20, 3, 1})}; commit(db, update);
+        const auto final = fs::path(parent.name()) / "answer.csv";
+        { std::ofstream old(final); old << "old complete result\n"; }
+        CsvResult sink{parent.name(), "answer.csv"};
+        auto report = execute_query(db.snapshot(), tiny_query(), parent.name(), sink);
+        check(report.completion == QueryCompletion::failed && report.staged_groups == 1 && report.error &&
+              !sink.published() && !sink.temporary_live() && read_text(final) == "old complete result\n",
+              "late arithmetic failure published a prefix");
+        expect<std::overflow_error>([&] { std::rethrow_exception(report.error); });
+        check(report.event_sort->live_files == 0 && report.group_sort->live_files == 0 &&
+              db.retention().snapshots == 0, "late overflow retained upstream owners");
+    }
+    check(budget->used() == 0, "late overflow charges");
+    TemporaryDirectory escaped_path, escaped_parent;
+    std::optional<CompleteQuery> escaped;
+    std::weak_ptr<memory::Budget> weak;
+    {
+        auto owner = std::make_shared<memory::Budget>(8 * 1024 * 1024); weak = owner;
+        Database db{owner, escaped_path.name(), DatabaseOpen::create, tiny_database()}; seed_small(db);
+        escaped.emplace(make_query(db.snapshot(), tiny_query(), escaped_parent.name(),
+                                   make_sort_stats(owner), make_sort_stats(owner)));
+    }
+    {
+        check(!weak.expired(), "escaped query lost its ledger");
+        GroupBatch output{escaped->budget(), 1};
+        check(drain(*escaped, output) == std::vector<GroupRow>{{1, 3, 2, 750}, {2, 3, 1, 700}},
+              "escaped query answer");
+    }
+    escaped.reset(); check(weak.expired() && fs::is_empty(escaped_parent.name()), "escaped final owner cleanup");
+    std::cout << "late overflow: staged=1, previous result preserved; escaped plan completes\n";
+}
+```
+
+## Capture completed native runs for an independent reader
+
+The hook copies completed files into separate test-only directories before the
+sort can retire them. These copies are oracle artifacts, outside the engine's
+resource ledger and normal temporary-file cleanup. They are not query checkpoints
+or recovery candidates. Their parent is deleted by the outer Python fixture.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 14"
+struct Capture {
+    fs::path destination;
+    static void call(void* p, SpillEvent event, const char* directory, std::uint64_t id, std::uint64_t) {
+        if (event != SpillEvent::completed_run) { return; }
+        auto& self = *static_cast<Capture*>(p); char name[32];
+        std::snprintf(name, sizeof(name), "run-%020llu.bin", static_cast<unsigned long long>(id));
+        fs::copy_file(fs::path(directory) / name, self.destination / name);
+    }
+};
+```
+
+The larger fixture begins with 31 accounts and 210 events, then deletes one account
+and one event and changes event 9. Filtering days `[2,6)` leaves 119 events; the
+inner join produces 100 rows and regional/day grouping produces 20 groups. Account
+12's deleted row must not participate. The event update must appear once, with
+888 cents and day 2 rather than its earlier values.
+
+Both sorts must spill and perform multiple materialized passes. Their input
+cardinalities differ because unmatched events disappear at the join. A second
+complete execution compares a separate C++ map oracle with all emitted groups.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 15"
+void native_fixture(const fs::path& root) {
+    fs::create_directories(root / "db"); fs::create_directories(root / "spill");
+    fs::create_directories(root / "event-runs"); fs::create_directories(root / "group-runs");
+    auto budget = std::make_shared<memory::Budget>(8 * 1024 * 1024);
+    {
+        Database db{budget, (root / "db").string(), DatabaseOpen::create, tiny_database()};
+        std::map<std::uint64_t, Account> accounts; std::map<std::uint64_t, Event> events;
+        std::vector<Mutation> changes;
+        for (std::uint64_t id = 1; id <= 31; ++id) {
+            Account value{id, static_cast<std::uint32_t>((31 - id) % 5)};
+            accounts[id] = value; changes.push_back(Mutation::put(value));
+        }
+        commit(db, changes); changes.clear();
+        for (std::uint64_t id = 0; id < 210; ++id) {
+            Event value{id, id % 37, static_cast<std::uint32_t>(id % 7), id + 10};
+            events[id] = value; changes.push_back(Mutation::put(value));
+        }
+        commit(db, changes);
+        const std::array update{Mutation::erase({Relation::accounts, 12}), Mutation::erase({Relation::events, 17}),
+                               Mutation::put(Event{9, 9, 2, 888})}; commit(db, update);
+        accounts.erase(12); events.erase(17); events[9] = {9, 9, 2, 888};
+        check(db.rotate(), "native fixture rotation"); while (db.flush_oldest()) {}
+        std::vector<JoinedRow> joined;
+        for (const auto& [id, event] : events) {
+            (void)id;
+            if (2 <= event.day && event.day < 6 && accounts.contains(event.account_id)) {
+                joined.push_back({event, accounts.at(event.account_id).region_id});
+            }
+        }
+        const auto expected = oracle(joined);
+        auto options = tiny_query(); options.days = {2, 6};
+        Capture a{root / "event-runs"}, b{root / "group-runs"};
+        CsvResult sink{root.string(), "answer.csv"};
+        auto report = execute_query(db.snapshot(), options, (root / "spill").string(), sink,
+            {{Capture::call, &a}, {Capture::call, &b}});
+        if (report.error) { std::rethrow_exception(report.error); }
+        check(report.completion == QueryCompletion::complete && report.staged_groups == expected.size() &&
+              report.event_sort->initial_runs > 2 && report.group_sort->initial_runs > 2 &&
+              report.event_sort->merge_passes > 0 && report.group_sort->merge_passes > 0 &&
+              fs::is_empty(root / "spill") && db.retention().snapshots == 0, "native two-sort completion");
+        CollectSink independent; auto again = execute_query(db.snapshot(), options, (root / "spill").string(), independent);
+        check(again.completion == QueryCompletion::complete && independent.rows == expected, "full pipeline map oracle");
+        std::ofstream stats(root / "counts.txt");
+        stats << report.event_sort->initial_runs << ' ' << report.group_sort->initial_runs << '\n';
+        std::cout << "native complete query: filtered=" << report.event_sort->input_rows
+                  << " joined=" << report.group_sort->input_rows << " groups=" << report.staged_groups
+                  << " runs=" << report.event_sort->initial_runs << '/' << report.group_sort->initial_runs
+                  << " passes=" << report.event_sort->merge_passes << '/' << report.group_sort->merge_passes << '\n';
+    }
+    check(budget->used() == 0, "native fixture charges");
+}
+```
+
+Finish the test program. The optional `--fixture ROOT` mode leaves files for the
+external decoder; ordinary tests use a private temporary root and clean it up.
+Errors produce a nonzero process status rather than a successful-looking line.
+
+```cpp title="tests/aggregate.cpp — complete file, segment 16"
+}  // namespace
+int main(int argc, char** argv) {
+    try {
+        if (argc == 3 && std::string_view{argv[1]} == "--fixture") { native_fixture(argv[2]); return 0; }
+        if (argc != 1) { throw std::invalid_argument("usage: strata-aggregate-tests [--fixture ROOT]"); }
+        check_arithmetic_and_batches(); check_shapes(); check_failures_and_moves(); check_joined_sort();
+        check_joined_schema_rejection(); check_snapshots_and_reports(); check_output_failures();
+        check_late_overflow_and_escaped_plan();
+        TemporaryDirectory fixture; native_fixture(fixture.name());
+        std::cout << "aggregation, two-sort queries, and output publication: all checks passed\n";
+        return 0;
+    } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
+}
+```
+
+## Decode actual bytes without importing the C++ codec
+
+Create `scripts/check_query_fixture.py`. It uses Python's explicit little-endian
+`struct` layouts, CRC-32, integer arithmetic, and a dictionary of expected groups.
+The header identifies width 28/order 1 or width 32/order 2. The script checks all
+frames and footers, exact byte coverage, row counts, and appropriate ordering.
+This intentionally does not call the engine's decoder to verify its own output.
+
+```python title="scripts/check_query_fixture.py — complete file, segment 1"
+#!/usr/bin/env python3
+"""Decode both native spill schemas and verify completed CSV with Python integers."""
+import csv
+import struct
+import subprocess
+import sys
+import tempfile
+import zlib
+from collections import Counter, defaultdict
+from pathlib import Path
+
+
+def check(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
+def decode_run(path, width, order_id):
+    data = path.read_bytes()
+    check(len(data) >= 60, "short run")
+    magic, version, row_width, block_rows, order, count, crc = struct.unpack_from("<8sIIIIQI", data)
+    check((magic, version, row_width, block_rows, order) == (b"STRRUN01", 1, width, 2, order_id), "header schema")
+    check(zlib.crc32(data[:32]) == crc and count > 0, "header checksum/count")
+    tail, total, blocks, crc = struct.unpack_from("<8sQII", data, len(data) - 24)
+    check(tail == b"STREND01" and total == count and zlib.crc32(data[-24:-4]) == crc, "footer")
+    result, position, frames = [], 36, 0
+    while position < len(data) - 24:
+        n, payload = struct.unpack_from("<II", data, position)
+        check(0 < n <= block_rows and payload == n * width, "frame shape")
+        end = position + 8 + payload
+        check(end + 4 <= len(data) - 24, "frame boundary")
+        check(zlib.crc32(data[position:end]) == struct.unpack_from("<I", data, end)[0], "frame checksum")
+        for i in range(n):
+            result.append(struct.unpack_from("<QQIQ" if width == 28 else "<QQIQI", data, position + 8 + i * width))
+        position, frames = end + 4, frames + 1
+    key = (lambda r: (r[1], r[0], r[2], r[3])) if width == 28 else (lambda r: (r[4], r[2], r[0], r[1], r[3]))
+    check(position == len(data) - 24 and len(result) == count and frames == blocks, "run coverage")
+    check(result == sorted(result, key=key), "run ordering")
+    return result
+```
+
+The independent fixture applies the same input mutations using dictionaries keyed
+by record ID. Python integers do not wrap at 64 bits. The ordinary fixture fits
+comfortably in the required unsigned result range; the separate C++ overflow
+checks establish the engine's rejection policy.
+
+```python title="scripts/check_query_fixture.py — complete file, segment 2"
+def fixture():
+    accounts = {i: (31 - i) % 5 for i in range(1, 32)}
+    events = {i: (i, i % 37, i % 7, i + 10) for i in range(210)}
+    del accounts[12]
+    del events[17]
+    events[9] = (9, 9, 2, 888)
+    filtered = [r for r in events.values() if 2 <= r[2] < 6]
+    joined = [r + (accounts[r[1]],) for r in filtered if r[1] in accounts]
+    groups = defaultdict(lambda: [0, 0])
+    for _, _, day, amount, region in joined:
+        groups[(region, day)][0] += 1
+        groups[(region, day)][1] += amount
+    return filtered, joined, [key + tuple(groups[key]) for key in sorted(groups)]
+
+
+def read_csv(path):
+    with path.open(newline="", encoding="ascii") as stream:
+        reader = csv.reader(stream)
+        check(next(reader) == ["region_id", "day", "event_count", "total_cents"], "CSV header")
+        result = [tuple(int(v) for v in row) for row in reader]
+    check(all(len(row) == 4 for row in result), "CSV width")
+    return result
+```
+
+For each sort, the first recorded files are its initial runs. Their multiset must
+equal the entire corresponding input, including multiplicities. Every captured
+intermediate run must contain only legitimate source occurrences and be correctly
+ordered; the final CSV provides the end-to-end completeness check. All 144 captured
+files are decoded, not only the final run.
+
+The driver is exercised with spilling, no-spill, and empty plans. Invalid bounds
+and trailing characters must fail without replacing an existing completed file.
+The empty query publishes only the header and reports zero groups.
+
+```python title="scripts/check_query_fixture.py — complete file, segment 3"
+
+def main():
+    if len(sys.argv) != 3:
+        raise SystemExit("usage: check_query_fixture.py TEST_PROGRAM QUERY_PROGRAM")
+    program, query = (str(Path(p).resolve()) for p in sys.argv[1:])
+    with tempfile.TemporaryDirectory(prefix="strata-query-oracle-") as name:
+        root = Path(name)
+        subprocess.run([program, "--fixture", name], check=True)
+        events, joined, expected = fixture()
+        check((len(events), len(joined), len(expected)) == (119, 100, 20), "independent fixture dimensions")
+        check(read_csv(root / "answer.csv") == expected, "completed aggregate answer")
+        initial = [int(v) for v in (root / "counts.txt").read_text().split()]
+        check(initial == [40, 34], "initial runs")
+        files_checked = 0
+        for folder, width, order, n, source in zip(("event-runs", "group-runs"), (28, 32), (1, 2), initial, (events, joined)):
+            files = sorted((root / folder).glob("run-*.bin"))
+            check(len(files) > n, "no intermediate merge files captured")
+            decoded = [decode_run(path, width, order) for path in files]
+            check(Counter(row for run in decoded[:n] for row in run) == Counter(source), "initial run multiset")
+            check(all(Counter(run) <= Counter(source) for run in decoded[n:]), "invented intermediate row")
+            files_checked += len(files)
+        common = [query, str(root / "db"), str(root / "spill"), name]
+        for output, preset in (("cli-tiny.csv", ["tiny"]), ("cli-default.csv", [])):
+            subprocess.run(common + [output, "2", "6"] + preset, check=True)
+            check(read_csv(root / output) == expected, "CLI answer")
+        subprocess.run(common + ["empty.csv", "6", "6", "tiny"], check=True)
+        check(read_csv(root / "empty.csv") == [], "empty query invented a group")
+        before = (root / "cli-tiny.csv").read_bytes()
+        for lower, upper in (("x", "6"), ("-1", "6"), ("2x", "6"), ("7", "6"), ("0", "4294967297")):
+            result = subprocess.run(common + ["cli-tiny.csv", lower, upper, "tiny"], capture_output=True, text=True)
+            check(result.returncode != 0 and (root / "cli-tiny.csv").read_bytes() == before, "invalid CLI replaced completed output")
+        check(not list(root.glob(".strata-result-*")) and not list((root / "spill").iterdir()), "temporary output retained")
+        print(f"independent oracle: {files_checked} native files; 119 events; 100 joins; 20 groups; CLI tiny/default/empty pass")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+## Build the two new checks
+
+Append the following to root `CMakeLists.txt`; do not replace its existing targets
+or repeat the old `external_sort.cpp` source registration. The existing core target
+already compiles that file, which Part 1 replaced. CMake's Python interpreter
+variable was established in the earlier fixture chapters.
+
+```cmake title="CMakeLists.txt — append Chapter 17 targets"
+target_sources(strata-core PRIVATE src/query/aggregate.cpp src/query/result.cpp
+  src/query/complete_query.cpp)
+add_executable(strata-aggregate-tests tests/aggregate.cpp)
+target_link_libraries(strata-aggregate-tests PRIVATE strata-core)
+add_test(NAME aggregate-query COMMAND strata-aggregate-tests)
+add_executable(strata-query tools/query.cpp)
+target_link_libraries(strata-query PRIVATE strata-core)
+target_compile_options(strata-aggregate-tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+target_compile_options(strata-query PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+add_test(NAME complete-query-native
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_query_fixture.py
+            $<TARGET_FILE:strata-aggregate-tests> $<TARGET_FILE:strata-query>)
+```
+
+From the implementation root, build both ordinary configurations. Use your
+compatible native C++20 compiler from Chapter 1; changing it requires a fresh
+build directory. Do not force an x86 architecture on the M4.
+
+```sh title="Terminal — Debug and Release"
+cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-debug --parallel 4
+ctest --test-dir build-debug --output-on-failure
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release --parallel 4
+ctest --test-dir build-release --output-on-failure
+./build-debug/strata-aggregate-tests
+python3 scripts/check_query_fixture.py ./build-debug/strata-aggregate-tests ./build-debug/strata-query
+```
+
+Both configurations should pass all **25** CTest entries. The two new entries are
+`aggregate-query` and `complete-query-native`. The focused program reports the
+following values; the two allocation-failure counts are observations rather than
+cross-toolchain constants.
+
+```text title="Observed focused output — Clang 17 on Linux"
+aggregation shapes=54; giant_group=4097; empty emits no row
+joined sort: rows=25 runs=9 passes=3 write_bytes=4700 read_bytes=7856
+joined_aggregate_allocation_failures=40
+snapshot aggregates: old=(1,3,2,750),(2,3,1,700); new=(3,3,2,1400)
+complete_query_allocation_failures=46; output failures preserve prior file
+late overflow: staged=1, previous result preserved; escaped plan completes
+native complete query: filtered=119 joined=100 groups=20 runs=40/34 passes=5/5
+aggregation, two-sort queries, and output publication: all checks passed
+```
+
+The Python check ends with `independent oracle: 144 native files; 119 events;
+100 joins; 20 groups; CLI tiny/default/empty pass`. The tiny driver reports 40 and
+34 initial runs, while the default driver reports zero for both. On the checked
+Linux build, the respective root peak charges were 95,320 and 558,362 bytes.
+Those measurements include database/query charges and reflect different eagerly
+allocated capacities. They are **not** portable object-size promises, RSS values,
+throughput results, or evidence that spilling is always faster or smaller.
+
+## Inspect one concrete completed answer
+
+Generate a disposable native fixture, then invoke the driver directly. The
+fixture command creates its own `db` and `spill` children and also leaves captured
+run copies; ordinary driver use does not create those copies.
+
+```sh title="Terminal — inspect completed CSV"
+fixture=$(mktemp -d "${TMPDIR:-/tmp}/strata-query-demo.XXXXXX")
+./build-debug/strata-aggregate-tests --fixture "$fixture"
+./build-debug/strata-query "$fixture/db" "$fixture/spill" "$fixture" inspected.csv 2 6 tiny
+head -n 6 "$fixture/inspected.csv"
+rm -rf "$fixture"
+```
+
+Expect the header `region_id,day,event_count,total_cents` followed by increasing
+region/day pairs. The independent decoder, not a visual glance at the first five
+rows, establishes all 20 answers. The output file contains cents as exact integers;
+formatting them as currency belongs at a presentation boundary, not inside the
+aggregation loop.
+
+## Make one logical defect visible
+
+In `GroupAggregate<Source>::next`, replace only the EOF line
+`if (current_) { output.append(*current_); current_.reset(); }` with
+`if (current_) { current_.reset(); }`. Rebuild `strata-aggregate-tests` and run it.
+The shape check must fail with `aggregate differs from map oracle, including final
+group`. This defect may leave every allocation valid and still lose an entire
+result group.
+
+Restore the exact original line, rebuild, and rerun the full suite before
+continuing. A second focused exercise is to assign `group.event_count` before
+checking the sum in `add_event`. The sum-overflow test must reject that weaker
+failure guarantee. Restore it too; unsigned wraparound and premature publication
+are not repaired by enabling a memory sanitizer.
+
+Use a separate sanitizer build where your toolchain supports it:
+
+```sh title="Terminal — address and undefined-behavior checks"
+cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build-sanitize --parallel 4
+ctest --test-dir build-sanitize --output-on-failure
+```
+
+All 25 tests passed in fresh reconstructed Debug, Release, and
+AddressSanitizer/UndefinedBehaviorSanitizer builds with Clang 17 on Linux. Linux
+leak checking was enabled. The omitted-final-group variant failed its logical
+assertion in all three configurations without a sanitizer memory-error report;
+correct code was restored before the final passing runs. The acquisition counts
+and peaks above come from that environment. **Native M4/macOS execution remains
+unverified.** Unsupported platform diagnostics are not equivalent to passing ones.
+
+## Diagnose by boundary
+
+| Symptom | First place to inspect |
+|---|---|
+| A region/day appears twice | The joined sort order must begin with both grouping fields; inspect all comparator sites, not only chunk sorting. |
+| Exactly the last group is missing | Inspect EOF emission, including the nonempty-last-batch/empty-next-EOF pair. |
+| First event of each later group is missing or doubled | Trace the key-change row, current-group initialization, and source-index increment. |
+| Failure returns a changed count with the old sum | Both checked candidate totals must precede either assignment. |
+| A paused result changes after an account update | Both scans must share one read view; spill must preserve region, not look it up later. |
+| “Workspace cannot make progress” | Include control storage, stack allowance, `sizeof(Row)` generation, and three frames; more root memory does not override a smaller operator limit. |
+| The final CSV changes after a failed query | Do not open/truncate the final name in `begin`; completion must follow valid EOF and close. |
+| Temporary name survives an exception | Inspect reported unlink errors and retry only after the cause is resolved; do not hide or release an unresolved disk charge. |
+
+## Completion check and references
+
+You now have one complete fixed query, not a general SQL engine. It consumes one
+snapshot; external sorting and streaming join/grouping do the execution; bounded
+owning output batches feed a completion-aware sink. Both sorts can spill beyond
+their row buffers. No final result vector or unbounded group hash table exists in
+the production path. The public implementation remains synchronous, and the
+CSV completion boundary is not a durable recovery checkpoint.
+
+The references actually used for the language and system boundaries are the
+[C++ ordering rules](https://eel.is/c++draft/alg.sorting.general),
+[dependent-name rules](https://eel.is/c++draft/temp.res),
+[unsigned integer rules](https://eel.is/c++draft/basic.fundamental),
+[exception propagation](https://eel.is/c++draft/propagation), and
+[integer `from_chars`](https://eel.is/c++draft/charconv.from.chars), together with
+Apple's archived [temporary-file creation](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/mkstemp.3.html)
+and [rename interface](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/rename.2.html).
+The evolving C++ draft is used only for facilities available in the chosen C++20
+baseline. The Apple archive is not a substitute for checking the installed native
+manuals, compiler, filesystem, and test results. Resource bounds, traces, formats,
+and observed counts in this chapter are derived from the implementation and its
+checks, not asserted by those references.
+
+Chapter 18 develops synchronization and thread lifetime in standalone runnable
+programs before the engine begins sharing these owners between workers. Do not
+add threads to the current budget, cache, database, or result sink merely because
+some of their handles use shared ownership.
+

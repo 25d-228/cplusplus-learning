@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 10 · Part 1 — Atomic batches and write-ahead recovery · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-10.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html" aria-current="page"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 10 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/17">Read on GitHub</a><a href="source/chapter-10.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#the-prerequisite-state-and-the-new-boundary">The prerequisite state and the new boundary</a></li><li class="toc-h2"><a href="#three-answers-instead-of-one-boolean">Three answers instead of one Boolean</a></li><li class="toc-h2"><a href="#write-a-format-not-an-object-representation">Write a format, not an object representation</a></li><li class="toc-h2"><a href="#validate-the-request-before-allocating-its-encoding">Validate the request before allocating its encoding</a></li><li class="toc-h2"><a href="#decide-what-a-partial-header-can-tell-us">Decide what a partial header can tell us</a></li><li class="toc-h2"><a href="#decode-a-whole-payload-before-linking-any-row">Decode a whole payload before linking any row</a></li><li class="toc-h2"><a href="#emit-the-frame-in-one-charged-workspace">Emit the frame in one charged workspace</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-10-atomic-batches-and-write-ahead-recovery">Chapter 10 — Atomic batches and write-ahead recovery</h1>
+<p>An update changes event 100 from 500 cents to 700 cents and moves account 10 from
+region 1 to region 2. Both changes belong to the same batch. The skip list can
+prepare both nodes before linking either, but an arena disappears when the
+process exits. A table file is not the answer yet: creating and installing a
+replacement table for every small batch would be a different write path.</p>
+<p>A <strong>write-ahead log</strong>, or WAL, records the whole batch before the in-memory index
+publishes it. Reopening reads complete batches back into a new memtable. The hard
+part is deciding what a failed call means. A failure before append can reject the
+batch definitely. A failure after append starts can leave a complete recoverable
+batch even though its caller never received success.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Encode bounded, checksummed batches; distinguish definite rejection from an
+uncertain external effect; publish prepared nodes without allocating after
+synchronization; recover only complete batches; and repair a narrowly defined
+incomplete tail without disguising corruption as a successful reopen.</p>
+</blockquote>
+<p>This chapter has three parts and one <strong>4.5-hour implementation allocation</strong>:
+framing 1.0; the commit path 1.5; replay 1.0; fault checks 1.0. Reading is separate.
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-10-part-2.html">Part 2</a>
+connects these codecs to file ownership and publication.
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-10-part-3.html">Part 3</a>
+supplies all tests, native checks, and build additions. All three parts form one
+runnable increment; no later chapter is required.</p>
+<h2 id="the-prerequisite-state-and-the-new-boundary">The prerequisite state and the new boundary</h2>
+<p>Use the complete code through
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-09.html">Chapter 9</a>, including
+its arena, memtable, and table-reader migrations. In particular,
+<code>MemTable(budget, arena_cap)</code> uses the common charged allocator; do not restore
+the earlier uncharged constructor. The foundation executables remain unchanged.</p>
+<p><code>Mutation</code> owns its inline, at-most-30-byte row image. Its key contains a relation
+tag and an unsigned primary key; <code>validate_mutation</code> checks the tag, operation,
+exact row codec, and agreement between the key and encoded row. A tombstone has
+no row bytes. <code>MemTable::prepare(sequence, changes)</code> returns a nonmovable prepared
+token: it validates the batch, allocates nodes, copies row bytes, and retains a
+rollback checkpoint. Its <code>commit()</code> is <code>noexcept</code>; abandonment destroys pending
+nodes and restores the checkpoint. <code>find</code> returns a borrowed <code>EntryView</code>, not a
+lifetime-owning snapshot.</p>
+<p><code>io::File</code> owns its descriptor, borrows a <code>FileOps</code> backend, retries interrupted
+transfers, and advances offsets across short transfers. <code>write_all</code> can throw
+after modifying a prefix. <code>sync</code> reports failures and does not silently downgrade
+full-device synchronization. <code>memory::Vector&lt;T&gt;</code> charges allocator requests to
+its explicit budget, and Chapter 8's <code>table_format::crc32</code> supports incremental
+checksumming. We reuse that checksum rather than create another subtly different
+implementation.</p>
+<p>Create these five files. The filename-labelled listings in reading order create
+their complete contents. Repeated blocks for one file append; Part 2 also names
+explicit additions to the existing I/O code. Part 3 appends CMake targets.</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — WAL source and checks</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>include/strata/storage<span class="w"> </span>src/storage<span class="w"> </span>tests<span class="w"> </span>scripts
+</code></pre></figure>
+<p>The new files are <code>include/strata/storage/wal.hpp</code>, <code>src/storage/wal.cpp</code>,
+<code>tests/wal_file_ops.hpp</code>, <code>tests/wal.cpp</code>, and <code>scripts/check_wal_fixture.py</code>.
+There is no new dependency. <code>strata-core</code> already contains the checksum, record,
+arena, and file implementations.</p>
+<p>The result is a <strong>single, exclusively owned log and memtable</strong>, not a database
+catalog. There is no directory lock, manifest, flush installation, multi-process
+access, or concurrent reader publication yet. Only one thread uses this object
+and its budget/backend at a time. Callbacks must not reenter it. Here, “atomic
+batch” means indivisible logical visibility at operation boundaries and whole-batch
+replay; it does not mean an atomic CPU instruction or one atomic filesystem write.</p>
+<h2 id="three-answers-instead-of-one-boolean">Three answers instead of one Boolean</h2>
+<p>Let the visible sequence initially be 1. Preparing sequence 2 does not change the
+visible sequence. Its frame can then be partly written, wholly written, synchronized,
+published, and finally reported to the caller. These are distinct events:</p>
+<table>
+<thead>
+<tr>
+<th>Last completed step</th>
+<th style="text-align:right">In-memory visible sequence</th>
+<th>What reopening may find</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Validation or allocation failed before append</td>
+<td style="text-align:right">1</td>
+<td>No new bytes from this attempt</td>
+</tr>
+<tr>
+<td>Some frame bytes appended, then an error</td>
+<td style="text-align:right">1</td>
+<td>A permitted incomplete tail, or possibly a complete batch under a broader I/O failure</td>
+</tr>
+<tr>
+<td>Complete frame appended; synchronization reports failure</td>
+<td style="text-align:right">1</td>
+<td>The complete sequence-2 batch may be present</td>
+</tr>
+<tr>
+<td>Synchronization returned; process stopped before publication or response</td>
+<td style="text-align:right">1, or no live process</td>
+<td>Complete sequence 2 under the stated persistence assumptions</td>
+</tr>
+<tr>
+<td>Publication and return completed</td>
+<td style="text-align:right">2</td>
+<td>Sequence 2 must be retained under those assumptions</td>
+</tr>
+</tbody>
+</table>
+<p>A negative Boolean would collapse definite rejection and uncertainty. Returning
+“failed, safe to retry” after a synchronization error would invent knowledge that
+the process does not have. A repeated put might appear harmless in this fixture,
+but it is still another sequence; retries of larger application actions are not
+automatically exactly once.</p>
+<p>A write result therefore contains an outcome, a reason, an optional-in-meaning
+sequence number, and an integer I/O error. Sequence zero means no candidate was
+accepted for append. For an uncertain result, the number identifies the candidate,
+<strong>not</strong> a durable commit certificate. The writer remains poisoned until destroyed
+and reopened; clearing a Boolean without replay is not a recovery procedure.</p>
+<p>SQLite's <a href="https://www.sqlite.org/wal.html#how_wal_works">WAL overview, section 2</a>
+describes the general separation between appending changes and later checkpointing.
+Strata's record format and replay policy below are its own: this is not SQLite's
+page WAL, commit-record encoding, or recovery algorithm.</p>
+<h2 id="write-a-format-not-an-object-representation">Write a format, not an object representation</h2>
+<p>No pointer, <code>std::span</code>, <code>Mutation</code> object, enum padding, or node tower is copied
+as a C++ object representation. Every multibyte integer below is unsigned and
+little-endian. Lengths count <strong>encoded bytes</strong>, not <code>sizeof</code> a C++ structure.</p>
+<p>The file starts with a fixed 32-byte header:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">Offset</th>
+<th style="text-align:right">Bytes</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">0</td>
+<td style="text-align:right">8</td>
+<td>ASCII <code>STRWAL01</code></td>
+</tr>
+<tr>
+<td style="text-align:right">8</td>
+<td style="text-align:right">4</td>
+<td>Format version, 1</td>
+</tr>
+<tr>
+<td style="text-align:right">12</td>
+<td style="text-align:right">4</td>
+<td>Header byte count, 32</td>
+</tr>
+<tr>
+<td style="text-align:right">16</td>
+<td style="text-align:right">8</td>
+<td>Base sequence before this log's first batch</td>
+</tr>
+<tr>
+<td style="text-align:right">24</td>
+<td style="text-align:right">4</td>
+<td>Reserved, all zero</td>
+</tr>
+<tr>
+<td style="text-align:right">28</td>
+<td style="text-align:right">4</td>
+<td>CRC-32 of bytes 0 through 27</td>
+</tr>
+</tbody>
+</table>
+<p>Use base sequence zero for this standalone harness. The reader requires an
+<strong>expected</strong> base and compares it with the encoded header. A later log generation
+can begin after an installed sequence, but a nonzero base does not manufacture
+older rows. The boundary tests use a large base solely to exercise sequence
+arithmetic. This header is not a globally unique file identity or an authoritative
+catalog; those are different responsibilities.</p>
+<p>After the header, each batch has a 24-byte header, a payload, and a four-byte
+trailer checksum:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">Relative offset</th>
+<th style="text-align:right">Bytes</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">0</td>
+<td style="text-align:right">4</td>
+<td>ASCII <code>BAT1</code></td>
+</tr>
+<tr>
+<td style="text-align:right">4</td>
+<td style="text-align:right">4</td>
+<td>Payload byte count</td>
+</tr>
+<tr>
+<td style="text-align:right">8</td>
+<td style="text-align:right">8</td>
+<td>Batch sequence</td>
+</tr>
+<tr>
+<td style="text-align:right">16</td>
+<td style="text-align:right">4</td>
+<td>Operation count</td>
+</tr>
+<tr>
+<td style="text-align:right">20</td>
+<td style="text-align:right">4</td>
+<td>CRC-32 of batch-header bytes 0 through 19</td>
+</tr>
+<tr>
+<td style="text-align:right">24</td>
+<td style="text-align:right">Payload length</td>
+<td>Exactly the encoded operations</td>
+</tr>
+<tr>
+<td style="text-align:right">24 + payload length</td>
+<td style="text-align:right">4</td>
+<td>CRC-32 of the entire 24-byte header followed by the payload</td>
+</tr>
+</tbody>
+</table>
+<p>The small header checksum protects the length before it determines allocation
+or a body read. The trailer checks the complete frame. A checksum is error
+detection, not authentication, proof of persistence, or evidence that a caller
+received success. CRC collisions remain possible. There is no separate commit
+record: a complete, valid frame is the unit replay accepts.</p>
+<p>Every operation has a 14-byte envelope: relation at offset 0 (one byte), kind at
+1 (one byte), primary key at 2 (eight bytes), value length at 10 (four bytes), then
+the row image. Put is kind 1; erase is kind 2. A put carries the existing 30-byte
+event or 14-byte account encoding. Erase carries zero value bytes. Repeated keys
+<strong>within</strong> one batch are rejected; changes to the same key in later batches are
+new versions. Operation order is retained in the log, although memtable preparation
+sorts its pending nodes for publication.</p>
+<p>Let <span class="math-input" data-display="false">n</span> be the operation count and <span class="math-input" data-display="false">v_i</span> the value byte count of operation <span class="math-input" data-display="false">i</span>.
+The payload byte count <span class="math-input" data-display="false">P</span> and total frame byte count <span class="math-input" data-display="false">F</span> are</p>
+<div class="math-input" data-display="true">P = \sum_{i=0}^{n-1}(14 + v_i), \qquad F = 24 + P + 4.</div>
+<p>Here <span class="math-input" data-display="false">1 \le n \le 256</span> and <span class="math-input" data-display="false">v_i</span> is 0, 14, or 30. Therefore</p>
+<div class="math-input" data-display="true">14n \le P \le 44n \le 11264, \qquad F \le 11292.</div>
+<p>For the event/account update, <span class="math-input" data-display="false">P=(14+30)+(14+14)=72</span> bytes and <span class="math-input" data-display="false">F=100</span> bytes.
+The first batch occupies file offsets 32 through 131, making its exclusive end
+132. The second ends at 232. A later event deletion plus account put has payload
+<span class="math-input" data-display="false">14+(14+14)=42</span> bytes and frame length 70, so the third end is 302. These values
+will be checked by both C++ and a separately written Python decoder.</p>
+<p>The physical log is capped at 64 MiB, where one MiB is <span class="math-input" data-display="false">2^{20}</span> bytes. This is an
+implementation limit for this format/harness, not a measured throughput target.
+There is also a common memory budget and a per-memtable arena cap; an admissible
+log size does not guarantee sufficient replay memory.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/wal.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_STORAGE_WAL_HPP</span>
+<span class="cp">#define STRATA_STORAGE_WAL_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/io/file.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/memory/budget.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/memtable.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">wal_format</span><span class="w"> </span><span class="p">{</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">file_header_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">batch_header_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">24</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">operation_header_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">14</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">checksum_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_payload_bytes</span><span class="w"> </span><span class="o">=</span>
+<span class="w">    </span><span class="n">MemTable</span><span class="o">::</span><span class="n">max_batch</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="n">operation_header_bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">event_bytes</span><span class="p">);</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">max_log_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+
+<span class="n">memory</span><span class="o">::</span><span class="n">Vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">encode_batch</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">changes</span><span class="p">);</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace wal_format</span>
+</code></pre></figure>
+<p>These constants derive the maximum payload from the existing batch cap and codec
+size. They are not copied from an ABI measurement. <code>encode_batch</code> returns an owning
+charged vector; it retains no span into the caller's mutations. Its returned
+storage must not outlive the budget supplied to its allocator.</p>
+<p>Add the result types. A scoped enum requires qualification such as
+<code>WriteOutcome::uncertain</code>; it cannot silently act as a Boolean success flag.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/wal.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">WalOpen</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">create</span><span class="p">,</span><span class="w"> </span><span class="n">recover</span><span class="w"> </span><span class="p">};</span>
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">WriteOutcome</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">committed</span><span class="p">,</span><span class="w"> </span><span class="n">rejected</span><span class="p">,</span><span class="w"> </span><span class="n">uncertain</span><span class="w"> </span><span class="p">};</span>
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">WriteReason</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">none</span><span class="p">,</span><span class="w"> </span><span class="n">invalid_batch</span><span class="p">,</span><span class="w"> </span><span class="n">resource_exhausted</span><span class="p">,</span><span class="w"> </span><span class="n">log_full</span><span class="p">,</span><span class="w"> </span><span class="n">sequence_exhausted</span><span class="p">,</span>
+<span class="w">    </span><span class="n">writer_poisoned</span><span class="p">,</span><span class="w"> </span><span class="n">io_failure</span><span class="p">,</span><span class="w"> </span><span class="n">unexpected_failure</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">WriteResult</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">WriteOutcome</span><span class="w"> </span><span class="n">outcome</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WriteReason</span><span class="w"> </span><span class="n">reason</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence</span><span class="p">;</span><span class="w">  </span><span class="c1">// Zero for rejection; candidate for uncertainty.</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">io_error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p><code>WriteReason::writer_poisoned</code> describes the <strong>newly rejected request</strong>. It does
+not resolve the outcome of the earlier uncertain request. <code>io_error</code> is the
+backend error number, zero when no such number is available. Keeping the result
+small and value-owned avoids constructing diagnostic strings after a successful
+synchronization. Unexpected exceptions during append are classified conservatively;
+Part 2 explains why the catch-all is restricted to that boundary.</p>
+<p>Declare the owner next. <code>WalOpen::create</code> requires an empty writable file;
+<code>WalOpen::recover</code> requires an existing writable WAL of the expected format/base.
+Both opening modes take ownership of the supplied <code>File</code>. The backend and budget
+must outlive the owner. Construction failure closes the moved-in descriptor.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/wal.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">WalMemTable</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">WalMemTable</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">arena_cap</span><span class="p">,</span>
+<span class="w">                </span><span class="n">WalOpen</span><span class="w"> </span><span class="n">open_mode</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">SyncMode</span><span class="w"> </span><span class="n">sync_mode</span><span class="p">,</span>
+<span class="w">                </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">base_sequence</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="n">WalMemTable</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">WalMemTable</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WalMemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">WalMemTable</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WalMemTable</span><span class="p">(</span><span class="n">WalMemTable</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WalMemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">WalMemTable</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+
+<span class="w">    </span><span class="p">[[</span><span class="na">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">WriteResult</span><span class="w"> </span><span class="n">write</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">changes</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">table</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">table_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">MemTable</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">table</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">sequence</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">sequence_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">log_end</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">end_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">poisoned</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">poisoned_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">repaired_tail</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">repaired_tail_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">initialize</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">base</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">replay</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">expected_base</span><span class="p">);</span>
+<span class="w">    </span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="w"> </span><span class="n">file_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MemTable</span><span class="w"> </span><span class="n">table_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">io</span><span class="o">::</span><span class="n">SyncMode</span><span class="w"> </span><span class="n">sync_mode_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">end_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wal_format</span><span class="o">::</span><span class="n">file_header_bytes</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">poisoned_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">repaired_tail_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::storage</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The declaration order matters: <code>table_</code> is destroyed before <code>file_</code>, and both
+before the external budget may disappear. The reference member does not own the
+budget. No custom destructor is needed: member owners provide cleanup. The
+existing <code>File</code> destructor is nonthrowing and is not a replacement for explicit
+synchronization or a way to report a delayed close failure.</p>
+<p>The class cannot be copied or moved, because its prepared tokens and borrowed
+views depend on stable owner identity. The lvalue-qualified <code>table()</code> permits a
+borrow only from an lvalue owner, just like earlier view accessors. This does not
+extend its lifetime. A <code>const MemTable&amp;</code> blocks normal mutation through that API;
+it does not make concurrent access safe.</p>
+<p><code>sequence()</code> is the published log sequence, possibly the base before any new
+rows exist. <code>log_end()</code> is the end of the last <strong>published</strong> frame. After an
+uncertain append, the physical file can be longer. <code>repaired_tail()</code> reports
+whether opening removed a nonempty permitted tail; it is not a continuously
+updated “file damaged” flag. <code>[[nodiscard]]</code> makes an ignored write result a
+useful compiler diagnostic, not a runtime control-flow guarantee.</p>
+<h2 id="validate-the-request-before-allocating-its-encoding">Validate the request before allocating its encoding</h2>
+<p>Start <code>src/storage/wal.cpp</code>. The internal helpers live in an unnamed namespace,
+so they belong to this translation unit rather than the public library API.
+The include of <code>table.hpp</code> reuses only the implemented CRC-32 routine; no table
+builder, reader, or cache participates in logging.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/wal.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/wal.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/codec.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/table.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;new&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+<span class="k">namespace</span><span class="w"> </span><span class="p">{</span>
+<span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">wal_format</span><span class="p">;</span>
+<span class="k">using</span><span class="w"> </span><span class="n">table_format</span><span class="o">::</span><span class="n">crc32</span><span class="p">;</span>
+<span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">&gt;</span><span class="w"> </span><span class="n">file_magic</span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'S'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'T'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'R'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'W'</span><span class="p">},</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'A'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'L'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'0'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'1'</span><span class="p">}};</span>
+<span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">&gt;</span><span class="w"> </span><span class="n">batch_magic</span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'B'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'A'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'T'</span><span class="p">},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">{</span><span class="sc">'1'</span><span class="p">}};</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">require_wal</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">condition</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="n">message</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>require_wal</code> classifies invalid persisted bytes as <code>FormatError</code>. It does not
+catch an I/O error and relabel it as end-of-file. That distinction is essential:
+a read returning zero at EOF can justify a tail decision; a failed read cannot.</p>
+<p>The payload-size function checks every mutation and rejects duplicate storage
+keys before allocating the frame. It uses a bounded nested loop, deliberately
+simpler than introducing another temporary sort buffer.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/wal.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">payload_size</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">changes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">changes</span><span class="p">.</span><span class="n">empty</span><span class="p">()</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">changes</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">MemTable</span><span class="o">::</span><span class="n">max_batch</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"WAL batch must contain 1..256 operations"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">changes</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">validate_mutation</span><span class="p">(</span><span class="n">changes</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">changes</span><span class="p">[</span><span class="n">j</span><span class="p">].</span><span class="n">key</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">changes</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"duplicate WAL batch key"</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">bytes</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">operation_header_bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">changes</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">length</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span><span class="w">  </span><span class="c1">// At most 256 * (14 + 30) = 11264.</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>For <span class="math-input" data-display="false">n</span> operations the duplicate check makes <span class="math-input" data-display="false">n(n-1)/2</span> key comparisons, at most
+32640 for the cap of 256. This is a stated small-batch cost, not an unbounded
+quadratic ingest algorithm. The memtable will validate defensively again; the
+codec can also be exercised independently.</p>
+<p><code>validate_mutation</code> runs before adding each length. Once it succeeds, the value
+length is bounded by the inline array, so the sum cannot exceed 11264. This proof
+is why an ordinary addition is safe here. It would stop being valid if the batch
+cap or payload representation became unbounded. <code>FormatError</code> from an invalid
+row codec and <code>invalid_argument</code> from an invalid operation both mean a bad caller
+batch on encoding; the writer will translate them before append.</p>
+<p>The next helper encodes the file header. Value initialization makes the reserved
+bytes zero. A reader regenerates the one expected header and compares all 32 bytes,
+checking the version, length, base, reserved bytes, and CRC together.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/wal.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">file_header_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">file_header</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">base</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">file_header_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">image</span><span class="p">{};</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">image</span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">file_magic</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">file_magic</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">image</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">file_header_bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">base</span><span class="p">);</span>
+<span class="w">    </span><span class="c1">// Bytes 24..27 are reserved zero bytes.</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">last</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="mi">28</span><span class="p">)));</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">image</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Comparing with the expected header is intentionally stricter than accepting
+unknown reserved fields or silently upgrading formats. A short or damaged file
+header is fatal: it is not an incomplete final <strong>batch</strong>. A failed initial create
+can leave an unusable file, and this harness will not overwrite it on reopen.</p>
+<h2 id="decide-what-a-partial-header-can-tell-us">Decide what a partial header can tell us</h2>
+<p>A frame can end before all 24 header bytes exist. We cannot verify the complete
+header checksum then. We can still reject contradictions already visible in the
+prefix: wrong magic, an out-of-range complete length, a wrong complete sequence,
+or an impossible complete count. Only fields whose full bytes are present are
+interpreted. Half of an eight-byte integer is not an integer padded with zeroes.</p>
+<p><code>check_prefix</code> receives between one and 24 bytes. Its caller has already rejected
+sequence exhaustion and passes the exact next sequence. It does not itself decide
+to ignore data; it validates the prefix before replay makes the EOF decision.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/wal.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">check_prefix</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">header</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">next</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">magic_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="n">batch_magic</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+<span class="w">    </span><span class="n">require_wal</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">equal</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">header</span><span class="p">.</span><span class="n">begin</span><span class="p">()</span><span class="w"> </span><span class="o">+</span>
+<span class="w">        </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">ptrdiff_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">magic_count</span><span class="p">),</span><span class="w"> </span><span class="n">batch_magic</span><span class="p">.</span><span class="n">begin</span><span class="p">()),</span>
+<span class="w">        </span><span class="s">"bad WAL batch magic"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">));</span>
+<span class="w">        </span><span class="n">require_wal</span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">operation_header_bytes</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">max_payload_bytes</span><span class="p">,</span>
+<span class="w">                    </span><span class="s">"WAL payload bound"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">16</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">require_wal</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">))</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">next</span><span class="p">,</span>
+<span class="w">                    </span><span class="s">"noncontiguous WAL sequence"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">));</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">));</span>
+<span class="w">        </span><span class="n">require_wal</span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">MemTable</span><span class="o">::</span><span class="n">max_batch</span><span class="p">,</span>
+<span class="w">                    </span><span class="s">"WAL operation count bound"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">require_wal</span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">operation_header_bytes</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                    </span><span class="n">bytes</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="n">operation_header_bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">event_bytes</span><span class="p">),</span>
+<span class="w">                    </span><span class="s">"WAL payload/count mismatch"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">batch_header_bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">require_wal</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">last</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="mi">20</span><span class="p">)),</span>
+<span class="w">                    </span><span class="s">"WAL batch header checksum"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The first comparison consumes only the available magic bytes. At lengths 8, 16,
+and 20 the corresponding fields are complete. At length 24 the checksum must
+also match. The count/length inequalities are only outer bounds; a payload with
+the right aggregate length can still contain malformed individual records.</p>
+<p>Consider a 17-byte final header prefix for sequence 2. It contains all magic,
+length, and sequence bytes, but only the first count byte. A correct prefix passes
+these checks; replay can remove it because EOF occurs before the header is
+complete. Changing its complete sequence to 3 makes opening fail instead. A
+single byte <code>B</code> after the last complete frame is an indistinguishable valid prefix
+of <code>BAT1</code>; a single byte <code>X</code> is not. No checksum scheme can reconstruct an absent
+acknowledgement history from that one byte. Part 2 states the failure model that
+makes ignoring such a permitted prefix meaningful.</p>
+<h2 id="decode-a-whole-payload-before-linking-any-row">Decode a whole payload before linking any row</h2>
+<p>Only a complete frame with a valid trailer checksum reaches <code>decode_payload</code>.
+The count has already been limited to 1 through 256, and the body to 11264 bytes.
+The decoder owns its mutation workspace through the common allocator; it does
+not return views into a frame that will disappear at the next iteration.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/wal.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">memory</span><span class="o">::</span><span class="n">Vector</span><span class="o">&lt;</span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">decode_payload</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">memory</span><span class="o">::</span><span class="n">Vector</span><span class="o">&lt;</span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">changes</span><span class="p">(</span><span class="n">count</span><span class="p">,</span><span class="w"> </span><span class="n">memory</span><span class="o">::</span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">Mutation</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">});</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">at</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">change</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">changes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">require_wal</span><span class="p">(</span><span class="n">operation_header_bytes</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">bytes</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">at</span><span class="p">,</span>
+<span class="w">                    </span><span class="s">"short WAL operation header"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">header</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="n">at</span><span class="p">,</span><span class="w"> </span><span class="n">operation_header_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="n">change</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">Relation</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">to_integer</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">[</span><span class="mi">0</span><span class="p">]));</span>
+<span class="w">        </span><span class="n">change</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">EntryKind</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">to_integer</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">[</span><span class="mi">1</span><span class="p">]));</span>
+<span class="w">        </span><span class="n">change</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">primary</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">));</span>
+<span class="w">        </span><span class="n">change</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)));</span>
+<span class="w">        </span><span class="n">at</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">operation_header_bytes</span><span class="p">;</span>
+<span class="w">        </span><span class="n">require_wal</span><span class="p">(</span><span class="n">change</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">change</span><span class="p">.</span><span class="n">bytes</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">change</span><span class="p">.</span><span class="n">length</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">bytes</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">at</span><span class="p">,</span>
+<span class="w">                    </span><span class="s">"WAL value length bound"</span><span class="p">);</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">copy_n</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">begin</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">ptrdiff_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">at</span><span class="p">),</span>
+<span class="w">                    </span><span class="n">change</span><span class="p">.</span><span class="n">length</span><span class="p">,</span><span class="w"> </span><span class="n">change</span><span class="p">.</span><span class="n">bytes</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="w">        </span><span class="n">at</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">change</span><span class="p">.</span><span class="n">length</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">require_wal</span><span class="p">(</span><span class="n">at</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">bytes</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="s">"trailing WAL payload bytes"</span><span class="p">);</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">payload_size</span><span class="p">(</span><span class="n">changes</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"invalid WAL mutation or duplicate key"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">changes</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace</span>
+</code></pre></figure>
+<p>At the start of each iteration, <code>at &lt;= bytes.size()</code>. Checking the 14-byte
+header against <code>bytes.size() - at</code> therefore cannot underflow. After consuming
+that header, the same subtraction bounds the value copy. Length is checked
+against both the remaining payload and the destination's inline capacity before
+<code>copy_n</code> sees it. The final equality rejects trailing payload bytes, including
+an operation count smaller than the actual encoded list.</p>
+<p>After structural parsing, <code>payload_size(changes)</code> reuses the schema/key/duplicate
+checks. An <code>invalid_argument</code> now describes invalid <strong>persisted data</strong>, so it
+becomes <code>FormatError</code>. A codec's existing <code>FormatError</code> propagates directly.
+Allocation failure is not translated into corruption; reopening with more memory
+may succeed. The bounded count prevents <code>payload_size</code>'s count exception here.</p>
+<p>No node has been linked at any of these steps. A malformed second operation must
+not leave the first operation committed. The closing brace in this block ends
+the unnamed namespace, not <code>strata::storage</code>.</p>
+<h2 id="emit-the-frame-in-one-charged-workspace">Emit the frame in one charged workspace</h2>
+<p>Add the encoder at namespace scope. It allocates exactly one vector for the
+complete batch image, fills fields and operation bytes, then fills the trailer.
+The allocator charges its actual requested capacity; “one vector” is not an
+assumption that the process uses no other memory.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/wal.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">memory</span><span class="o">::</span><span class="n">Vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">wal_format</span><span class="o">::</span><span class="n">encode_batch</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sequence</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">Mutation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">changes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">sequence</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"zero WAL sequence"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">payload_size</span><span class="p">(</span><span class="n">changes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">memory</span><span class="o">::</span><span class="n">Vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">image</span><span class="p">(</span><span class="n">batch_header_bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">checksum_bytes</span><span class="p">,</span>
+<span class="w">                                    </span><span class="n">memory</span><span class="o">::</span><span class="n">Allocator</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">});</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">image</span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">copy</span><span class="p">(</span><span class="n">batch_magic</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">batch_magic</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">image</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">payload</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">sequence</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">changes</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="mi">20</span><span class="p">)));</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">at</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">batch_header_bytes</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">change</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">changes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">bytes</span><span class="p">[</span><span class="n">at</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">(</span><span class="n">change</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">relation</span><span class="p">);</span>
+<span class="w">        </span><span class="n">bytes</span><span class="p">[</span><span class="n">at</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">(</span><span class="n">change</span><span class="p">.</span><span class="n">kind</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="n">at</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">change</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">primary</span><span class="p">);</span>
+<span class="w">        </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="n">at</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">change</span><span class="p">.</span><span class="n">length</span><span class="p">);</span>
+<span class="w">        </span><span class="n">at</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">operation_header_bytes</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">copy_n</span><span class="p">(</span><span class="n">change</span><span class="p">.</span><span class="n">bytes</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">change</span><span class="p">.</span><span class="n">length</span><span class="p">,</span>
+<span class="w">                    </span><span class="n">image</span><span class="p">.</span><span class="n">begin</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">ptrdiff_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">at</span><span class="p">));</span>
+<span class="w">        </span><span class="n">at</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">change</span><span class="p">.</span><span class="n">length</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">last</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">crc32</span><span class="p">(</span><span class="n">bytes</span><span class="p">.</span><span class="n">first</span><span class="p">(</span><span class="n">at</span><span class="p">)));</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">image</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The loop's cursor <code>at</code> starts at 24. For the first event put it advances by 14
+and then 30, reaching 68. The account put advances by 14 and 14, reaching 96.
+The frame has 100 bytes; its last four receive the CRC of bytes 0 through 95.
+The header CRC is already inside those bytes, so the trailer also covers it.</p>
+<p>The encoder rejects sequence zero, but it does not impose a predecessor on a
+standalone image. The writer supplies <code>sequence_ + 1</code>; replay verifies that exact
+relationship. This separates a pure framing function from the state machine.</p>
+<p>If returned-vector copy elision is not performed for the named local <code>image</code>,
+its move transfers charged storage rather than copying all bytes. This is the
+ordinary return of a movable vector, unlike the nonmovable prepared-token return
+already developed in Chapter 7. The input span remains borrowed only during this
+call. It must not be mutated concurrently or changed between encoding and
+memtable preparation in the writer.</p>
+<p>Before continuing, calculate the erase-plus-account frame without running it:
+its payload is 42 bytes, its trailer starts at relative offset 66, and its total
+length is 70. A value length of 1 on the erase is rejected even if the aggregate
+payload length still falls inside <span class="math-input" data-display="false">14n \le P \le 44n</span>. Aggregate bounds never
+replace semantic validation.</p>
+<p><code>src/storage/wal.cpp</code> intentionally continues in Part 2; its outer namespace is
+still open. Proceed to
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-10-part-2.html">the commit and recovery state machine</a>.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-09-part-3.html"><small>Previous · Chapter 9 · Part 3</small><span>Reader integration and pressure tests</span></a><a href="chapter-10-part-2.html"><small>Next · Chapter 10 · Part 2</small><span>Commit, uncertainty, and strict replay</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 10 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#the-prerequisite-state-and-the-new-boundary">The prerequisite state and the new boundary</a></li><li class="toc-h2"><a href="#three-answers-instead-of-one-boolean">Three answers instead of one Boolean</a></li><li class="toc-h2"><a href="#write-a-format-not-an-object-representation">Write a format, not an object representation</a></li><li class="toc-h2"><a href="#validate-the-request-before-allocating-its-encoding">Validate the request before allocating its encoding</a></li><li class="toc-h2"><a href="#decide-what-a-partial-header-can-tell-us">Decide what a partial header can tell us</a></li><li class="toc-h2"><a href="#decode-a-whole-payload-before-linking-any-row">Decode a whole payload before linking any row</a></li><li class="toc-h2"><a href="#emit-the-frame-in-one-charged-workspace">Emit the frame in one charged workspace</a></li></ul></aside>
+</div></body></html>

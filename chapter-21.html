@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 21 · Part 1 — Reproducible workloads and independent answers · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-21.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html" aria-current="page"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 21 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/49">Read on GitHub</a><a href="source/chapter-21.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-a-workload-is-a-sequence-of-committed-batches">Part 1 — A workload is a sequence of committed batches</a></li><li class="toc-h2"><a href="#put-the-commit-boundary-in-the-input">Put the commit boundary in the input</a></li><li class="toc-h2"><a href="#count-bytes-with-an-explicit-denominator">Count bytes with an explicit denominator</a></li><li class="toc-h2"><a href="#generate-bounded-batches-not-a-giant-list">Generate bounded batches, not a giant list</a></li><li class="toc-h2"><a href="#use-a-documented-pattern-for-skew-and-updates">Use a documented pattern for skew and updates</a></li><li class="toc-h2"><a href="#parse-independently-before-evaluating-a-snapshot">Parse independently before evaluating a snapshot</a></li><li class="toc-h2"><a href="#preserve-unsigned-and-aggregate-semantics">Preserve unsigned and aggregate semantics</a></li><li class="toc-h2"><a href="#derive-the-large-answer-without-materializing-events">Derive the large answer without materializing events</a></li><li class="toc-h2"><a href="#compare-ordered-results-without-converting-integers-to-floats">Compare ordered results without converting integers to floats</a></li><li class="toc-h2"><a href="#first-runnable-checks">First runnable checks</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-21-reproducible-workloads-and-independent-answers">Chapter 21 — Reproducible workloads and independent answers</h1>
+<h2 id="part-1-a-workload-is-a-sequence-of-committed-batches">Part 1 — A workload is a sequence of committed batches</h2>
+<p>A query result is not correct merely because the engine can read the file it
+just wrote. The writer, reader, join, and expected-result code might all make
+the same mistake. An update can also change an answer without changing the
+number of input rows. We need a workload whose mutation history is explicit,
+a small reference implementation that does not call the engine, and a larger
+answer that does not require a Python dictionary containing the entire database.</p>
+<p>This chapter supplies those pieces and a thin command-line program. The storage
+and query mechanisms remain the Chapter 20 implementations. The driver will
+import complete batches, run the fixed query, compact, inspect, and reopen.
+An in-process scenario will hold an old query while the writer applies a delta,
+reject another snapshot at the retention limit, cancel a spilling query, and
+verify both the old and new answers independently.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Specify reproducible input rather than an incidental random stream; compare
+committed snapshots rather than input prefixes; distinguish logical record
+bytes from text and physical I/O; parse bounded numeric input without losing
+unsigned precision; derive an analytical answer; and make a concurrent
+demonstration establish its ordering with predicates rather than sleeps.</p>
+</blockquote>
+<p><strong>Prerequisites:</strong> the complete engine through
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-20.html">Chapter 20</a>.
+Keep its <code>Engine</code>, <code>Executor</code>, <code>Request</code>, private query readers, shared budget
+ledger, and immutable capture interfaces. Chapter 17 supplies the fixed query
+and completion-aware CSV sink; Chapter 19 supplies task outcomes and cooperative
+cancellation. No prerequisite source file is replaced in this chapter.</p>
+<p><strong>Implementation: 4.5 hours across all three parts.</strong> Allocate 1.5 hours to the
+generator/reference, 1.25 to the driver/scenario, 1.0 to controlled interactions,
+and 0.75 to fixture and diagnosis checks. Reading is separate. Record actual
+time; a longer explanation is not a reason to spend longer typing the adapter.</p>
+<p>Create these files, concatenating blocks with the same filename in reading
+order, then append the CMake block in Part 3:</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>scripts/generate_data.py
+scripts/reference_query.py
+scripts/check_workload.py
+include/strata/workload/input.hpp
+include/strata/workload/driver.hpp
+src/workload/input.cpp
+src/workload/driver.cpp
+apps/strata.cpp
+apps/scenario.cpp
+</code></pre></figure>
+<p><a href="https://25d-228.github.io/cplusplus-learning/chapter-21-part-2.html">Part 2</a>
+implements the C++ adapter. <a href="https://25d-228.github.io/cplusplus-learning/chapter-21-part-3.html">Part 3</a>
+implements the overlap scenario, checks, and complete run commands.</p>
+<h2 id="put-the-commit-boundary-in-the-input">Put the commit boundary in the input</h2>
+<p>The input is a deliberately narrow ASCII format, <strong>not general CSV</strong>. Each line
+has one space between fields and ends with LF. Integers are unsigned decimal
+without a sign or leading zero, except the single digit <code>0</code>. Content is at most
+255 bytes per line. An event ID and account ID fit in 64 bits; day and region fit
+in 32 bits; cents fit in 64 bits. Amounts are integers, not binary floating-point
+currency.</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>STRATA1 9 0
+B 1 4
+A 10 1
+A 20 2
+E 1 10 3 7
+E 2 20 3 9
+C 1
+END 1 4 88
+</code></pre></figure>
+<p>The header contains the format version, seed, and required <strong>base sequence</strong>.
+<code>B 1 4</code> begins sequence 1 with four operations. <code>A</code> is an account put:
+<code>account_id region_id</code>. <code>E</code> is an event put:
+<code>event_id account_id day cents</code>. <code>X A id</code> and <code>X E id</code> are tombstones.
+<code>C 1</code> terminates that batch. <code>END</code> records the last sequence, operation count,
+and logical byte total for the file.</p>
+<p>A batch contains 1 through 256 distinct relation/key pairs. Account 10 and event
+10 are different keys. Two event-10 operations in the same batch are rejected;
+we do not silently decide which one wins. A file can contain many batches, but
+only one batch is buffered at a time. Sequences are contiguous and absolute,
+not renumbered by each importing process.</p>
+<p>The parser returns a batch <strong>only after</strong> consuming its matching <code>C</code> line.
+Then <code>Engine::write</code> supplies the actual WAL-backed commit. The text <code>C</code> is
+neither a durable record nor proof that the database has accepted anything.
+If the second batch is malformed, the first acknowledged batch remains
+committed. If <code>END</code> is missing after otherwise valid batches, import fails but
+those batches also remain. This is batch atomicity, not whole-file atomicity.
+The program reports the last acknowledged sequence and refuses automatic retry.
+A sequence guard also does not prove database identity: two unrelated databases
+can have the same sequence. These fixtures use new directories and a known
+history, not a production deduplication protocol.</p>
+<p>For the sample, a query over days <span class="math-input" data-display="false">[3,4)</span> joins both events and returns
+<code>(region, day, count, cents)</code> values <code>(1,3,1,7)</code> and <code>(2,3,1,9)</code>.
+A second batch can move account 10 to region 4, change event 1 to 11 cents, and
+delete event 2. Sequence 2 then returns only <code>(4,3,1,11)</code>. A sequence-1 query must
+still return the earlier two rows. Counting input lines cannot establish this.</p>
+<h2 id="count-bytes-with-an-explicit-denominator">Count bytes with an explicit denominator</h2>
+<p>Let <span class="math-input" data-display="false">E</span> be the number of event puts, <span class="math-input" data-display="false">A</span> the number of account puts, and <span class="math-input" data-display="false">X</span> the
+number of tombstones <strong>submitted in this file</strong>, including updates. Define the
+workload's logical encoded-byte measure as</p>
+<div class="math-input" data-display="true">L = 30E + 14A + 9X.</div>
+<p>The put widths are Chapter 6's encodings. The 9-byte tombstone measure is one
+relation byte plus an eight-byte primary key. It is a workload accounting
+convention, <strong>not the complete WAL tombstone representation</strong>. Sequence numbers,
+frame checksums, manifests, block directories, repeated versions, and physical
+writes are excluded. Therefore <span class="math-input" data-display="false">L</span> is neither live-data size nor disk usage.
+The generator separately reports the actual text-file size, including headers
+and decimal digits. Later measurements can divide physical I/O by <span class="math-input" data-display="false">L</span>, but must
+name that denominator.</p>
+<p>The sample has two accounts and two events, so <span class="math-input" data-display="false">L=2(14)+2(30)=88</span>.
+With the default 17 accounts and 120 events, the base has 137 operations and
+<span class="math-input" data-display="false">L=17(14)+120(30)=3838</span>. At 32 operations per batch, its last sequence is
+<span class="math-input" data-display="false">\lceil137/32\rceil=5</span>. The default delta has 30 operations and 621 logical bytes,
+so it commits as sequence 6. Changing the batch size changes these sequence
+numbers even when the final logical values are unchanged.</p>
+<h2 id="generate-bounded-batches-not-a-giant-list">Generate bounded batches, not a giant list</h2>
+<p>Start the generator. <code>pending</code> owns at most <code>batch</code> small tuples. The operation
+iterator yields one tuple at a time; no list of all events is built. The nested
+<code>flush</code> function uses <code>nonlocal</code> to update counters belonging to <code>write_phase</code>,
+not new local variables. File mode <code>x</code> rejects an existing name. The output
+context closes the file on every exit, but a failed generation may leave an
+incomplete file; it is not a transactional file-creation facility.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/generate_data.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="ch">#!/usr/bin/env python3</span>
+<span class="sd">"""Emit a versioned, bounded-batch workload. No engine or oracle imports."""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="n">U64</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">64</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+<span class="n">PERIOD</span> <span class="o">=</span> <span class="mi">1000</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">write_phase</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">operations</span><span class="p">,</span> <span class="n">batch</span><span class="p">):</span>
+    <span class="n">sequence</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">logical</span> <span class="o">=</span> <span class="n">base</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="n">pending</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="n">path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">"ascii"</span><span class="p">,</span> <span class="n">newline</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span> <span class="k">as</span> <span class="n">out</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">"STRATA1 </span><span class="si">{</span><span class="n">seed</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">flush</span><span class="p">():</span>
+            <span class="k">nonlocal</span> <span class="n">sequence</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">logical</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">pending</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="k">if</span> <span class="n">sequence</span> <span class="o">==</span> <span class="n">U64</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"sequence overflow"</span><span class="p">)</span>
+            <span class="n">sequence</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">"B </span><span class="si">{</span><span class="n">sequence</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pending</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">fields</span> <span class="ow">in</span> <span class="n">pending</span><span class="p">:</span>
+                <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">fields</span><span class="p">))</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+                <span class="n">logical</span> <span class="o">+=</span> <span class="p">{</span><span class="s2">"E"</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span> <span class="s2">"A"</span><span class="p">:</span> <span class="mi">14</span><span class="p">,</span> <span class="s2">"X"</span><span class="p">:</span> <span class="mi">9</span><span class="p">}[</span><span class="n">fields</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">"C </span><span class="si">{</span><span class="n">sequence</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+            <span class="n">count</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pending</span><span class="p">)</span>
+            <span class="n">pending</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">operation</span> <span class="ow">in</span> <span class="n">operations</span><span class="p">:</span>
+            <span class="n">pending</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">operation</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pending</span><span class="p">)</span> <span class="o">==</span> <span class="n">batch</span><span class="p">:</span>
+                <span class="n">flush</span><span class="p">()</span>
+        <span class="n">flush</span><span class="p">()</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">"END </span><span class="si">{</span><span class="n">sequence</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">logical</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">base_sequence</span><span class="o">=</span><span class="n">base</span><span class="p">,</span> <span class="n">last_sequence</span><span class="o">=</span><span class="n">sequence</span><span class="p">,</span>
+                <span class="n">operations</span><span class="o">=</span><span class="n">count</span><span class="p">,</span> <span class="n">logical_bytes</span><span class="o">=</span><span class="n">logical</span><span class="p">,</span>
+                <span class="n">text_bytes</span><span class="o">=</span><span class="n">path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="p">)</span>
+</code></pre></figure>
+<p><code>logical</code> increases once per serialized operation; it does not count <code>B</code>, <code>C</code>,
+or <code>END</code> text. <code>pending.clear()</code> occurs only after the matching terminator has
+been written. The generator is not issuing database writes, so this ordering
+specifies a complete input file rather than claiming disk durability.</p>
+<h2 id="use-a-documented-pattern-for-skew-and-updates">Use a documented pattern for skew and updates</h2>
+<p>A seed alone does not specify every high-level random algorithm forever.
+Python's <a href="https://docs.python.org/3/library/random.html#notes-on-reproducibility">reproducibility notes</a>
+distinguish the stable <code>random()</code> sequence guarantee from algorithms that may
+change. Here we avoid that dependency: the seed is an integer parameter in an
+explicit recipe, not a claim that the data is random.</p>
+<p>Let <span class="math-input" data-display="false">N</span> be event count, <span class="math-input" data-display="false">a</span> account count, <span class="math-input" data-display="false">d</span> the number of days, <span class="math-input" data-display="false">g</span> the number
+of regions, <span class="math-input" data-display="false">h</span> the seed, and <span class="math-input" data-display="false">s</span> the forced-hot percentage. Event identity <span class="math-input" data-display="false">i</span>
+runs from 1 through <span class="math-input" data-display="false">N</span>. Define its <strong>lane</strong></p>
+<div class="math-input" data-display="true">r=(i-1)\bmod1000.</div>
+<p>The account is 1 when <span class="math-input" data-display="false">r\bmod100&lt;s</span>; otherwise it is
+<span class="math-input" data-display="false">1+(17r+h)\bmod a</span>. Day is <span class="math-input" data-display="false">(r+h)\bmod d</span>, and cents are
+<span class="math-input" data-display="false">1+(37r+h)\bmod1000</span>. Account <span class="math-input" data-display="false">j</span> initially belongs to region
+<span class="math-input" data-display="false">1+(j+h)\bmod g</span>. A fallback account can also be 1, so the true hot-account
+fraction can exceed the forced fraction. A short final period need not have
+the same distribution as a complete period.</p>
+<p>The delta deletes every configured deletion lane first. A surviving update
+lane moves to the next account, wrapping at <span class="math-input" data-display="false">a</span>, and adds 1000 cents. Deletion
+wins when both rules select a lane. Separately, account IDs divisible by 11 are
+deleted; remaining IDs divisible by 5 move to the next region. Zero disables
+an event update/deletion interval. These choices create dimension changes,
+missing join partners, hot keys, and repeated versions with calculable answers.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/generate_data.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">event</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">changed</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="n">lane</span> <span class="o">=</span> <span class="p">(</span><span class="n">identity</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">PERIOD</span>
+    <span class="n">account</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="n">lane</span> <span class="o">%</span> <span class="mi">100</span> <span class="o">&lt;</span> <span class="n">p</span><span class="p">[</span><span class="s2">"hot_percent"</span><span class="p">]</span> <span class="k">else</span>
+               <span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="mi">17</span> <span class="o">*</span> <span class="n">lane</span> <span class="o">+</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">])</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"accounts"</span><span class="p">])</span>
+    <span class="n">cents</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="mi">37</span> <span class="o">*</span> <span class="n">lane</span> <span class="o">+</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">])</span> <span class="o">%</span> <span class="mi">1000</span>
+    <span class="k">if</span> <span class="n">changed</span><span class="p">:</span>
+        <span class="n">account</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">account</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"accounts"</span><span class="p">]</span>
+        <span class="n">cents</span> <span class="o">+=</span> <span class="mi">1000</span>
+    <span class="k">return</span> <span class="p">(</span><span class="s2">"E"</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">account</span><span class="p">,</span> <span class="p">(</span><span class="n">lane</span> <span class="o">+</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">])</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"days"</span><span class="p">],</span> <span class="n">cents</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">base_rows</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">account</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="s2">"accounts"</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="p">(</span><span class="s2">"A"</span><span class="p">,</span> <span class="n">account</span><span class="p">,</span> <span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="n">account</span> <span class="o">+</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">])</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"regions"</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">identity</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="s2">"events"</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="n">event</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">identity</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">delta_rows</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">account</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="s2">"accounts"</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">account</span> <span class="o">%</span> <span class="mi">11</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="s2">"X"</span><span class="p">,</span> <span class="s2">"A"</span><span class="p">,</span> <span class="n">account</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">account</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">region</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="n">account</span> <span class="o">+</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">])</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"regions"</span><span class="p">]</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="s2">"A"</span><span class="p">,</span> <span class="n">account</span><span class="p">,</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">region</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"regions"</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">identity</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="s2">"events"</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">lane</span> <span class="o">=</span> <span class="p">(</span><span class="n">identity</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">PERIOD</span>
+        <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s2">"delete_every"</span><span class="p">]</span> <span class="ow">and</span> <span class="n">lane</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"delete_every"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="s2">"X"</span><span class="p">,</span> <span class="s2">"E"</span><span class="p">,</span> <span class="n">identity</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">p</span><span class="p">[</span><span class="s2">"update_every"</span><span class="p">]</span> <span class="ow">and</span> <span class="n">lane</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"update_every"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">event</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">changed</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></figure>
+<p>For the defaults, event 22 has lane 21: account 1, day
+<span class="math-input" data-display="false">(21+7)\bmod8=4</span>, and <span class="math-input" data-display="false">1+(37\cdot21+7)\bmod1000=785</span> cents.
+Lane 21 is divisible by 7 but not 13, so the delta changes it to account 2 and
+1785 cents. Account 1 maps to region 1; account 2 maps to region 2. Its
+contribution moves between groups. Event 27 has lane 26 and is deleted instead.</p>
+<p>Recipe arithmetic uses mathematical integers before taking a remainder; it does
+not add an implicit 64-bit wraparound. The pattern repeats every 1000 identities.
+It is a controlled stress fixture,
+not a model of real customer traffic or a statistical performance benchmark.
+In particular, update spacing restarts at each period. Preserve the recipe
+name when reproducing an answer; changing this rule requires a new recipe.</p>
+<p>The complete entry point validates bounds, writes the two phases, and writes
+metadata last. A directory with partial data but no completed <code>meta.json</code>
+should not be treated as a completed generation. The script does not remove
+such a directory automatically.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/generate_data.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span><span class="n">directory</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">U64</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"events"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">10</span><span class="o">**</span><span class="mi">12</span> <span class="ow">and</span>
+            <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"accounts"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">4096</span> <span class="ow">and</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"days"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">64</span> <span class="ow">and</span>
+            <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"regions"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">32</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"hot_percent"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">100</span> <span class="ow">and</span>
+            <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"batch"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">256</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"update_every"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">PERIOD</span> <span class="ow">and</span>
+            <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"delete_every"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">PERIOD</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"parameters outside workload-v1 limits"</span><span class="p">)</span>
+    <span class="n">directory</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">write_phase</span><span class="p">(</span><span class="n">directory</span> <span class="o">/</span> <span class="s2">"base.ops"</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">base_rows</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="n">p</span><span class="p">[</span><span class="s2">"batch"</span><span class="p">])</span>
+    <span class="n">delta</span> <span class="o">=</span> <span class="n">write_phase</span><span class="p">(</span><span class="n">directory</span> <span class="o">/</span> <span class="s2">"delta.ops"</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">],</span> <span class="n">base</span><span class="p">[</span><span class="s2">"last_sequence"</span><span class="p">],</span>
+                        <span class="n">delta_rows</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="n">p</span><span class="p">[</span><span class="s2">"batch"</span><span class="p">])</span>
+    <span class="n">meta</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">recipe</span><span class="o">=</span><span class="s2">"strata-periodic-v1"</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="n">p</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="n">base</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="n">delta</span><span class="p">)</span>
+    <span class="c1"># Written last: a partial generation has no completed metadata record.</span>
+    <span class="k">with</span> <span class="p">(</span><span class="n">directory</span> <span class="o">/</span> <span class="s2">"meta.json"</span><span class="p">)</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span> <span class="k">as</span> <span class="n">out</span><span class="p">:</span>
+        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">meta</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">meta</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="vm">__doc__</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"directory"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">"seed"</span><span class="p">,</span> <span class="mi">7</span><span class="p">),</span> <span class="p">(</span><span class="s2">"events"</span><span class="p">,</span> <span class="mi">120</span><span class="p">),</span> <span class="p">(</span><span class="s2">"accounts"</span><span class="p">,</span> <span class="mi">17</span><span class="p">),</span>
+                          <span class="p">(</span><span class="s2">"days"</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="p">(</span><span class="s2">"regions"</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="s2">"hot-percent"</span><span class="p">,</span> <span class="mi">70</span><span class="p">),</span>
+                          <span class="p">(</span><span class="s2">"batch"</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span> <span class="p">(</span><span class="s2">"update-every"</span><span class="p">,</span> <span class="mi">7</span><span class="p">),</span> <span class="p">(</span><span class="s2">"delete-every"</span><span class="p">,</span> <span class="mi">13</span><span class="p">)):</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--"</span> <span class="o">+</span> <span class="n">name</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">default</span><span class="p">)</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="nb">vars</span><span class="p">(</span><span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">())</span>
+    <span class="n">directory</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"directory"</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">generate</span><span class="p">(</span><span class="n">directory</span><span class="p">,</span> <span class="n">args</span><span class="p">),</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"generate seed=</span><span class="si">{</span><span class="n">args</span><span class="p">[</span><span class="s1">'seed'</span><span class="p">]</span><span class="si">}</span><span class="s2"> directory=</span><span class="si">{</span><span class="n">directory</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</code></pre></figure>
+<p>The generator's <span class="math-input" data-display="false">10^{12}</span> event limit is an arithmetic/input-generation bound,
+not a promise that this engine can import or query that many rows. The engine's
+run-descriptor, table, and memory limits remain in force. Part 2 derives the
+much smaller limits of the supplied execution presets.</p>
+<h2 id="parse-independently-before-evaluating-a-snapshot">Parse independently before evaluating a snapshot</h2>
+<p>The reference program does not import <code>generate_data</code>, C++ encodings, or engine
+query results. Its small mode stores current values in Python dictionaries and
+applies <strong>whole validated batches</strong> up to a requested sequence. The complete
+file is still validated, including later batches and <code>END</code>, even when evaluating
+an older snapshot. Thus malformed later text is not silently accepted as a
+valid workload description.</p>
+<p>Begin with integer parsing and the header of the batch iterator. <code>readline(257)</code>
+places a bound on text admitted for one line. Accepted lines occupy at most
+256 bytes including LF. ASCII decoding and the numeric grammar prevent locale
+or Unicode digits from changing the format. The first yielded item describes
+the file's seed and base sequence; subsequent yields are completed batches.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/reference_query.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="ch">#!/usr/bin/env python3</span>
+<span class="sd">"""Independent dictionary replay and constant-period analytical answers."""</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">csv</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+
+<span class="n">U64</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">64</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+<span class="n">HEADER</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"region_id"</span><span class="p">,</span> <span class="s2">"day"</span><span class="p">,</span> <span class="s2">"event_count"</span><span class="p">,</span> <span class="s2">"total_cents"</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">unsigned</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">maximum</span><span class="o">=</span><span class="n">U64</span><span class="p">):</span>
+    <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">text</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">text</span><span class="o">.</span><span class="n">isascii</span><span class="p">()</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">text</span><span class="o">.</span><span class="n">isdecimal</span><span class="p">()</span> <span class="ow">or</span>
+            <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">text</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"0"</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"noncanonical unsigned integer: </span><span class="si">{</span><span class="n">text</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">value</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">value</span> <span class="o">&gt;</span> <span class="n">maximum</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"integer out of range"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">value</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">batches</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+        <span class="n">line_number</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">line</span><span class="p">():</span>
+            <span class="k">nonlocal</span> <span class="n">line_number</span>
+            <span class="n">raw</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="n">readline</span><span class="p">(</span><span class="mi">257</span><span class="p">)</span>
+            <span class="n">line_number</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">raw</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="sa">b</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">256</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">line_number</span><span class="si">}</span><span class="s2">: missing/long/unterminated line"</span><span class="p">)</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="n">raw</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"ascii"</span><span class="p">)</span>
+            <span class="n">tokens</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">" "</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="ow">not</span> <span class="n">token</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">tokens</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"empty token"</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">tokens</span>
+
+        <span class="n">head</span> <span class="o">=</span> <span class="n">line</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">head</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span> <span class="ow">or</span> <span class="n">head</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"STRATA1"</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"workload header"</span><span class="p">)</span>
+        <span class="n">seed</span><span class="p">,</span> <span class="n">sequence</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">unsigned</span><span class="p">,</span> <span class="n">head</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+        <span class="k">yield</span> <span class="p">(</span><span class="s2">"header"</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="n">sequence</span><span class="p">)</span>
+</code></pre></figure>
+<p>The rest of the iterator recognizes puts and tombstones. Its duplicate-key set
+is bounded by 256. A put's <code>value</code> is a tuple or region integer; <code>None</code> means a
+tombstone, so region zero is a valid value and is not confused with deletion.
+<code>logical</code> is parser working state. If parsing raises, discard this iterator;
+its counters are not a recovery checkpoint.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/reference_query.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>        <span class="n">count</span> <span class="o">=</span> <span class="n">logical</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">words</span> <span class="o">=</span> <span class="n">line</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">words</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"END"</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">words</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span> <span class="ow">or</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">unsigned</span><span class="p">,</span> <span class="n">words</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span> <span class="o">!=</span> <span class="p">[</span><span class="n">sequence</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">logical</span><span class="p">]:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"workload totals"</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">stream</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"bytes after END"</span><span class="p">)</span>
+                <span class="k">return</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">words</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span> <span class="ow">or</span> <span class="n">words</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"B"</span> <span class="ow">or</span> <span class="n">sequence</span> <span class="o">==</span> <span class="n">U64</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"batch header"</span><span class="p">)</span>
+            <span class="n">next_sequence</span><span class="p">,</span> <span class="n">size</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">unsigned</span><span class="p">,</span> <span class="n">words</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+            <span class="k">if</span> <span class="n">next_sequence</span> <span class="o">!=</span> <span class="n">sequence</span> <span class="o">+</span> <span class="mi">1</span> <span class="ow">or</span> <span class="ow">not</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">size</span> <span class="o">&lt;=</span> <span class="mi">256</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"batch sequence/count"</span><span class="p">)</span>
+            <span class="n">changes</span><span class="p">,</span> <span class="n">keys</span> <span class="o">=</span> <span class="p">[],</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">size</span><span class="p">):</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="n">line</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"E"</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+                    <span class="n">identity</span><span class="p">,</span> <span class="n">account</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">cents</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">unsigned</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+                    <span class="k">if</span> <span class="n">day</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">32</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"event day"</span><span class="p">)</span>
+                    <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"E"</span><span class="p">,</span> <span class="n">identity</span><span class="p">),</span> <span class="p">(</span><span class="n">account</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">cents</span><span class="p">),</span> <span class="mi">30</span>
+                <span class="k">elif</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"A"</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="n">identity</span><span class="p">,</span> <span class="n">region</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">unsigned</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+                    <span class="k">if</span> <span class="n">region</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">32</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"account region"</span><span class="p">)</span>
+                    <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"A"</span><span class="p">,</span> <span class="n">identity</span><span class="p">),</span> <span class="n">region</span><span class="p">,</span> <span class="mi">14</span>
+                <span class="k">elif</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"X"</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"E"</span><span class="p">,</span> <span class="s2">"A"</span><span class="p">):</span>
+                    <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">unsigned</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">2</span><span class="p">])),</span> <span class="kc">None</span><span class="p">,</span> <span class="mi">9</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"operation fields"</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"duplicate key in batch"</span><span class="p">)</span>
+                <span class="n">keys</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+                <span class="n">changes</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+                <span class="n">logical</span> <span class="o">+=</span> <span class="n">width</span>
+            <span class="k">if</span> <span class="n">line</span><span class="p">()</span> <span class="o">!=</span> <span class="p">[</span><span class="s2">"C"</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">next_sequence</span><span class="p">)]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"batch terminator"</span><span class="p">)</span>
+            <span class="n">sequence</span> <span class="o">=</span> <span class="n">next_sequence</span>
+            <span class="n">count</span> <span class="o">+=</span> <span class="n">size</span>
+            <span class="k">if</span> <span class="nb">max</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">logical</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">U64</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"input totals overflow"</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="n">sequence</span><span class="p">,</span> <span class="n">changes</span><span class="p">)</span>
+</code></pre></figure>
+<p>Notice where <code>yield (sequence, changes)</code> occurs: after the entire batch and
+matching terminator have been checked. The caller cannot accidentally observe
+half a batch. A Python generator resumes after its last <code>yield</code>; it does not
+restart the function. The file context remains owned by that iterator until
+it finishes or closes.</p>
+<h2 id="preserve-unsigned-and-aggregate-semantics">Preserve unsigned and aggregate semantics</h2>
+<p>Python can represent values beyond 64 bits. The engine cannot. An independent
+oracle must therefore check the engine's domain rather than quietly accepting
+an answer that C++ must reject. Let <span class="math-input" data-display="false">U=2^{64}-1</span>. For a group with current count
+<span class="math-input" data-display="false">c</span> and total <span class="math-input" data-display="false">t</span>, and a contribution of <span class="math-input" data-display="false">\Delta c,\Delta t</span>, require</p>
+<div class="math-input" data-display="true">c+\Delta c\le U,\qquad t+\Delta t\le U.</div>
+<p>Only then store both new values. All contributions are nonnegative, so a final
+overflow cannot be canceled by later rows; enumeration order does not change
+the pass/fail decision. There is no floating-point tolerance. Sort the final
+<code>(region, day)</code> keys lexicographically and compare every integer exactly.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/reference_query.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">add_group</span><span class="p">(</span><span class="n">groups</span><span class="p">,</span> <span class="n">region</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">cents</span><span class="p">):</span>
+    <span class="n">previous_count</span><span class="p">,</span> <span class="n">previous_cents</span> <span class="o">=</span> <span class="n">groups</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">region</span><span class="p">,</span> <span class="n">day</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">new_count</span><span class="p">,</span> <span class="n">new_cents</span> <span class="o">=</span> <span class="n">previous_count</span> <span class="o">+</span> <span class="n">count</span><span class="p">,</span> <span class="n">previous_cents</span> <span class="o">+</span> <span class="n">cents</span>
+    <span class="k">if</span> <span class="nb">max</span><span class="p">(</span><span class="n">new_count</span><span class="p">,</span> <span class="n">new_cents</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">U64</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">OverflowError</span><span class="p">(</span><span class="s2">"aggregate exceeds uint64"</span><span class="p">)</span>
+    <span class="n">groups</span><span class="p">[(</span><span class="n">region</span><span class="p">,</span> <span class="n">day</span><span class="p">)]</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_count</span><span class="p">,</span> <span class="n">new_cents</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">answer</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+    <span class="n">groups</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">account</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">cents</span> <span class="ow">in</span> <span class="n">events</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">begin</span> <span class="o">&lt;=</span> <span class="n">day</span> <span class="o">&lt;</span> <span class="n">end</span> <span class="ow">and</span> <span class="n">account</span> <span class="ow">in</span> <span class="n">accounts</span><span class="p">:</span>
+            <span class="n">add_group</span><span class="p">(</span><span class="n">groups</span><span class="p">,</span> <span class="n">accounts</span><span class="p">[</span><span class="n">account</span><span class="p">],</span> <span class="n">day</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">cents</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">[(</span><span class="n">region</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="o">*</span><span class="n">totals</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">region</span><span class="p">,</span> <span class="n">day</span><span class="p">),</span> <span class="n">totals</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="o">.</span><span class="n">items</span><span class="p">())]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">replay</span><span class="p">(</span><span class="n">paths</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">max_keys</span><span class="o">=</span><span class="mi">100000</span><span class="p">):</span>
+    <span class="n">events</span><span class="p">,</span> <span class="n">accounts</span> <span class="o">=</span> <span class="p">{},</span> <span class="p">{}</span>
+    <span class="n">sequence</span><span class="p">,</span> <span class="n">seed</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span>
+    <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">:</span>
+        <span class="n">records</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">batches</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">file_seed</span><span class="p">,</span> <span class="n">base</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">records</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">base</span> <span class="o">!=</span> <span class="n">sequence</span> <span class="ow">or</span> <span class="p">(</span><span class="n">seed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">seed</span> <span class="o">!=</span> <span class="n">file_seed</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"input files do not form one ordered workload"</span><span class="p">)</span>
+        <span class="n">seed</span> <span class="o">=</span> <span class="n">file_seed</span>
+        <span class="k">for</span> <span class="n">sequence</span><span class="p">,</span> <span class="n">changes</span> <span class="ow">in</span> <span class="n">records</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">sequence</span> <span class="o">&gt;</span> <span class="n">target</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="c1"># Each batch is fully parsed and validated before any state changes.</span>
+            <span class="k">for</span> <span class="p">(</span><span class="n">relation</span><span class="p">,</span> <span class="n">identity</span><span class="p">),</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">changes</span><span class="p">:</span>
+                <span class="n">state</span> <span class="o">=</span> <span class="n">events</span> <span class="k">if</span> <span class="n">relation</span> <span class="o">==</span> <span class="s2">"E"</span> <span class="k">else</span> <span class="n">accounts</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">state</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">identity</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">identity</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">state</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">accounts</span><span class="p">)</span> <span class="o">==</span> <span class="n">max_keys</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"small oracle key cap; use formula for generated large data"</span><span class="p">)</span>
+                    <span class="n">state</span><span class="p">[</span><span class="n">identity</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">if</span> <span class="n">sequence</span> <span class="o">&lt;</span> <span class="n">target</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"requested sequence is not present"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">answer</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>
+</code></pre></figure>
+<p><code>replay</code> checks that each file starts exactly where the preceding one ended
+and that their seeds agree. It deliberately starts from sequence zero: a delta
+alone is insufficient to reconstruct its base. The bounded dictionary mode
+rejects insertion beyond <code>max_keys</code> rather than swapping away the machine.
+The cap counts live account and event keys; temporary batch objects are
+separate. A deleted account removes inner-join matches even when its events
+remain in the event dictionary.</p>
+<p>The comparison target is the requested committed sequence, not the sequence
+of the last physical record read. <code>sequence</code> continues advancing during input
+validation after <code>target</code>, while the dictionaries stop changing. An absent
+requested sequence is an error. This separation is what permits checking a
+held old view against a fully supplied new history.</p>
+<h2 id="derive-the-large-answer-without-materializing-events">Derive the large answer without materializing events</h2>
+<p>For the periodic recipe, all payload fields and mutation decisions depend on
+lane, not on the number of the period. Event IDs remain distinct, but the final
+query does not group by ID. Write</p>
+<div class="math-input" data-display="true">N=1000q+t,\qquad 0\le t&lt;1000.</div>
+<p>Here <span class="math-input" data-display="false">q</span> is the number of complete periods and <span class="math-input" data-display="false">t</span> the remaining events. Lane
+<span class="math-input" data-display="false">r</span> occurs</p>
+<div class="math-input" data-display="true">m_r=q+\mathbf{1}[r&lt;t]</div>
+<p>times; the bracket is 1 when its condition is true and 0 otherwise. For
+<span class="math-input" data-display="false">N=2007</span>, lanes 0 through 6 occur three times and all other lanes twice.
+The sum is <span class="math-input" data-display="false">7(3)+993(2)=2007</span>. This is the loop's <code>multiplicity</code>.</p>
+<p>After applying deletion, update, day filtering, and account existence for a
+lane, it contributes <span class="math-input" data-display="false">m_r</span> events and <span class="math-input" data-display="false">m_r v_r</span> cents to its region/day group,
+where <span class="math-input" data-display="false">v_r</span> is the surviving event amount. The code enumerates exactly 1000
+lanes and at most <span class="math-input" data-display="false">32\cdot64=2048</span> output groups. It never enumerates <span class="math-input" data-display="false">N</span> events
+or imports the generator's event function.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/reference_query.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">formula</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="n">phase</span><span class="p">,</span> <span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"recipe"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"strata-periodic-v1"</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"unknown analytical recipe"</span><span class="p">)</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"parameters"</span><span class="p">]</span>
+    <span class="n">n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">seed</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"events"</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="s2">"accounts"</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="s2">"seed"</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">n</span> <span class="o">&lt;=</span> <span class="mi">10</span><span class="o">**</span><span class="mi">12</span> <span class="ow">and</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">a</span> <span class="o">&lt;=</span> <span class="mi">4096</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">seed</span> <span class="o">&lt;=</span> <span class="n">U64</span> <span class="ow">and</span>
+            <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"days"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">64</span> <span class="ow">and</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"regions"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">32</span> <span class="ow">and</span>
+            <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"hot_percent"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">100</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"update_every"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">1000</span> <span class="ow">and</span>
+            <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">p</span><span class="p">[</span><span class="s2">"delete_every"</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">1000</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"recipe parameter range"</span><span class="p">)</span>
+    <span class="n">groups</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">cycles</span><span class="p">,</span> <span class="n">tail</span> <span class="o">=</span> <span class="nb">divmod</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
+    <span class="c1"># Enumerate lanes, not events; no event dictionary or generated input import.</span>
+    <span class="k">for</span> <span class="n">lane</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1000</span><span class="p">):</span>
+        <span class="n">multiplicity</span> <span class="o">=</span> <span class="n">cycles</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">lane</span> <span class="o">&lt;</span> <span class="n">tail</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">multiplicity</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">phase</span> <span class="o">==</span> <span class="s2">"delta"</span> <span class="ow">and</span> <span class="n">p</span><span class="p">[</span><span class="s2">"delete_every"</span><span class="p">]</span> <span class="ow">and</span> <span class="n">lane</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"delete_every"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">identity</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">lane</span> <span class="o">%</span> <span class="mi">100</span> <span class="o">&lt;</span> <span class="n">p</span><span class="p">[</span><span class="s2">"hot_percent"</span><span class="p">]</span> <span class="k">else</span> <span class="p">(</span><span class="mi">17</span> <span class="o">*</span> <span class="n">lane</span> <span class="o">+</span> <span class="n">seed</span><span class="p">)</span> <span class="o">%</span> <span class="n">a</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">amount</span> <span class="o">=</span> <span class="p">(</span><span class="mi">37</span> <span class="o">*</span> <span class="n">lane</span> <span class="o">+</span> <span class="n">seed</span><span class="p">)</span> <span class="o">%</span> <span class="mi">1000</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">phase</span> <span class="o">==</span> <span class="s2">"delta"</span> <span class="ow">and</span> <span class="n">p</span><span class="p">[</span><span class="s2">"update_every"</span><span class="p">]</span> <span class="ow">and</span> <span class="n">lane</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"update_every"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">identity</span> <span class="o">=</span> <span class="n">identity</span> <span class="o">%</span> <span class="n">a</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">amount</span> <span class="o">+=</span> <span class="mi">1000</span>
+        <span class="n">day</span> <span class="o">=</span> <span class="p">(</span><span class="n">lane</span> <span class="o">+</span> <span class="n">seed</span><span class="p">)</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"days"</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">begin</span> <span class="o">&lt;=</span> <span class="n">day</span> <span class="o">&lt;</span> <span class="n">end</span> <span class="ow">or</span> <span class="p">(</span><span class="n">phase</span> <span class="o">==</span> <span class="s2">"delta"</span> <span class="ow">and</span> <span class="n">identity</span> <span class="o">%</span> <span class="mi">11</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="n">region</span> <span class="o">=</span> <span class="p">(</span><span class="n">identity</span> <span class="o">+</span> <span class="n">seed</span><span class="p">)</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"regions"</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">phase</span> <span class="o">==</span> <span class="s2">"delta"</span> <span class="ow">and</span> <span class="n">identity</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">region</span> <span class="o">=</span> <span class="n">region</span> <span class="o">%</span> <span class="n">p</span><span class="p">[</span><span class="s2">"regions"</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">add_group</span><span class="p">(</span><span class="n">groups</span><span class="p">,</span> <span class="n">region</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">multiplicity</span><span class="p">,</span> <span class="n">multiplicity</span> <span class="o">*</span> <span class="n">amount</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">[(</span><span class="n">region</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="o">*</span><span class="n">totals</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">region</span><span class="p">,</span> <span class="n">day</span><span class="p">),</span> <span class="n">totals</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="o">.</span><span class="n">items</span><span class="p">())]</span>
+</code></pre></figure>
+<p>This analytical mode supports the <strong>complete base or complete delta phase</strong>.
+It does not describe an arbitrary intermediate batch: a mid-file snapshot can
+contain only some identities from a lane. Use dictionary replay for those small
+snapshots. It also assumes that the files follow <code>strata-periodic-v1</code>; changing
+an operation by hand does not change the metadata formula. We therefore
+cross-check generator, replay, and formula on small cases and retain handwritten
+fixtures whose answers do not depend on either recipe implementation.</p>
+<p>For <span class="math-input" data-display="false">N=10^{12}</span>, <span class="math-input" data-display="false">q=10^9</span> and <span class="math-input" data-display="false">t=0</span>. Every group answer is the corresponding
+1000-event answer multiplied by <span class="math-input" data-display="false">10^9</span>, subject to the same unsigned checks.
+The test computes this formula only. It does not generate, import, or claim to
+have processed a trillion events in the engine.</p>
+<h2 id="compare-ordered-results-without-converting-integers-to-floats">Compare ordered results without converting integers to floats</h2>
+<p>The CSV reader returns strings by default. Its documentation also specifies
+opening file objects with <code>newline=&quot;&quot;</code>; see
+<a href="https://docs.python.org/3/library/csv.html#csv.reader">Python's CSV reader</a>.
+Keep that behavior and call <code>unsigned</code> yourself. Do not use an option that
+converts numeric fields to floating point: values near <span class="math-input" data-display="false">2^{64}</span> cannot be
+validated that way.</p>
+<p>Comparison is a streaming walk over the actual file. It rejects the wrong
+header, missing rows, wrong widths, changed values, and extra rows. The expected
+rows are sorted, so a duplicate or out-of-order actual group is also rejected.
+For an empty answer, a header with no data rows is correct.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/reference_query.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">compare</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">expected</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">newline</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">"ascii"</span><span class="p">)</span> <span class="k">as</span> <span class="n">source</span><span class="p">:</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">next</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">!=</span> <span class="n">HEADER</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"answer CSV header"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">wanted</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">expected</span><span class="p">):</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">row</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"answer row </span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">: missing/wrong width"</span><span class="p">)</span>
+            <span class="n">actual</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">unsigned</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">row</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">actual</span> <span class="o">!=</span> <span class="n">wanted</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"answer row </span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">: expected </span><span class="si">{</span><span class="n">wanted</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">actual</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">next</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"extra answer row"</span><span class="p">)</span>
+</code></pre></figure>
+<p>The command-line entry point validates the day interval and chooses replay or
+formula explicitly. Supplying <code>--actual</code> compares a completed output; omitting
+it prints the expected CSV. Errors name the selected mode and input paths.
+The reference does not create an expected file next to the database or consult
+any table, cache, or manifest bytes.</p>
+<figure class="code-block"><figcaption><span class="code-title">scripts/reference_query.py</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="vm">__doc__</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"mode"</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">(</span><span class="s2">"replay"</span><span class="p">,</span> <span class="s2">"formula"</span><span class="p">))</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"inputs"</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s2">"+"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--sequence"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--phase"</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">(</span><span class="s2">"base"</span><span class="p">,</span> <span class="s2">"delta"</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="s2">"delta"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--begin"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--end"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">32</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--max-keys"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">100000</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--actual"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">)</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">begin</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">end</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">32</span> <span class="ow">and</span> <span class="n">args</span><span class="o">.</span><span class="n">max_keys</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"query bounds/key cap"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s2">"replay"</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">sequence</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">sequence</span> <span class="o">&lt;=</span> <span class="n">U64</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"replay needs an unsigned --sequence"</span><span class="p">)</span>
+            <span class="n">expected</span> <span class="o">=</span> <span class="n">replay</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">sequence</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">max_keys</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inputs</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"formula needs one meta.json"</span><span class="p">)</span>
+            <span class="n">expected</span> <span class="o">=</span> <span class="n">formula</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">read_text</span><span class="p">()),</span> <span class="n">args</span><span class="o">.</span><span class="n">phase</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">actual</span><span class="p">:</span>
+            <span class="n">compare</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">actual</span><span class="p">,</span> <span class="n">expected</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"verified groups=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span><span class="si">}</span><span class="s2"> mode=</span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">mode</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">writer</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="n">lineterminator</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+            <span class="n">writer</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">HEADER</span><span class="p">)</span>
+            <span class="n">writer</span><span class="o">.</span><span class="n">writerows</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">OverflowError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">,</span> <span class="ne">UnicodeError</span><span class="p">,</span> <span class="n">csv</span><span class="o">.</span><span class="n">Error</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"reference </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">mode</span><span class="si">}</span><span class="s2"> inputs=</span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">inputs</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</code></pre></figure>
+<h2 id="first-runnable-checks">First runnable checks</h2>
+<p>These commands need only Python and the three completed files above, not the
+C++ executable. Run them from the learner source root. The chosen directory
+must not already exist.</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — generate and compare two independent small answers</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>python3<span class="w"> </span>scripts/generate_data.py<span class="w"> </span>/tmp/strata-workload-small
+python3<span class="w"> </span>scripts/reference_query.py<span class="w"> </span>replay<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>/tmp/strata-workload-small/base.ops<span class="w"> </span>/tmp/strata-workload-small/delta.ops<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--sequence<span class="w"> </span><span class="m">5</span><span class="w"> </span>--begin<span class="w"> </span><span class="m">1</span><span class="w"> </span>--end<span class="w"> </span><span class="m">5</span><span class="w"> </span>&gt;<span class="w"> </span>/tmp/strata-old-reference.csv
+python3<span class="w"> </span>scripts/reference_query.py<span class="w"> </span>formula<span class="w"> </span>/tmp/strata-workload-small/meta.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--phase<span class="w"> </span>base<span class="w"> </span>--begin<span class="w"> </span><span class="m">1</span><span class="w"> </span>--end<span class="w"> </span><span class="m">5</span><span class="w"> </span>--actual<span class="w"> </span>/tmp/strata-old-reference.csv
+</code></pre></figure>
+<p>The last command prints <code>verified groups=8 mode=formula</code>. The base metadata
+reports sequence 5, 137 operations, and 3838 logical bytes. Evaluating sequence
+6 or <code>--phase delta</code> yields twelve groups, not eight. Changing only the seed
+or batch size requires reading the resulting metadata instead of reusing these
+sequence constants.</p>
+<p>The next part turns the same format into a bounded C++ source of real mutations.
+The two implementations should agree about valid inputs, but they must not share
+parser code that would make the same error invisible.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-20-part-3.html"><small>Previous · Chapter 20 · Part 3</small><span>Force publication, failure, and shutdown boundaries</span></a><a href="chapter-21-part-2.html"><small>Next · Chapter 21 · Part 2</small><span>Parse bounded input; drive the existing engine</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 21 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-a-workload-is-a-sequence-of-committed-batches">Part 1 — A workload is a sequence of committed batches</a></li><li class="toc-h2"><a href="#put-the-commit-boundary-in-the-input">Put the commit boundary in the input</a></li><li class="toc-h2"><a href="#count-bytes-with-an-explicit-denominator">Count bytes with an explicit denominator</a></li><li class="toc-h2"><a href="#generate-bounded-batches-not-a-giant-list">Generate bounded batches, not a giant list</a></li><li class="toc-h2"><a href="#use-a-documented-pattern-for-skew-and-updates">Use a documented pattern for skew and updates</a></li><li class="toc-h2"><a href="#parse-independently-before-evaluating-a-snapshot">Parse independently before evaluating a snapshot</a></li><li class="toc-h2"><a href="#preserve-unsigned-and-aggregate-semantics">Preserve unsigned and aggregate semantics</a></li><li class="toc-h2"><a href="#derive-the-large-answer-without-materializing-events">Derive the large answer without materializing events</a></li><li class="toc-h2"><a href="#compare-ordered-results-without-converting-integers-to-floats">Compare ordered results without converting integers to floats</a></li><li class="toc-h2"><a href="#first-runnable-checks">First runnable checks</a></li></ul></aside>
+</div></body></html>

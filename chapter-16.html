@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 16 · Part 1 — A streaming many-to-one merge join · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-16.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html" aria-current="page"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 16 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/35">Read on GitHub</a><a href="source/chapter-16.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-one-account-value-many-events">Part 1 — One account value, many events</a></li><li class="toc-h2"><a href="#state-the-multiplicity-before-writing-the-loop">State the multiplicity before writing the loop</a></li><li class="toc-h2"><a href="#use-order-to-prove-which-row-can-be-discarded">Use order to prove which row can be discarded</a></li><li class="toc-h2"><a href="#walk-across-an-output-boundary">Walk across an output boundary</a></li><li class="toc-h2"><a href="#make-the-joined-output-own-all-five-fields">Make the joined output own all five fields</a></li><li class="toc-h2"><a href="#prepare-replacement-storage-before-touching-the-old-batch">Prepare replacement storage before touching the old batch</a></li><li class="toc-h2"><a href="#name-three-different-capacities">Name three different capacities</a></li><li class="toc-h2"><a href="#keep-input-lifetime-in-one-optional-owner">Keep input lifetime in one optional owner</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-16-a-streaming-many-to-one-merge-join">Chapter 16 — A streaming many-to-one merge join</h1>
+<h2 id="part-1-one-account-value-many-events">Part 1 — One account value, many events</h2>
+<p>A sorted event stream is not yet a regional result. It contains account IDs, not
+regions. An event whose account was deleted must disappear from an inner join;
+an event whose account changed region must use the region from the <strong>same read
+view</strong> as the event. Looking up each event in a newly captured account snapshot
+would violate that requirement even when every individual lookup was correct.</p>
+<p>We will merge Chapter 15's event stream with an account scan from one captured
+<code>ReadView</code>. The account relation can be much larger than its input buffer. A hot
+account can match thousands of events without growing a group vector: retain one
+copied account row and reuse it until the event key moves forward.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Derive the three ordered comparison cases; implement a resumable many-to-one
+merge; distinguish copied row state from borrowed batch storage; enforce input
+ordering and dimension uniqueness; preserve empty progress; account for
+overlapping pipeline buffers; and connect terminal failure to upstream spill
+and snapshot cleanup.</p>
+</blockquote>
+<p><strong>Prerequisites:</strong> the complete code through all three parts of
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-15.html">Chapter 15</a>, including
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-14.html">Chapter 14's</a> owning
+batches and pull protocol and
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-12.html">Chapter 12's</a> owning
+read views. Keep the twenty-two existing CTest entries. We reuse <code>EventOrder</code>,
+<code>ExternalSort</code>, <code>EventScan</code>, <code>AccountScan</code>, <code>Column</code>, <code>check_output</code>, and the shared
+budget; we do not replace their implementations.</p>
+<p><strong>Implementation allocation: 5.0 hours for all three parts together.</strong> Allocate
+1.5 hours to the state machine, 1.5 to streaming integration, 0.75 to budget and
+lifetime behavior, and 1.25 to boundaries, skew, and failure checks. Reading is
+separate. This chapter remains synchronous. Grouping, an additional sort order,
+query-result publication, and cancellation are not introduced here.</p>
+<p>Create <code>include/strata/query/merge_join.hpp</code>, <code>src/query/merge_join.cpp</code>, and
+<code>tests/merge_join.cpp</code>. Numbered segments for each filename concatenate in reading
+order across these three parts. The header deliberately stays open until Part 2;
+the implementation namespace closes there too. Part 3 supplies the full test
+program and a small CMake append. No prior source file changes except that append.</p>
+<p><a href="https://25d-228.github.io/cplusplus-learning/chapter-16-part-2.html">Part 2</a>
+implements head loading, advancement, failure, and the same-view factory.
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-16-part-3.html">Part 3</a>
+provides the runnable checks.</p>
+<h2 id="state-the-multiplicity-before-writing-the-loop">State the multiplicity before writing the loop</h2>
+<p>An <strong>inner join</strong> emits a row for each matching pair, not one row for each distinct
+key. The PostgreSQL manual's
+<a href="https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN">inner-join definition</a>
+states that matching-pair interpretation. Our narrower relation contract says
+that the visible accounts stream has exactly one row per present account ID.
+Consequently, an input event produces either one joined row or none.</p>
+<p>Let <span class="math-input" data-display="false">N</span> be the number of events after filtering, let <span class="math-input" data-display="false">k_i</span> be event <span class="math-input" data-display="false">i</span>'s account
+ID, and let <span class="math-input" data-display="false">K</span> be the set of visible account IDs in the captured view. Define
+<span class="math-input" data-display="false">\mathbf{1}[P]</span> as one when proposition <span class="math-input" data-display="false">P</span> is true and zero otherwise. The number
+of output rows is</p>
+<div class="math-input" data-display="true">J=\sum_{i=0}^{N-1}\mathbf{1}[k_i\in K],\qquad 0\leq J\leq N.</div>
+<p>For event account IDs <code>(10,10,20,99)</code> and visible accounts <code>(10,20)</code>, the four
+indicator values are <code>(1,1,1,0)</code>, so <span class="math-input" data-display="false">J=3</span>. The two events for account 10 both
+survive. This is not deduplication or aggregation. Exact duplicate fact rows also
+retain their multiplicity in the reusable operator, although an ordinary visible
+event scan produces one row per event primary key.</p>
+<p>The accounts side is different. Seeing account 10 twice violates the operator's
+unique-visible-key contract, even when both copies have the same region. We
+reject the stream instead of multiplying output rows. A general many-to-many
+merge join must handle the cross-product of equal-key groups; PostgreSQL's
+<a href="https://doxygen.postgresql.org/nodeMergejoin_8c_source.html">merge-join implementation notes</a>
+explain why repeated keys on both sides can require restoring an earlier input
+position. The implementation here needs no such replay because the dimension
+key is unique. It has no null values, outer-join padding, arbitrary predicates,
+or implicit foreign-key enforcement. Missing accounts simply omit events.</p>
+<h2 id="use-order-to-prove-which-row-can-be-discarded">Use order to prove which row can be discarded</h2>
+<p>The left input is ordered lexicographically by
+<code>(account_id, event_id, day, amount_cents)</code>, exactly as Chapter 15's <code>EventOrder</code>
+specifies. The first component is sufficient for joining; the remaining fields
+make output order deterministic. The right input is strictly increasing by
+<code>account_id</code>. Both use unsigned comparisons, not subtraction that might wrap.</p>
+<p>Write <span class="math-input" data-display="false">e</span> for the current event account ID and <span class="math-input" data-display="false">a</span> for the current account ID.
+Only three comparisons are possible:</p>
+<table>
+<thead>
+<tr>
+<th>Comparison</th>
+<th>What the ordering proves</th>
+<th>State change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="math-input" data-display="false">e&lt;a</span></td>
+<td>All remaining accounts have keys at least <span class="math-input" data-display="false">a</span>; this event cannot match.</td>
+<td>Discard the event and count it as unmatched.</td>
+</tr>
+<tr>
+<td><span class="math-input" data-display="false">e&gt;a</span></td>
+<td>All remaining events have keys at least <span class="math-input" data-display="false">e</span>; this account cannot match another event.</td>
+<td>Discard the account. Keep the event.</td>
+</tr>
+<tr>
+<td><span class="math-input" data-display="false">e=a</span></td>
+<td>The unique account supplies this event's region.</td>
+<td>Emit a copied joined row; discard the event, <strong>keep the account</strong>.</td>
+</tr>
+</tbody>
+</table>
+<p>The last action is the essential many-to-one rule. Advancing both sides after a
+match would lose the second event for account 10. Advancing neither side would
+emit the same pair forever. Clearing only the event head makes one unit of
+progress while preserving a possible next match.</p>
+<p>There is also a useful loop invariant. Every discarded event has either been
+emitted exactly once or proved unmatched. Every discarded account is too small
+for the remaining events, or the event input has ended. A current head is an
+owned value that has been loaded but not yet discarded. Rows before the input
+batch index have already been copied into a head at most once; they are not
+loaded again after an output pause.</p>
+<p>Let <span class="math-input" data-display="false">A</span> be the number of visible account rows. Each comparison discards at least
+one previously undiscarded input row, so the number of comparisons is bounded by
+<span class="math-input" data-display="false">N+A</span>. Tail validation also visits each row at most once. Excluding upstream
+sorting, decoding, and empty-progress calls, the merge work is <span class="math-input" data-display="false">O(N+A)</span> and its
+current-row state is <span class="math-input" data-display="false">O(1)</span>. The bound depends on ordered inputs, not on uniform
+key frequencies. A single account matching almost every event does not require
+memory proportional to that group.</p>
+<h2 id="walk-across-an-output-boundary">Walk across an output boundary</h2>
+<p>Use event notation <code>(event_id, account_id, day, cents)</code>. The event input is
+<code>(9,1,3,5)</code>, <code>(100,10,3,500)</code>, <code>(101,10,3,250)</code>, <code>(102,20,3,700)</code>, and
+<code>(103,99,3,50)</code>. The accounts are <code>(10,1)</code>, <code>(20,2)</code>, and <code>(30,4)</code>, where the
+second field is a region. Give each input buffer one row and the output two rows.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">Comparison number</th>
+<th>Current event/account keys</th>
+<th>Action</th>
+<th>Saved account afterward</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">1</td>
+<td>1 / 10</td>
+<td>Discard event 9.</td>
+<td>10 → region 1</td>
+</tr>
+<tr>
+<td style="text-align:right">2</td>
+<td>10 / 10</td>
+<td>Emit event 100 in region 1.</td>
+<td>10 → region 1</td>
+</tr>
+<tr>
+<td style="text-align:right">3</td>
+<td>10 / 10</td>
+<td>Emit event 101; output is full. Return.</td>
+<td>10 → region 1</td>
+</tr>
+<tr>
+<td style="text-align:right">4</td>
+<td>20 / 10</td>
+<td>On the next call, discard account 10.</td>
+<td>None</td>
+</tr>
+<tr>
+<td style="text-align:right">5</td>
+<td>20 / 20</td>
+<td>Emit event 102 in region 2.</td>
+<td>20 → region 2</td>
+</tr>
+<tr>
+<td style="text-align:right">6</td>
+<td>99 / 20</td>
+<td>Discard account 20.</td>
+<td>None</td>
+</tr>
+<tr>
+<td style="text-align:right">7</td>
+<td>99 / 30</td>
+<td>Discard account 30.</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p>After comparison 7, the account source reports end. Event 103 is unmatched;
+there is no eighth key comparison. When both inputs end, the second output batch
+contains event 102. The next call returns empty <code>Pull::end</code>.</p>
+<p>The first output call asked the account source for only one batch, despite
+matching two events and refilling the event buffer three times. That observation
+will be an assertion, not just a diagram. It catches a state-machine defect that
+can remain entirely within valid memory addresses.</p>
+<h2 id="make-the-joined-output-own-all-five-fields">Make the joined output own all five fields</h2>
+<p>A joined result keeps the complete <code>Event</code> and adds <code>region_id</code>. Event ID remains
+useful as a deterministic tie-breaker; account ID remains useful for diagnosis;
+day, cents, and region are needed by the next query stages. The batch stores
+columns rather than an array of padded <code>JoinedRow</code> objects.</p>
+<p>Compose an <code>EventBatch</code> with one <code>Column&lt;uint32_t&gt;</code>. There is only one visible row
+count, inside <code>events_</code>. <code>size()</code> delegates to it; a second independently updated
+count would create a new consistency invariant for no benefit. Begin the header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/merge_join.hpp — complete file, segment 1</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_QUERY_MERGE_JOIN_HPP</span>
+<span class="cp">#define STRATA_QUERY_MERGE_JOIN_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/query/external_sort.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/query/operators.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string_view&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">query</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">JoinedRow</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Event</span><span class="w"> </span><span class="n">event</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">region_id</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">JoinedRow</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">JoinedBatch</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">row_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EventBatch</span><span class="o">::</span><span class="n">row_bytes</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="p">);</span>
+<span class="w">    </span><span class="n">JoinedBatch</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">);</span>
+<span class="w">    </span><span class="n">JoinedBatch</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">JoinedBatch</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">JoinedBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">JoinedBatch</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">JoinedBatch</span><span class="p">(</span><span class="n">JoinedBatch</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">JoinedBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">JoinedBatch</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">swap</span><span class="p">(</span><span class="n">JoinedBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">replace_capacity</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">clear</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">events_</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">append</span><span class="p">(</span><span class="n">JoinedRow</span><span class="w"> </span><span class="n">row</span><span class="p">);</span>
+<span class="w">    </span><span class="n">JoinedRow</span><span class="w"> </span><span class="nf">row</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">EventBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">events</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">events_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">EventBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">events</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">regions</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">regions_</span><span class="p">.</span><span class="n">storage</span><span class="p">().</span><span class="n">first</span><span class="p">(</span><span class="n">size</span><span class="p">());</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">regions</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">size</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">events_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">capacity</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">events_</span><span class="p">.</span><span class="n">capacity</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">capacity_bytes</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">row_bytes</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">events_</span><span class="p">.</span><span class="n">budget</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">EventBatch</span><span class="w"> </span><span class="n">events_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Column</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">regions_</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>The defaulted move operations are appropriate <strong>because</strong> both members already
+implement the required ownership behavior. Moving <code>EventBatch</code> empties its source
+count and capacities; moving <code>Column</code> transfers its allocation with the allocator
+that owns the corresponding budget. There is no additional scalar count here
+that a memberwise move would accidentally leave nonzero. This is different from
+default-moving a type with a raw owning pointer or an independent count.</p>
+<p>The <code>events()</code> and <code>regions()</code> accessors expose read-only borrows, not ownership.
+As in Chapter 14, treat them as expired at successful mutation, refill, move,
+swap, capacity replacement, or destruction. <code>row(i)</code> returns a copied value.
+The rvalue-deleted accessors prevent directly borrowing from a temporary batch;
+they cannot prove every caller obeys the remaining lifetime contract.</p>
+<p>A joined column row requires three 64-bit fields and two 32-bit fields:</p>
+<div class="math-input" data-display="true">w_J=3\cdot8+2\cdot4=32\ \text{bytes}.</div>
+<p>This is the sum of column element widths, not <code>sizeof(JoinedRow)</code>. Its <code>Event</code>
+subobject can have padding. A capacity-two output therefore requests 64 element
+bytes through five allocations, regardless of the aggregate row object's padding.</p>
+<h2 id="prepare-replacement-storage-before-touching-the-old-batch">Prepare replacement storage before touching the old batch</h2>
+<p>Start <code>src/query/merge_join.cpp</code> with a checked capacity helper, construction,
+swap, and replacement. The namespace remains open for the following segments:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/query/merge_join.cpp — complete file, segment 1</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/query/merge_join.hpp"</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">query</span><span class="w"> </span><span class="p">{</span>
+<span class="k">namespace</span><span class="w"> </span><span class="p">{</span>
+<span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">joined_capacity</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">capacity</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"zero joined batch capacity"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">checked_size_mul</span><span class="p">(</span><span class="n">capacity</span><span class="p">,</span><span class="w"> </span><span class="n">JoinedBatch</span><span class="o">::</span><span class="n">row_bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">capacity</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace</span>
+
+<span class="n">JoinedBatch</span><span class="o">::</span><span class="n">JoinedBatch</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">events_</span><span class="p">(</span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">joined_capacity</span><span class="p">(</span><span class="n">capacity</span><span class="p">)),</span><span class="w"> </span><span class="n">regions_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">budget</span><span class="p">),</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">JoinedBatch::swap</span><span class="p">(</span><span class="n">JoinedBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">events_</span><span class="p">.</span><span class="n">swap</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">events_</span><span class="p">);</span><span class="w"> </span><span class="n">regions_</span><span class="p">.</span><span class="n">swap</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">regions_</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">JoinedBatch::replace_capacity</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">JoinedBatch</span><span class="w"> </span><span class="n">candidate</span><span class="p">{</span><span class="n">budget</span><span class="p">(),</span><span class="w"> </span><span class="n">capacity</span><span class="p">};</span><span class="w"> </span><span class="n">swap</span><span class="p">(</span><span class="n">candidate</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>joined_capacity</code> checks the <strong>whole</strong> column footprint before the first
+allocation. Relying only on each column's multiplication would not establish
+that their sum fits <code>size_t</code>. The helper returns the original capacity; it is
+called while initializing <code>events_</code>, before the region column is constructed.
+An exception from that later column destroys the already constructed event
+columns automatically.</p>
+<p><code>replace_capacity</code> does not reserve more space while retaining rows. It installs
+an empty batch of the requested capacity after a complete candidate exists.
+Failure leaves the original rows, borrowed addresses, and charges intact. For a
+capacity-two old batch and a capacity-three candidate, old and new storage can
+coexist at a peak of <span class="math-input" data-display="false">64+96=160</span> column bytes. Releasing old storage first would
+reduce that transient requirement but abandon the strong replacement guarantee.</p>
+<p>Now append and read rows:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/query/merge_join.cpp — complete file, segment 2</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">JoinedBatch::append</span><span class="p">(</span><span class="n">JoinedRow</span><span class="w"> </span><span class="n">row</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">capacity</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"joined batch full"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">regions_</span><span class="p">.</span><span class="n">storage</span><span class="p">()[</span><span class="n">size</span><span class="p">()]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">row</span><span class="p">.</span><span class="n">region_id</span><span class="p">;</span>
+<span class="w">    </span><span class="n">events_</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">.</span><span class="n">event</span><span class="p">);</span><span class="w">  </span><span class="c1">// One shared visible count, published last.</span>
+<span class="p">}</span>
+<span class="n">JoinedRow</span><span class="w"> </span><span class="nf">JoinedBatch::row</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">events_</span><span class="p">.</span><span class="n">row</span><span class="p">(</span><span class="n">index</span><span class="p">);</span><span class="w">  </span><span class="c1">// Bounds check precedes region access.</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">event</span><span class="p">,</span><span class="w"> </span><span class="n">regions_</span><span class="p">.</span><span class="n">storage</span><span class="p">()[</span><span class="n">index</span><span class="p">]};</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The full-batch check precedes either write. <code>regions_[size()]</code> is initialized
+first; <code>events_.append</code> writes the event scalars and increments the shared visible
+count last. Its capacity precondition is already established, and these unsigned
+assignments do not throw. A reader cannot observe an extra event row lacking a
+region. This argument would need revisiting for throwing element types; our
+existing <code>ColumnNumber</code> deliberately excludes them.</p>
+<p>For <code>row(index)</code>, the event lookup checks bounds before the region access. A
+moved-from batch has zero capacity and size; appending directly is rejected, but
+<code>replace_capacity</code> can make it usable again because its moved-from column
+allocators retain valid budget owners. No raw pointer is exposed for ownership
+transfer.</p>
+<h2 id="name-three-different-capacities">Name three different capacities</h2>
+<p><code>event_rows</code> and <code>account_rows</code> configure the two input batches. The caller's
+<code>JoinedBatch</code> determines output capacity independently. <code>work_rows</code> is a bound
+on iterations of the join state machine per pull; it is not a memory allowance
+or an end-to-end latency promise.</p>
+<p>The statistics below are copied observations. Saturation prevents counters from
+wrapping and falsely appearing small. It does not stop a valid query. In
+particular, <code>matched</code> counts rows staged internally; a later error can discard
+those rows from the current output batch. It is not an output-commit counter.
+Continue the header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/merge_join.hpp — complete file, segment 2</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">struct</span><span class="w"> </span><span class="nc">JoinOptions</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">event_rows</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">account_rows</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">work_rows</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span><span class="w">  </span><span class="c1">// At most this many join transitions per next().</span>
+<span class="p">};</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">JoinStats</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">accounts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">comparisons</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">matched</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">unmatched</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">progress_returns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">saturated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="k">namespace</span><span class="w"> </span><span class="nn">join_detail</span><span class="w"> </span><span class="p">{</span>
+<span class="n">JoinOptions</span><span class="w"> </span><span class="nf">checked_options</span><span class="p">(</span><span class="n">JoinOptions</span><span class="w"> </span><span class="n">options</span><span class="p">);</span>
+<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">common_budget</span><span class="p">(</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">events</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">accounts</span><span class="p">);</span>
+<span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">increment</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">value</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="o">&amp;</span><span class="w"> </span><span class="n">saturated</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">saturated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">++</span><span class="n">value</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace join_detail</span>
+</code></pre></figure>
+<p>The post-increment in <code>increment</code> executes only below the maximum value. At the
+maximum, the value stays there and <code>saturated</code> becomes true. Interpret equalities
+between counters only when that flag is false.</p>
+<p>The two non-inline helpers belong in the implementation file. <code>common_budget</code>
+compares the ledger objects, not two equal numeric limits. Giving each side a
+separate 8 MiB ledger would permit their sum to exceed an intended shared 8 MiB
+allowance. It would also make downstream allocation ownership harder to follow.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/query/merge_join.cpp — complete file, segment 3</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">namespace</span><span class="w"> </span><span class="nn">join_detail</span><span class="w"> </span><span class="p">{</span>
+<span class="n">JoinOptions</span><span class="w"> </span><span class="nf">checked_options</span><span class="p">(</span><span class="n">JoinOptions</span><span class="w"> </span><span class="n">options</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">event_rows</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">account_rows</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">work_rows</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"zero join capacity or work limit"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">checked_size_add</span><span class="p">(</span><span class="n">checked_size_mul</span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">event_rows</span><span class="p">,</span><span class="w"> </span><span class="n">EventBatch</span><span class="o">::</span><span class="n">row_bytes</span><span class="p">),</span>
+<span class="w">                           </span><span class="n">checked_size_mul</span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">account_rows</span><span class="p">,</span><span class="w"> </span><span class="n">AccountBatch</span><span class="o">::</span><span class="n">row_bytes</span><span class="p">));</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">options</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">common_budget</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">events</span><span class="p">,</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">accounts</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">events</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">events</span><span class="p">.</span><span class="n">get</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">accounts</span><span class="p">.</span><span class="n">get</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"join sources need one shared budget"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">events</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace join_detail</span>
+</code></pre></figure>
+<p>These checks establish construction preconditions, not a guarantee that every
+future upstream request will fit. Other live readers and snapshots share the
+same ledger. A locally valid sort or join can still encounter <code>BudgetExceeded</code>.
+The default capacities are choices, not minimum hardware requirements.</p>
+<p>Notice a limitation of the budget check: two independent snapshots from the
+same database naturally share one ledger. Equality of budget pointers does not
+prove that two sources describe the same committed boundary. The factory in
+Part 2 will establish that property by construction.</p>
+<h2 id="keep-input-lifetime-in-one-optional-owner">Keep input lifetime in one optional owner</h2>
+<p>The complete class declaration follows. <code>Inputs</code> is a nested class holding both
+upstream sources, both reusable batches, and their next-unloaded indices. The
+outer <code>std::optional&lt;Inputs&gt;</code> holds that object <strong>inline</strong>. <code>std::in_place</code> tells
+the optional to construct its contained <code>Inputs</code> directly from the following
+arguments; it does not ask for another heap allocation.</p>
+<p>Why use an optional for an object that always exists after successful
+construction? Completion or failure should destroy the entire upstream ownership
+chain immediately, while leaving the join object available to answer an end or
+failed-state check. According to the
+<a href="https://eel.is/c++draft/optional.mod"><code>optional::reset</code> contract</a>, resetting an
+engaged optional destroys its contained object and disengages it.</p>
+<p>The <code>requires</code> clause checks the two source interfaces through Chapter 14's
+<code>PullSource</code> concept. It checks callable expressions and return types, not that
+rows are sorted, keys are unique, or an empty batch represents real progress;
+that distinction follows the standard's
+<a href="https://eel.is/c++draft/expr.prim.req">requires-expression rules</a>.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/merge_join.hpp — complete file, segment 3</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Events</span><span class="p">,</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Accounts</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="k">requires</span><span class="w"> </span><span class="n">PullSource</span><span class="o">&lt;</span><span class="n">Events</span><span class="p">,</span><span class="w"> </span><span class="n">EventBatch</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">PullSource</span><span class="o">&lt;</span><span class="n">Accounts</span><span class="p">,</span><span class="w"> </span><span class="n">AccountBatch</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MergeJoin</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">struct</span><span class="w"> </span><span class="nc">Inputs</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">Events</span><span class="w"> </span><span class="n">left</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Accounts</span><span class="w"> </span><span class="n">right</span><span class="p">;</span>
+<span class="w">        </span><span class="n">EventBatch</span><span class="w"> </span><span class="n">events</span><span class="p">;</span>
+<span class="w">        </span><span class="n">AccountBatch</span><span class="w"> </span><span class="n">accounts</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">event_at</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">account_at</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="n">Inputs</span><span class="p">(</span><span class="n">Events</span><span class="w"> </span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="n">Accounts</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">JoinOptions</span><span class="w"> </span><span class="n">options</span><span class="p">)</span>
+<span class="w">            </span><span class="o">:</span><span class="w"> </span><span class="n">left</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">e</span><span class="p">)),</span><span class="w"> </span><span class="n">right</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">a</span><span class="p">)),</span><span class="w"> </span><span class="n">events</span><span class="p">(</span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">event_rows</span><span class="p">),</span>
+<span class="w">              </span><span class="n">accounts</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">budget</span><span class="p">),</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">account_rows</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="w">    </span><span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Head</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">row</span><span class="p">,</span><span class="w"> </span><span class="n">progress</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="w"> </span><span class="p">};</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">MergeJoin</span><span class="p">(</span><span class="n">Events</span><span class="w"> </span><span class="n">events</span><span class="p">,</span><span class="w"> </span><span class="n">Accounts</span><span class="w"> </span><span class="n">accounts</span><span class="p">,</span><span class="w"> </span><span class="n">JoinOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{})</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">budget_</span><span class="p">(</span><span class="n">join_detail</span><span class="o">::</span><span class="n">common_budget</span><span class="p">(</span><span class="n">events</span><span class="p">.</span><span class="n">budget</span><span class="p">(),</span><span class="w"> </span><span class="n">accounts</span><span class="p">.</span><span class="n">budget</span><span class="p">())),</span>
+<span class="w">          </span><span class="n">options_</span><span class="p">(</span><span class="n">join_detail</span><span class="o">::</span><span class="n">checked_options</span><span class="p">(</span><span class="n">options</span><span class="p">)),</span>
+<span class="w">          </span><span class="n">inputs_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">in_place</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">events</span><span class="p">),</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">accounts</span><span class="p">),</span><span class="w"> </span><span class="n">budget_</span><span class="p">,</span><span class="w"> </span><span class="n">options_</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="n">MergeJoin</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MergeJoin</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MergeJoin</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MergeJoin</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MergeJoin</span><span class="p">(</span><span class="n">MergeJoin</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MergeJoin</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">MergeJoin</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">JoinStats</span><span class="w"> </span><span class="n">stats</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">stats_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">StreamState</span><span class="w"> </span><span class="n">state</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">state_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">Pull</span><span class="w"> </span><span class="n">next</span><span class="p">(</span><span class="n">JoinedBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">Head</span><span class="w"> </span><span class="n">event_head</span><span class="p">();</span>
+<span class="w">    </span><span class="n">Head</span><span class="w"> </span><span class="nf">account_head</span><span class="p">();</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">release_inputs</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">event_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="n">account_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="n">previous_event_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="n">previous_account_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="n">inputs_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w">  </span><span class="c1">// Destroys upstream plans, cursors, and spill owners.</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">count</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">join_detail</span><span class="o">::</span><span class="n">increment</span><span class="p">(</span><span class="n">value</span><span class="p">,</span><span class="w"> </span><span class="n">stats_</span><span class="p">.</span><span class="n">saturated</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">JoinOptions</span><span class="w"> </span><span class="n">options_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Inputs</span><span class="o">&gt;</span><span class="w"> </span><span class="n">inputs_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Event</span><span class="o">&gt;</span><span class="w"> </span><span class="n">event_</span><span class="p">,</span><span class="w"> </span><span class="n">previous_event_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Account</span><span class="o">&gt;</span><span class="w"> </span><span class="n">account_</span><span class="p">,</span><span class="w"> </span><span class="n">previous_account_</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">event_end_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="n">account_end_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="n">StreamState</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ready</span><span class="p">;</span>
+<span class="w">    </span><span class="n">JoinStats</span><span class="w"> </span><span class="n">stats_</span><span class="p">{};</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>Member declaration order is intentional. <code>budget_</code> and validated <code>options_</code>
+exist before <code>inputs_</code> construction. A constructor exception destroys completed
+members and parameters, including any sources already moved into the operation.
+The arguments are ownership transfers by value: rejection does not promise to
+restore the caller's moved-from source object.</p>
+<p><code>event_</code> and <code>account_</code> own scalar copies of the current heads. Their <code>previous_</code>
+partners retain the last loaded rows for ordering checks even when a head has
+been discarded. No pointer refers back into <code>Inputs</code> or into an upstream batch.
+That lets a paused join move without retaining a pointer to its former address.
+Use only destruction or reassignment on a moved-from join. The stronger
+reusable-empty promise of the batch types does not extend to the whole pipeline.</p>
+<p><code>release_inputs</code> first clears visible and validation heads, then destroys the
+source chain. A sorted source's destructor releases its final merge readers and
+spill owners; account/event scans release cursor and read-view handles. The
+separate <code>budget_</code> member keeps output checks usable after that teardown. Every
+source must obey the existing nonthrowing-cleanup contract.</p>
+<p>At this point the types and ownership graph are complete, but the header still
+needs its three member-function definitions and factory declaration. Continue
+with <a href="https://25d-228.github.io/cplusplus-learning/chapter-16-part-2.html">Part 2</a>
+before compiling.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-15-part-3.html"><small>Previous · Chapter 15 · Part 3</small><span>Pressure, corruption, and the native run oracle</span></a><a href="chapter-16-part-2.html"><small>Next · Chapter 16 · Part 2</small><span>Resume without borrowing stale rows</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 16 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-one-account-value-many-events">Part 1 — One account value, many events</a></li><li class="toc-h2"><a href="#state-the-multiplicity-before-writing-the-loop">State the multiplicity before writing the loop</a></li><li class="toc-h2"><a href="#use-order-to-prove-which-row-can-be-discarded">Use order to prove which row can be discarded</a></li><li class="toc-h2"><a href="#walk-across-an-output-boundary">Walk across an output boundary</a></li><li class="toc-h2"><a href="#make-the-joined-output-own-all-five-fields">Make the joined output own all five fields</a></li><li class="toc-h2"><a href="#prepare-replacement-storage-before-touching-the-old-batch">Prepare replacement storage before touching the old batch</a></li><li class="toc-h2"><a href="#name-three-different-capacities">Name three different capacities</a></li><li class="toc-h2"><a href="#keep-input-lifetime-in-one-optional-owner">Keep input lifetime in one optional owner</a></li></ul></aside>
+</div></body></html>

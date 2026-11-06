@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 14 · Part 2 — Pull without confusing emptiness and completion · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-14-part-2.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html" aria-current="page"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 14 · Part 2</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/30">Read on GitHub</a><a href="source/chapter-14-part-2.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-2-pull-without-confusing-emptiness-and-completion">Part 2 — Pull without confusing emptiness and completion</a></li><li class="toc-h2"><a href="#define-a-step-not-an-ambiguous-row-count">Define a step, not an ambiguous row count</a></li><li class="toc-h2"><a href="#retain-the-snapshots-actual-ledger">Retain the snapshot&#x27;s actual ledger</a></li><li class="toc-h2"><a href="#separate-storage-borrowing-from-decoded-values">Separate storage borrowing from decoded values</a></li><li class="toc-h2"><a href="#refill-from-one-half-open-relation-range">Refill from one half-open relation range</a></li><li class="toc-h2"><a href="#make-a-predicate-with-representable-endpoints">Make a predicate with representable endpoints</a></li><li class="toc-h2"><a href="#compact-selected-rows-without-reallocating">Compact selected rows without reallocating</a></li><li class="toc-h2"><a href="#project-away-provenance-not-required-query-fields">Project away provenance, not required query fields</a></li><li class="toc-h2"><a href="#account-for-simultaneous-buffers">Account for simultaneous buffers</a></li><li class="toc-h2"><a href="#trace-the-tiny-relation-before-running-it">Trace the tiny relation before running it</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-14-owned-batches-and-a-streaming-query-pipeline">Chapter 14 — Owned batches and a streaming query pipeline</h1>
+<h2 id="part-2-pull-without-confusing-emptiness-and-completion">Part 2 — Pull without confusing emptiness and completion</h2>
+<p><a href="https://25d-228.github.io/cplusplus-learning/chapter-14.html">Part 1</a> supplied the
+owned columns. This part connects them to one retained snapshot and composes a
+filter and projection. All code still belongs to the chapter's single <strong>3.5-hour
+implementation allocation</strong>. Keep the storage engine and its earlier tests.</p>
+<h2 id="define-a-step-not-an-ambiguous-row-count">Define a step, not an ambiguous row count</h2>
+<p>A consumer asks for one step with <code>next(output)</code>. The output owner belongs to the
+consumer. The producer can replace its logical contents but cannot retain an
+unannounced borrow into them. The result says whether the producer completed an
+input step or reached permanent end:</p>
+<table>
+<thead>
+<tr>
+<th>Result or event</th>
+<th>Output after the call</th>
+<th>May another valid call produce rows?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Pull::batch</code></td>
+<td>Zero through capacity rows</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>Pull::end</code></td>
+<td>Zero rows</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Output capacity/budget rejected before work</td>
+<td>Previous output unchanged</td>
+<td>Yes, with a valid output</td>
+</tr>
+<tr>
+<td>Exception during execution/refill</td>
+<td>Zero rows; stream becomes failed</td>
+<td>No; reconstruct the query</td>
+</tr>
+<tr>
+<td>Call on an already failed stream</td>
+<td>Rejected without work</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>End is absorbing for <strong>valid</strong> calls. An ended producer still rejects an output
+with the wrong ledger or inadequate capacity. A failed producer never turns an
+error into a successful end result.</p>
+<p>This differs from a row iterator, where no row can naturally mean end. A filter
+must be able to say “I consumed three rows, selected none, and have not reached
+end.” A consumer must examine <code>Pull</code>, not treat <code>output.size() == 0</code> as its stop
+condition.</p>
+<p>Start <code>include/strata/query/scan.hpp</code> with the protocol and its reusable preflight:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/scan.hpp — complete file, segment 1</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_QUERY_SCAN_HPP</span>
+<span class="cp">#define STRATA_QUERY_SCAN_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/query/batch.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/read_view.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;concepts&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">query</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Pull</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">batch</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="w"> </span><span class="p">};</span>
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">StreamState</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ready</span><span class="p">,</span><span class="w"> </span><span class="n">ended</span><span class="p">,</span><span class="w"> </span><span class="n">failed</span><span class="w"> </span><span class="p">};</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Source</span><span class="p">,</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Batch</span><span class="o">&gt;</span>
+<span class="k">concept</span><span class="w"> </span><span class="nc">PullSource</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">requires</span><span class="p">(</span><span class="n">Source</span><span class="o">&amp;</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w"> </span><span class="n">Batch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">source</span><span class="p">.</span><span class="n">next</span><span class="p">(</span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">same_as</span><span class="o">&lt;</span><span class="n">Pull</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">source</span><span class="p">.</span><span class="n">budget</span><span class="p">()</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">same_as</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Batch</span><span class="o">&gt;</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">check_output</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Batch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span>
+<span class="w">                  </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">minimum</span><span class="p">,</span><span class="w"> </span><span class="n">StreamState</span><span class="w"> </span><span class="n">state</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">failed</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"query stream failed"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">output</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">minimum</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">budget</span><span class="p">().</span><span class="n">get</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">budget</span><span class="p">.</span><span class="n">get</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"query output capacity or budget mismatch"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>PullSource&lt;Source, Batch&gt;</code> applies Chapter 5's expression constraints to an
+actual execution interface. The expressions in a
+<a href="https://timsong-cpp.github.io/cppwp/n4861/expr.prim.req"><code>requires</code> expression</a>
+are checked without executing a query. The <code>-&gt; std::same_as&lt;Pull&gt;</code> part requires
+the exact result type of <code>next</code>; it does not call a conversion to a loosely
+related boolean. <code>budget()</code> must return an owning handle by value.</p>
+<p>The compiler cannot prove this protocol's semantic obligations. A type might
+return <code>Pull::batch</code> forever without consuming input, retain a dangling reference,
+or claim end with nonempty output. Our concrete sources make progress, own their
+source dependencies, and honor end/failure behavior. The generic wrappers also
+reject a nonempty end batch. They do not pretend that a syntactic concept is a
+proof of lifetime or eventual termination.</p>
+<p><code>check_output</code> runs <strong>before</strong> clearing output or asking upstream for work. A
+wrongly sized buffer therefore cannot cause a consumed row to disappear. It also
+requires the exact same budget object as the source. A new uncharged ledger with
+the same numeric limit is not an acceptable substitute.</p>
+<h2 id="retain-the-snapshots-actual-ledger">Retain the snapshot's actual ledger</h2>
+<p>A <code>ReadView</code> already owns a context, which owns the common budget. Add an accessor
+rather than accept a second unrelated budget argument for a scan. This is the only
+change to existing library interfaces in this chapter.</p>
+<p>In <code>include/strata/storage/read_view.hpp</code>, inside the public section of <code>ReadView</code>,
+add this declaration immediately after <code>ReadRetention retention() const;</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/read_view.hpp — add one declaration</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget_owner</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+</code></pre></figure>
+<p>In <code>src/storage/read_view.cpp</code>, add this whole function before the final closing
+brace of <code>namespace strata::storage</code>. Existing includes and definitions suffice;
+do not replace any previous method:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/read_view.cpp — add budget_owner</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ReadView</span><span class="o">::</span><span class="n">budget_owner</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_valid</span><span class="p">();</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">context</span><span class="o">-&gt;</span><span class="n">budget</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The returned shared pointer retains the existing ledger; it does not allocate a
+new budget or a second budget control block. An empty/moved-from view is rejected
+by <code>require_valid</code>. Query batches can now keep the ledger alive even after every
+source owner has gone. They do <strong>not</strong> need to retain table files merely to retain
+already decoded scalar rows.</p>
+<h2 id="separate-storage-borrowing-from-decoded-values">Separate storage borrowing from decoded values</h2>
+<p>A scan owns its <code>ReadView</code>, a budget handle, and eventually a <code>ReadCursor</code>. The
+cursor is created lazily on the first pull, so constructing the plan does not yet
+perform a storage scan. The retained view still fixes the query's read boundary.
+Continue the header with both concrete source types:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/scan.hpp — complete file, segment 2</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">ScannedEvent</span><span class="w"> </span><span class="nf">decode_visible_event</span><span class="p">(</span><span class="n">storage</span><span class="o">::</span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">);</span>
+<span class="n">Account</span><span class="w"> </span><span class="nf">decode_visible_account</span><span class="p">(</span><span class="n">storage</span><span class="o">::</span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">);</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">EventScan</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">EventScan</span><span class="p">(</span><span class="n">storage</span><span class="o">::</span><span class="n">ReadView</span><span class="w"> </span><span class="n">view</span><span class="p">)</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">view_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">view</span><span class="p">)),</span><span class="w"> </span><span class="n">budget_</span><span class="p">(</span><span class="n">view_</span><span class="p">.</span><span class="n">budget_owner</span><span class="p">())</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="n">EventScan</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">EventScan</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventScan</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">EventScan</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventScan</span><span class="p">(</span><span class="n">EventScan</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventScan</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">EventScan</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Pull</span><span class="w"> </span><span class="nf">next</span><span class="p">(</span><span class="n">ScanBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">storage</span><span class="o">::</span><span class="n">ReadView</span><span class="w"> </span><span class="n">view_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">storage</span><span class="o">::</span><span class="n">ReadCursor</span><span class="w"> </span><span class="n">cursor_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">StreamState</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ready</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">started_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AccountScan</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">AccountScan</span><span class="p">(</span><span class="n">storage</span><span class="o">::</span><span class="n">ReadView</span><span class="w"> </span><span class="n">view</span><span class="p">)</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">view_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">view</span><span class="p">)),</span><span class="w"> </span><span class="n">budget_</span><span class="p">(</span><span class="n">view_</span><span class="p">.</span><span class="n">budget_owner</span><span class="p">())</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="n">AccountScan</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">AccountScan</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">AccountScan</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">AccountScan</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">AccountScan</span><span class="p">(</span><span class="n">AccountScan</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">AccountScan</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">AccountScan</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Pull</span><span class="w"> </span><span class="nf">next</span><span class="p">(</span><span class="n">AccountBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">storage</span><span class="o">::</span><span class="n">ReadView</span><span class="w"> </span><span class="n">view_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">storage</span><span class="o">::</span><span class="n">ReadCursor</span><span class="w"> </span><span class="n">cursor_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">StreamState</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ready</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">started_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::query</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The constructor accepts the view by value, then moves that handle into the source.
+Passing an lvalue view copies its shared ownership; passing a temporary transfers
+it. Neither captures a new database snapshot. The view member is initialized
+before <code>budget_</code>, so the latter can safely obtain the same context's ledger.</p>
+<p><code>next(...) &amp;</code> can be called only on an lvalue operator. A query is a state machine,
+not a one-shot expression whose producer disappears immediately after a returned
+borrow. The producer itself is movable but not copyable: copying a live cursor
+would raise unanswered questions about whether consumption is shared or duplicated.
+After moving an operator, use the destination; destroy or reassign the moved-from
+operator rather than pulling it. Batch moves have the stronger reusable-empty
+contract from Part 1.</p>
+<p>Create <code>src/query/scan.cpp</code>. These two helpers turn a borrowed storage entry into
+an owning value before any source advance:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/query/scan.cpp — complete file, segment 1</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/query/scan.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/codec.hpp"</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">query</span><span class="w"> </span><span class="p">{</span>
+
+<span class="n">ScannedEvent</span><span class="w"> </span><span class="nf">decode_visible_event</span><span class="p">(</span><span class="n">storage</span><span class="o">::</span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">storage</span><span class="o">::</span><span class="n">EntryKind</span><span class="o">::</span><span class="n">put</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"event scan requires a visible event put"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decode_event</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">key_of</span><span class="p">(</span><span class="n">event</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"event scan key mismatch"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">event</span><span class="p">,</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="p">};</span>
+<span class="p">}</span>
+<span class="n">Account</span><span class="w"> </span><span class="nf">decode_visible_account</span><span class="p">(</span><span class="n">storage</span><span class="o">::</span><span class="n">EntryView</span><span class="w"> </span><span class="n">entry</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">storage</span><span class="o">::</span><span class="n">EntryKind</span><span class="o">::</span><span class="n">put</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"account scan requires a visible account put"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">account</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decode_account</span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">value</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">key_of</span><span class="p">(</span><span class="n">account</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"account scan key mismatch"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">account</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The byte codecs from Chapter 6 check exact length, version, and relation tag.
+These wrappers additionally check that a visible row is a nonzero-sequence put
+from the intended relation, and that its decoded primary key agrees with the
+storage key. A tombstone is not an event containing zero cents. Storage's merged
+cursor normally suppresses tombstones already, but an execution boundary should
+not reinterpret a violated input contract as valid business data.</p>
+<p>A returned <code>ScannedEvent</code> contains only integer values. Its lifetime does not
+depend on <code>entry.value</code>, the cursor's owning <code>OwnedEntry</code>, or any cache pin that
+was needed to assemble that entry. That is the precise point where a storage
+borrow stops propagating into the query pipeline.</p>
+<h2 id="refill-from-one-half-open-relation-range">Refill from one half-open relation range</h2>
+<p>Append the event scan:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/query/scan.cpp — complete file, segment 2</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">Pull</span><span class="w"> </span><span class="nf">EventScan::next</span><span class="p">(</span><span class="n">ScanBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">check_output</span><span class="p">(</span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="n">budget_</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state_</span><span class="p">);</span><span class="w">  </span><span class="c1">// Reject misuse before consuming anything.</span>
+<span class="w">    </span><span class="n">output</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ended</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">started_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">cursor_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">view_</span><span class="p">.</span><span class="n">scan</span><span class="p">({</span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="n">Key</span><span class="p">{</span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">});</span>
+<span class="w">            </span><span class="n">started_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">cursor_</span><span class="p">.</span><span class="n">valid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">row</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decode_visible_event</span><span class="p">(</span><span class="n">cursor_</span><span class="p">.</span><span class="n">entry</span><span class="p">());</span>
+<span class="w">            </span><span class="n">output</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">);</span><span class="w">  </span><span class="c1">// All fields now belong to output, not to the cursor.</span>
+<span class="w">            </span><span class="n">cursor_</span><span class="p">.</span><span class="n">next</span><span class="p">();</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">cursor_</span><span class="p">.</span><span class="n">valid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cursor_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ended</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">batch</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">output</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span><span class="w"> </span><span class="n">cursor_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">failed</span><span class="p">;</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The lower bound <code>{events, 0}</code> and exclusive upper bound <code>{accounts, 0}</code> cover all
+event keys, including the largest possible 64-bit event ID, without computing
+“largest ID plus one.” The source never performs mutable database point reads for
+individual rows. Every row comes from the retained <code>ReadView</code>'s merged cursor.</p>
+<p>Inside the loop, the order is deliberate:</p>
+<figure class="code-block"><figcaption><span class="code-title">One scan iteration</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>borrow current entry -&gt; decode owning scalars -&gt; copy into output columns
+                    -&gt; advance cursor and expire the storage borrow
+</code></pre></figure>
+<p>An output allocation failure cannot occur in <code>append</code>: capacity was acquired in
+Part 1. Storage advancement can still allocate a new frame or fail while decoding
+or reading. The merged cursor may need to look ahead through a key group to decide
+the next visible row. If that fails after two rows have been copied into this
+refill, the catch block clears the <strong>entire current refill</strong> and makes the source
+terminal. It does not publish a plausible two-row success.</p>
+<p>Previously returned batches owned by other objects remain valid. They are only a
+prefix of a failed query, not a successfully completed query result. We do not
+rewind the storage cursor and retry this same producer: some input was consumed.
+A new query can restart from its retained snapshot. A complete result sink will
+need its own success/failure boundary later in the course.</p>
+<p>When the cursor runs out, the source releases its mutable cursor but retains the
+view until the source object is released. A final nonempty refill still returns
+<code>Pull::batch</code>, even if its size equals capacity exactly. The following valid call
+returns <code>Pull::end</code> with empty output. An initially empty relation returns end on
+its first call. Thus neither a short final batch nor an exactly full final batch
+requires an extra fake row.</p>
+<p>Finish the source file with the account scan:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/query/scan.cpp — complete file, segment 3</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">Pull</span><span class="w"> </span><span class="nf">AccountScan::next</span><span class="p">(</span><span class="n">AccountBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">check_output</span><span class="p">(</span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="n">budget_</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state_</span><span class="p">);</span>
+<span class="w">    </span><span class="n">output</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ended</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">started_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">cursor_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">view_</span><span class="p">.</span><span class="n">scan</span><span class="p">({</span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">});</span>
+<span class="w">            </span><span class="n">started_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">cursor_</span><span class="p">.</span><span class="n">valid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">row</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decode_visible_account</span><span class="p">(</span><span class="n">cursor_</span><span class="p">.</span><span class="n">entry</span><span class="p">());</span>
+<span class="w">            </span><span class="n">output</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">);</span>
+<span class="w">            </span><span class="n">cursor_</span><span class="p">.</span><span class="n">next</span><span class="p">();</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">cursor_</span><span class="p">.</span><span class="n">valid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cursor_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ended</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">batch</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">output</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span><span class="w"> </span><span class="n">cursor_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">failed</span><span class="p">;</span>
+<span class="w">        </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::query</span>
+</code></pre></figure>
+<p>Account keys are the final relation in the fixed schema, so the range starts at
+<code>{accounts, 0}</code> and has no upper bound. The decoder still checks the relation.
+Accounts arrive in primary-key order with at most one visible value per account,
+a property supplied by the same version/tombstone merge as the event scan.</p>
+<p>The two scanners deliberately have parallel, explicit loops. There is no hidden
+record dispatch framework. The later merge join can consume <code>AccountBatch</code>
+without assuming the entire account relation fits in memory.</p>
+<h2 id="make-a-predicate-with-representable-endpoints">Make a predicate with representable endpoints</h2>
+<p>Create <code>include/strata/query/operators.hpp</code>. Days are 32-bit unsigned labels, but
+a half-open interval containing the maximum day needs an upper endpoint one past
+that maximum. Store endpoints in 64 bits:</p>
+<div class="math-input" data-display="true">0 \le d_{\mathrm{low}} \le d_{\mathrm{high}} \le 2^{32},
+\qquad d_{\mathrm{low}} \le d &lt; d_{\mathrm{high}}.</div>
+<p>Here <span class="math-input" data-display="false">d</span> is an event's day. Equal endpoints select no rows. The final possible day,
+<span class="math-input" data-display="false">2^{32}-1</span>, is selected by the interval <span class="math-input" data-display="false">[2^{32}-1,2^{32})</span> without wrapping a
+32-bit addition. Start the header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/operators.hpp — complete file, segment 1</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_QUERY_OPERATORS_HPP</span>
+<span class="cp">#define STRATA_QUERY_OPERATORS_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/query/scan.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">query</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DayRange</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">DayRange</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">lower</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">upper</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">lower_</span><span class="p">(</span><span class="n">lower</span><span class="p">),</span><span class="w"> </span><span class="n">upper_</span><span class="p">(</span><span class="n">upper</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lower</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">upper</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">upper</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"day interval outside [0, 2^32]"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">contains</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">day</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">lower_</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">day</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">day</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">upper_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">lower_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">upper_</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>A <code>DayRange</code> is a small validated value. Its per-row <code>contains</code> operation cannot
+throw or mutate source state. Arbitrary user callbacks, expression parsing, and
+nullable columns are outside this fixed-plan chapter.</p>
+<h2 id="compact-selected-rows-without-reallocating">Compact selected rows without reallocating</h2>
+<p><code>EventFilter</code> owns an upstream source <strong>by value</strong> and an input <code>ScanBatch</code>.
+Its caller supplies a separate output batch large enough for the worst case:
+every input row might pass. No references to the caller's operator object or
+output spans are saved.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/operators.hpp — complete file, segment 2</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>
+</code></pre></figure>
+<p>The template's member definition must remain visible in the header so a caller
+can instantiate it for its chosen source type, as in Chapter 5. Member declaration
+order constructs <code>source_</code> before asking it for the budget used by <code>input_</code>.
+If that input allocation fails, construction unwinds the already-owned source.
+It cannot leave a half-built filter retaining an unowned cursor.</p>
+<p>Let <span class="math-input" data-display="false">n</span> be the input row count and let <span class="math-input" data-display="false">p_i</span> be one when input row <span class="math-input" data-display="false">i</span> passes the
+day predicate and zero otherwise. The selected count is</p>
+<div class="math-input" data-display="true">k = \sum_{i=0}^{n-1} p_i, \qquad 0 \le k \le n \le C.</div>
+<p>The output position of a selected input row <span class="math-input" data-display="false">i</span> is the number of selected rows
+before it:</p>
+<div class="math-input" data-display="true">j(i) = \sum_{h=0}^{i-1} p_h.</div>
+<p><code>output.size()</code> is that running count. <code>append</code> writes the row at this position
+and increments it. For days <code>[2, 3, 2, 3]</code> and the interval <code>[3, 4)</code>, input rows
+1 and 3 land at output rows 0 and 1, preserving their relative order. No selection
+vector or output growth allocation is needed.</p>
+<p>We borrow the input's day column once for the loop. Nothing in the loop refills,
+resizes, or moves <code>input_</code>, so that borrow remains valid. Each selected row is
+copied as an owning <code>ScannedEvent</code> into output. The next upstream pull may overwrite
+input safely; output owns different arrays.</p>
+<p>The <strong>unconditional</strong> <code>return Pull::batch</code> after filtering is essential. With
+input days <code>[3, 3, 3]</code> and a <code>[4, 5)</code> filter, the selected count is zero but one
+input batch was consumed. The next batch can contain day 4. The filter takes one
+upstream batch step per pull rather than hiding an arbitrarily long loop that
+searches for a nonempty result. This does not promise bounded wall-clock latency:
+I/O and storage's version resolution still have their own costs.</p>
+<h2 id="project-away-provenance-not-required-query-fields">Project away provenance, not required query fields</h2>
+<p>The projection owns another scan-shaped input buffer and emits an <code>EventBatch</code>.
+All four event fields survive. The sequence column ends here.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/query/operators.hpp — complete file, segment 3</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="k">requires</span><span class="w"> </span><span class="n">PullSource</span><span class="o">&lt;</span><span class="n">Source</span><span class="p">,</span><span class="w"> </span><span class="n">ScanBatch</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">EventFilter</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">EventFilter</span><span class="p">(</span><span class="n">Source</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w"> </span><span class="n">DayRange</span><span class="w"> </span><span class="n">days</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">source_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">source</span><span class="p">)),</span><span class="w"> </span><span class="n">input_</span><span class="p">(</span><span class="n">source_</span><span class="p">.</span><span class="n">budget</span><span class="p">(),</span><span class="w"> </span><span class="n">capacity</span><span class="p">),</span><span class="w"> </span><span class="n">days_</span><span class="p">(</span><span class="n">days</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="n">EventFilter</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">EventFilter</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventFilter</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">EventFilter</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventFilter</span><span class="p">(</span><span class="n">EventFilter</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventFilter</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">EventFilter</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">budget</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">Pull</span><span class="w"> </span><span class="n">next</span><span class="p">(</span><span class="n">ScanBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">check_output</span><span class="p">(</span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="n">budget</span><span class="p">(),</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">capacity</span><span class="p">(),</span><span class="w"> </span><span class="n">state_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">output</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ended</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">source_</span><span class="p">.</span><span class="n">next</span><span class="p">(</span><span class="n">input_</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">input_</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"nonempty end batch"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">                </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ended</span><span class="p">;</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="p">;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">days</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">events</span><span class="p">().</span><span class="n">columns</span><span class="p">().</span><span class="n">days</span><span class="p">;</span>
+<span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">days_</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="n">days</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">input_</span><span class="p">.</span><span class="n">row</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w"> </span><span class="p">}</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">batch</span><span class="p">;</span><span class="w">  </span><span class="c1">// Zero selected rows are still a completed input step.</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">output</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">failed</span><span class="p">;</span>
+<span class="w">            </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">Source</span><span class="w"> </span><span class="n">source_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ScanBatch</span><span class="w"> </span><span class="n">input_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">DayRange</span><span class="w"> </span><span class="n">days_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">StreamState</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ready</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="nc">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="k">requires</span><span class="w"> </span><span class="n">PullSource</span><span class="o">&lt;</span><span class="n">Source</span><span class="p">,</span><span class="w"> </span><span class="n">ScanBatch</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">EventProject</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">EventProject</span><span class="p">(</span><span class="n">Source</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">source_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">source</span><span class="p">)),</span><span class="w"> </span><span class="n">input_</span><span class="p">(</span><span class="n">source_</span><span class="p">.</span><span class="n">budget</span><span class="p">(),</span><span class="w"> </span><span class="n">capacity</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="n">EventProject</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">EventProject</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventProject</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">EventProject</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventProject</span><span class="p">(</span><span class="n">EventProject</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">EventProject</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">EventProject</span><span class="o">&amp;&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">budget</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">Pull</span><span class="w"> </span><span class="n">next</span><span class="p">(</span><span class="n">EventBatch</span><span class="o">&amp;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">check_output</span><span class="p">(</span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="n">budget</span><span class="p">(),</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">capacity</span><span class="p">(),</span><span class="w"> </span><span class="n">state_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">output</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ended</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">source_</span><span class="p">.</span><span class="n">next</span><span class="p">(</span><span class="n">input_</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">input_</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"nonempty end batch"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">                </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ended</span><span class="p">;</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">end</span><span class="p">;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="n">output</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">input_</span><span class="p">.</span><span class="n">events</span><span class="p">().</span><span class="n">row</span><span class="p">(</span><span class="n">i</span><span class="p">));</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">Pull</span><span class="o">::</span><span class="n">batch</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">output</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">failed</span><span class="p">;</span>
+<span class="w">            </span><span class="k">throw</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">Source</span><span class="w"> </span><span class="n">source_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ScanBatch</span><span class="w"> </span><span class="n">input_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">StreamState</span><span class="w"> </span><span class="n">state_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">StreamState</span><span class="o">::</span><span class="n">ready</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::query</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>This stage also propagates a successful zero-row step. It does not convert it to
+end. Both wrappers catch failures after upstream work begins, clear their current
+output, and become terminal. A failure may leave the upstream source at a later
+position; retrying the wrapper would not reconstruct the lost logical batch.</p>
+<p>Each wrapper requires output capacity at least its configured input capacity.
+Use compatible capacities when composing sources: the projection's input must
+satisfy its filter's output requirement. A direct caller's preflight mistake is
+rejected before work; an incorrectly composed upstream buffer detected <em>inside</em>
+a pull is an execution exception and terminalizes the outer wrapper. The supplied
+plan uses one capacity throughout, avoiding that configuration ambiguity.</p>
+<p>The concrete composition, implemented as a complete helper in Part 3, is:</p>
+<figure class="code-block"><figcaption><span class="code-title">Composition shape — the runnable helper appears in Part 3</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">using</span><span class="w"> </span><span class="n">Plan</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EventProject</span><span class="o">&lt;</span><span class="n">EventFilter</span><span class="o">&lt;</span><span class="n">EventScan</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+</code></pre></figure>
+<p>The outer object contains its filter, which contains its scan, which owns the
+read view. Moving a plan transfers that ownership chain. There is no heap-allocated
+operator graph, <code>std::function</code>, or framework implementing these loops. A template
+constraint describes the required operations; concrete types and their members
+provide the actual ownership.</p>
+<h2 id="account-for-simultaneous-buffers">Account for simultaneous buffers</h2>
+<p>For one capacity <span class="math-input" data-display="false">C</span>, the filter owns a scan input of <span class="math-input" data-display="false">36C</span> bytes, the projection
+owns another scan input of <span class="math-input" data-display="false">36C</span>, and the consumer owns projected output of
+<span class="math-input" data-display="false">28C</span>. These allocations coexist:</p>
+<div class="math-input" data-display="true">M_{\mathrm{columns}} = 36C + 36C + 28C = 100C.</div>
+<p>At capacity three, this is 300 charged bytes before constructing the lazy storage
+cursor. A separately active account output adds <span class="math-input" data-display="false">12C_a</span> bytes, where <span class="math-input" data-display="false">C_a</span> is its
+own capacity. Source readers, retained snapshots, cache frames, cursor state,
+stack objects, and excluded runtime overhead are not erased by that formula.
+The common ledger admits charged allocations from all of them together; it is
+not yet a separate whole-query reservation or a process-memory cap.</p>
+<p>Projection reduces <strong>selected-row payload</strong> from 36 to 28 bytes and prevents
+storage sequence values from flowing into later operators. It does not immediately
+free the two upstream buffers, nor does an empty output free its capacity. A more
+fused plan could avoid intermediate copies; a larger batch can also waste more
+capacity when few rows pass. Those are reasons to measure, not reasons to assert
+that a columnar batch must be faster.</p>
+<h2 id="trace-the-tiny-relation-before-running-it">Trace the tiny relation before running it</h2>
+<p>Use the roadmap's five events, ordered by event ID:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">ID</th>
+<th style="text-align:right">Account</th>
+<th style="text-align:right">Day</th>
+<th style="text-align:right">Cents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">100</td>
+<td style="text-align:right">10</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">500</td>
+</tr>
+<tr>
+<td style="text-align:right">101</td>
+<td style="text-align:right">10</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">250</td>
+</tr>
+<tr>
+<td style="text-align:right">102</td>
+<td style="text-align:right">20</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">700</td>
+</tr>
+<tr>
+<td style="text-align:right">103</td>
+<td style="text-align:right">99</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">50</td>
+</tr>
+<tr>
+<td style="text-align:right">104</td>
+<td style="text-align:right">10</td>
+<td style="text-align:right">4</td>
+<td style="text-align:right">100</td>
+</tr>
+</tbody>
+</table>
+<p>For capacity three and day interval <code>[4, 5)</code>, trace these pulls:</p>
+<table>
+<thead>
+<tr>
+<th>Pull</th>
+<th>Scan input IDs</th>
+<th style="text-align:right">Filter count</th>
+<th>Project result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>100, 101, 102</td>
+<td style="text-align:right">0</td>
+<td><code>batch</code>, zero rows</td>
+</tr>
+<tr>
+<td>2</td>
+<td>103, 104</td>
+<td style="text-align:right">1</td>
+<td><code>batch</code>, event 104</td>
+</tr>
+<tr>
+<td>3</td>
+<td>None</td>
+<td style="text-align:right">0</td>
+<td><code>end</code>, zero rows</td>
+</tr>
+</tbody>
+</table>
+<p>For <code>[3, 4)</code>, the two successful batch sizes are three and one. Event 103 remains
+present: account 99 is missing, but this chapter has not implemented the inner
+join. Dropping that row now would conceal work that belongs to the join.</p>
+<p>Capacity one is the same executor used as a one-row baseline. It produces five
+batch steps, the last empty under the day-3 predicate, followed by end. The
+capacity-three execution produces two batch steps followed by end. These are
+observed logical call counts, not a timing benchmark or a prediction about M4
+speedup. Both must match independent expected rows before any timing is useful.</p>
+<p>Continue with <a href="https://25d-228.github.io/cplusplus-learning/chapter-14-part-3.html">Part 3 — Boundary, retention, and refill checks</a>.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-14.html"><small>Previous · Chapter 14 · Part 1</small><span>Owned batches and a streaming query pipeline</span></a><a href="chapter-14-part-3.html"><small>Next · Chapter 14 · Part 3</small><span>Boundary, retention, and refill checks</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 14 · Part 2</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-2-pull-without-confusing-emptiness-and-completion">Part 2 — Pull without confusing emptiness and completion</a></li><li class="toc-h2"><a href="#define-a-step-not-an-ambiguous-row-count">Define a step, not an ambiguous row count</a></li><li class="toc-h2"><a href="#retain-the-snapshots-actual-ledger">Retain the snapshot&#x27;s actual ledger</a></li><li class="toc-h2"><a href="#separate-storage-borrowing-from-decoded-values">Separate storage borrowing from decoded values</a></li><li class="toc-h2"><a href="#refill-from-one-half-open-relation-range">Refill from one half-open relation range</a></li><li class="toc-h2"><a href="#make-a-predicate-with-representable-endpoints">Make a predicate with representable endpoints</a></li><li class="toc-h2"><a href="#compact-selected-rows-without-reallocating">Compact selected rows without reallocating</a></li><li class="toc-h2"><a href="#project-away-provenance-not-required-query-fields">Project away provenance, not required query fields</a></li><li class="toc-h2"><a href="#account-for-simultaneous-buffers">Account for simultaneous buffers</a></li><li class="toc-h2"><a href="#trace-the-tiny-relation-before-running-it">Trace the tiny relation before running it</a></li></ul></aside>
+</div></body></html>

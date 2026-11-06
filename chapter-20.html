@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 20 · Part 1 — Concurrent readers, ingestion, and maintenance · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-20.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html" aria-current="page"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 20 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/46">Read on GitHub</a><a href="source/chapter-20.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-share-lifetimes-not-mutable-readers">Part 1 — Share lifetimes, not mutable readers</a></li><li class="toc-h2"><a href="#choose-an-owner-for-every-mutation">Choose an owner for every mutation</a></li><li class="toc-h2"><a href="#repair-the-ledger-before-owners-cross-threads">Repair the ledger before owners cross threads</a></li><li class="toc-h2"><a href="#a-final-snapshot-release-is-a-registry-mutation">A final snapshot release is a registry mutation</a></li><li class="toc-h2"><a href="#share-frozen-nodes-reopen-mutable-readers">Share frozen nodes; reopen mutable readers</a></li><li class="toc-h2"><a href="#admit-for-a-stable-upper-bound">Admit for a stable upper bound</a></li><li class="toc-h2"><a href="#reserve-a-separate-route-for-maintenance">Reserve a separate route for maintenance</a></li><li class="toc-h2"><a href="#separate-preparation-build-and-installation">Separate preparation, build, and installation</a></li><li class="toc-h2"><a href="#validate-each-output-before-it-can-become-authoritative">Validate each output before it can become authoritative</a></li><li class="toc-h2"><a href="#reuse-the-ordered-scans-and-bounded-builder">Reuse the ordered scans and bounded builder</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-20-concurrent-readers-ingestion-and-maintenance">Chapter 20 — Concurrent readers, ingestion, and maintenance</h1>
+<h2 id="part-1-share-lifetimes-not-mutable-readers">Part 1 — Share lifetimes, not mutable readers</h2>
+<p>A query can keep a valid snapshot while the writer commits another batch. That
+alone does not make the database concurrent. A disk reader updates counters and
+cache recency while it reads. The final snapshot owner might release an arena on
+a query worker. A compaction may finish after the writer has installed a new log.
+Each of these operations touches a different kind of shared state.</p>
+<p>This chapter connects the real writer, query executor, and maintenance path.
+An old query will retain sequence 1. While a compaction of the prefix through
+sequence 2 is paused, the writer will commit sequence 3 and rotate its log.
+Installation must preserve that newer log set. A fresh query must see sequence
+3, not an accidental combination of the two snapshots.</p>
+<blockquote>
+<p><strong>Learning objectives</strong>
+Publish one coherent source set; distinguish immutable nodes from mutable
+reader bookkeeping; keep final-owner cleanup safe on another thread; build
+maintenance output without the writer mutex; revalidate selected inputs
+rather than rejecting every changed epoch; and stop a backpressured writer
+without losing acknowledged batches.</p>
+</blockquote>
+<p><strong>Prerequisites:</strong> the complete engine through
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-19.html">Chapter 19</a>, including
+Chapter 18's synchronization exercises. In particular, keep Chapter 11's manifest
+installation, Chapter 12's owning views, Chapter 13's prefix compaction and
+retirement, and Chapter 19's query admission and cancellation contracts. The
+standalone <code>Database</code> remains a synchronous API; the new <code>Engine</code> is its
+concurrent coordinator, not an instruction to call old methods from arbitrary
+threads.</p>
+<p><strong>Implementation: 3.5 hours across all three parts.</strong> Preserve the roadmap split:
+publication/locking 1.25 hours; maintenance/backpressure 1.0; controlled overlap
+and shutdown tests 1.25. Reading is separate. Record actual implementation time
+rather than treating these estimates as minimum durations.</p>
+<p>The new files are:</p>
+<figure class="code-block"><figcaption><span class="code-title">Output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>include/strata/storage/maintenance.hpp
+src/storage/maintenance.cpp
+include/strata/runtime/engine.hpp
+src/runtime/engine.cpp
+tests/engine.cpp
+scripts/check_engine_fixture.py
+</code></pre></figure>
+<p>We also amend the budget, read-view, database-friend, WAL-reason, query-provider,
+executor, and checkpoint declarations shown below, then append CMake targets.
+New files are assembled by concatenating blocks with the same filename in order.
+A block marked <strong>complete file</strong> replaces that prerequisite file; concatenate
+its blocks first. Unified diffs modify only the named prerequisite: keep context,
+remove <code>-</code> lines, and insert <code>+</code> lines. Do not paste diff prefixes into C++.</p>
+<p><a href="https://25d-228.github.io/cplusplus-learning/chapter-20-part-2.html">Part 2</a> supplies
+installation and the coordinator. <a href="https://25d-228.github.io/cplusplus-learning/chapter-20-part-3.html">Part 3</a>
+supplies the complete checks and build commands. These are three parts of one
+chapter, not three new implementation estimates.</p>
+<h2 id="choose-an-owner-for-every-mutation">Choose an owner for every mutation</h2>
+<p>A shared ownership count answers when an object may die. It does not serialize
+operations on that object. The standard's shared-pointer rules concern the
+pointer/control machinery, not a lock around the pointee; see
+<a href="https://eel.is/c++draft/util.smartptr.shared">shared ownership</a>. We therefore
+retain immutable source objects but do not share mutable disk readers across
+query workers.</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Ownership and synchronization in this chapter</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Database</code>, current WALs, manifest, namespace creation and retirement</td>
+<td>One <code>Engine</code> mutex; one serialized writer</td>
+</tr>
+<tr>
+<td>Frozen memtable nodes and encoded payloads</td>
+<td>Immutable after publication; owning parent view keeps storage alive</td>
+</tr>
+<tr>
+<td>Query disk readers, cache recency, pins, and read counters</td>
+<td>Private to one query worker; no concurrent calls on the same reader/cache</td>
+</tr>
+<tr>
+<td>Maintenance disk readers, cache, and builder buffers</td>
+<td>Private to the maintenance job while it builds</td>
+</tr>
+<tr>
+<td>Shared storage allocation ledger</td>
+<td>Internal budget mutex, including final-owner deallocation</td>
+</tr>
+<tr>
+<td>Snapshot-retention registry</td>
+<td>Internal registry mutex; new snapshot admission also serialized by the engine</td>
+</tr>
+<tr>
+<td>Maintenance results, failure, and writer-wait counts</td>
+<td>Engine mutex; returned as value snapshots</td>
+</tr>
+<tr>
+<td>Stop signal observed during unlocked work</td>
+<td>Atomic Boolean; does not publish the manifest</td>
+</tr>
+</tbody>
+</table>
+<p>The original cache's pinned-bypass and admission algorithm is unchanged. There
+is no duplicate-admission race <em>within a cache</em>, because one worker owns it.
+Two queries may cache the same disk block twice in different budgets. That is a
+real efficiency cost, not a race to resolve with an uncharged shared entry.
+Parallelism is obtained by isolating mutable readers, not by locking a global
+cache around a disk read.</p>
+<p>The engine mutex still covers WAL synchronization, manifest installation, and
+bounded namespace cleanup. These calls can be slow. It does <strong>not</strong> cover bulk
+table scanning, compaction encoding, output verification, query sorting, or CSV
+execution. This is not a lock-free writer or a claim of bounded commit latency.</p>
+<h2 id="repair-the-ledger-before-owners-cross-threads">Repair the ledger before owners cross threads</h2>
+<p>Suppose a query is the last owner of an old arena. Its worker releases the arena
+while the writer reserves space for a new batch. The old Chapter 9 counters
+would be read and written concurrently even though neither thread touches the
+same payload. Protect the ledger, not the payload.</p>
+<p>Let <span class="math-input" data-display="false">r</span> be reserved bytes, <span class="math-input" data-display="false">a</span> be allocated bytes, and <span class="math-input" data-display="false">L</span> be the immutable
+budget limit. A reservation for <span class="math-input" data-display="false">n</span> bytes succeeds only when</p>
+<div class="math-input" data-display="true">0 \le r+a \le L,\qquad n \le L-(r+a).</div>
+<p>The subtraction form avoids overflowing an unchecked sum with <span class="math-input" data-display="false">n</span>. Checking
+and increasing <span class="math-input" data-display="false">r</span> must occur under one lock. For example, with <span class="math-input" data-display="false">L=1000</span>,
+<span class="math-input" data-display="false">r=100</span>, and <span class="math-input" data-display="false">a=700</span>, two simultaneous reservations of <span class="math-input" data-display="false">150</span> cannot both pass.
+The first produces <span class="math-input" data-display="false">(r,a)=(250,700)</span>; the second sees only 50 free bytes.</p>
+<p>Apply the header changes. <code>mutable</code> permits a const observer to acquire its
+bookkeeping mutex without treating the observation as a logical value change.
+<code>limit_</code> never changes after construction, so <code>limit()</code> needs no ledger lock.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/memory/budget.hpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- include/strata/memory/budget.hpp</span>
+<span class="gi">+++ include/strata/memory/budget.hpp</span>
+<span class="gu">@@ -5,6 +5,7 @@</span>
+<span class="w"> </span>#include &lt;exception&gt;
+<span class="w"> </span>#include &lt;limits&gt;
+<span class="w"> </span>#include &lt;memory&gt;
+<span class="gi">+#include &lt;mutex&gt;</span>
+<span class="w"> </span>#include &lt;new&gt;
+<span class="w"> </span>#include &lt;optional&gt;
+<span class="w"> </span>#include &lt;stdexcept&gt;
+<span class="gu">@@ -51,18 +52,19 @@</span>
+<span class="w"> </span>    Budget&amp; operator=(Budget&amp;&amp;) = delete;
+<span class="w"> </span>    [[nodiscard]] Lease reserve(std::size_t bytes);
+<span class="w"> </span>    std::size_t limit() const noexcept { return limit_; }
+<span class="gd">-    std::size_t reserved() const noexcept { return reserved_; }</span>
+<span class="gd">-    std::size_t allocated() const noexcept { return allocated_; }</span>
+<span class="gd">-    std::size_t used() const noexcept { return reserved_ + allocated_; }</span>
+<span class="gd">-    std::size_t peak() const noexcept { return peak_; }</span>
+<span class="gi">+    std::size_t reserved() const noexcept { std::lock_guard lock{mutex_}; return reserved_; }</span>
+<span class="gi">+    std::size_t allocated() const noexcept { std::lock_guard lock{mutex_}; return allocated_; }</span>
+<span class="gi">+    std::size_t used() const noexcept { std::lock_guard lock{mutex_}; return reserved_ + allocated_; }</span>
+<span class="gi">+    std::size_t peak() const noexcept { std::lock_guard lock{mutex_}; return peak_; }</span>
+<span class="w"> </span>    void fail_allocation_on(std::size_t ordinal);
+<span class="gd">-    void clear_failure() noexcept { fail_after_.reset(); }</span>
+<span class="gi">+    void clear_failure() noexcept { std::lock_guard lock{mutex_}; fail_after_.reset(); }</span>
+<span class="w"> </span>
+<span class="w"> </span>private:
+<span class="w"> </span>    template&lt;class T&gt; friend class Allocator;
+<span class="w"> </span>    void before_allocate();
+<span class="w"> </span>    void release_allocation(std::size_t bytes) noexcept;
+<span class="gd">-    std::size_t limit_;</span>
+<span class="gi">+    mutable std::mutex mutex_;</span>
+<span class="gi">+    const std::size_t limit_;</span>
+<span class="w"> </span>    std::size_t reserved_ = 0;
+<span class="w"> </span>    std::size_t allocated_ = 0;
+<span class="w"> </span>    std::size_t peak_ = 0;
+</code></pre></figure>
+<p>Replace <code>src/memory/budget.cpp</code> with the following two blocks. Each lease still
+has exactly one owner. Protecting the budget does not permit two threads to
+move or reset the <strong>same lease object</strong> simultaneously.</p>
+<p>A committed allocation transfers bytes from <span class="math-input" data-display="false">r</span> to <span class="math-input" data-display="false">a</span> without changing <span class="math-input" data-display="false">r+a</span>.
+The native allocation remains outside the ledger lock: its reservation already
+prevents another thread from spending the same bytes. Allocation failure
+unwinds the lease and returns the reservation.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/budget.cpp — complete file, first block</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/memory/budget.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">memory</span><span class="w"> </span><span class="p">{</span>
+
+<span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">::</span><span class="n">Lease</span><span class="p">(</span><span class="n">Lease</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">owner_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">owner_</span><span class="p">,</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">bytes_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">bytes_</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">&amp;</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">::</span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">Lease</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="k">this</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="n">owner_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">owner_</span><span class="p">,</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">);</span>
+<span class="w">        </span><span class="n">bytes_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">bytes_</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">::</span><span class="n">reset</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">owner_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">{</span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">mutex_</span><span class="p">};</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes_</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">reserved_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">reserved_</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="n">bytes_</span><span class="p">;</span>
+<span class="w">        </span><span class="n">owner_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">        </span><span class="n">bytes_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="o">::</span><span class="n">commit_allocation</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">owner_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">{</span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">mutex_</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes_</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">reserved_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">reserved_</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="n">bytes_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">owner_</span><span class="o">-&gt;</span><span class="n">allocated_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">bytes_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">owner_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="n">bytes_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>reserve</code> must not call the newly locking <code>used()</code> while already holding the
+same nonrecursive mutex. It reads the protected fields directly. The observer
+methods acquire their own lock only when called from outside that critical
+section. Mutex acquisition after an earlier unlock provides the synchronization
+we need; this is the rule in the
+<a href="https://eel.is/c++draft/thread.mutex.requirements">mutex requirements</a>, not a
+property of <code>std::size_t</code>.</p>
+<p>The failure countdown is also serialized. In a concurrent run, “allocation 7”
+means the seventh admitted call reaching that countdown, not a deterministic
+choice of thread. Use single-threaded fault injection or controlled gates when
+an exact failing operation matters.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/memory/budget.cpp — complete file, second block</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">Budget</span><span class="o">::~</span><span class="n">Budget</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">used</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">Budget</span><span class="o">::</span><span class="n">Lease</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">reserve</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">{</span><span class="n">mutex_</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">limit_</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">reserved_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">allocated_</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">BudgetExceeded</span><span class="p">{};</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="p">{};</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">reserved_</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span>
+<span class="w">    </span><span class="n">peak_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">max</span><span class="p">(</span><span class="n">peak_</span><span class="p">,</span><span class="w"> </span><span class="n">reserved_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">allocated_</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">Lease</span><span class="p">{</span><span class="o">*</span><span class="k">this</span><span class="p">,</span><span class="w"> </span><span class="n">bytes</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">release_allocation</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">{</span><span class="n">mutex_</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bytes</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">allocated_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">terminate</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">allocated_</span><span class="w"> </span><span class="o">-=</span><span class="w"> </span><span class="n">bytes</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">fail_allocation_on</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">ordinal</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">{</span><span class="n">mutex_</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ordinal</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"allocation ordinal is zero"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">fail_after_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ordinal</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">Budget</span><span class="o">::</span><span class="n">before_allocate</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="n">lock</span><span class="p">{</span><span class="n">mutex_</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">fail_after_</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">--*</span><span class="n">fail_after_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">fail_after_</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="p">{};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::memory</span>
+</code></pre></figure>
+<p>The cleanup methods retain their nonthrowing contracts. An exceptional failure
+to acquire their internal mutex is an unrecoverable invariant/runtime failure,
+not an allocation rejection to retry. Ordinary budget exhaustion still throws
+before the requested allocation. Budget destruction requires all leases and
+allocations gone and no concurrent callers; a mutex does not extend its own
+lifetime.</p>
+<h2 id="a-final-snapshot-release-is-a-registry-mutation">A final snapshot release is a registry mutation</h2>
+<p>Snapshot capture checks capacity and later activates a state. In between, it
+may prepare a replacement writer. We do not hold the registry mutex over that
+I/O. Instead, the engine mutex serializes <strong>all new admissions</strong>, while internal
+registry locking allows concurrent releases. A release can only reduce pressure
+between check and activation; it cannot consume an unreserved slot.</p>
+<p>Add the forward declarations, friendships, registry mutex, and private isolation
+entry point. Friendship grants access to these explicitly cooperating classes;
+it is not synchronization and does not make the methods public.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/read_view.hpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- include/strata/storage/read_view.hpp</span>
+<span class="gi">+++ include/strata/storage/read_view.hpp</span>
+<span class="gu">@@ -10,14 +10,16 @@</span>
+<span class="w"> </span>#include &lt;cstddef&gt;
+<span class="w"> </span>#include &lt;cstdint&gt;
+<span class="w"> </span>#include &lt;memory&gt;
+<span class="gi">+#include &lt;mutex&gt;</span>
+<span class="w"> </span>#include &lt;optional&gt;
+<span class="w"> </span>#include &lt;span&gt;
+<span class="w"> </span>#include &lt;string&gt;
+<span class="w"> </span>#include &lt;utility&gt;
+<span class="w"> </span>
+<span class="gd">-namespace strata::runtime { class FrozenInputs; }</span>
+<span class="gi">+namespace strata::runtime { class FrozenInputs; class Engine; }</span>
+<span class="w"> </span>
+<span class="w"> </span>namespace strata::storage {
+<span class="gi">+class MaintenanceJob;</span>
+<span class="w"> </span>
+<span class="w"> </span>struct ReadLimits {
+<span class="w"> </span>    std::size_t snapshots = 16;
+<span class="gu">@@ -50,7 +52,7 @@</span>
+<span class="w"> </span>    void check_admission(std::span&lt;const Source&gt; sources) const;
+<span class="w"> </span>    void retain(std::span&lt;const Source&gt; sources) noexcept;
+<span class="w"> </span>    void release(std::span&lt;const Source&gt; sources) noexcept;
+<span class="gd">-    ReadRetention retention() const noexcept { return counts_; }</span>
+<span class="gi">+    ReadRetention retention() const noexcept { std::lock_guard lock{mutex_}; return counts_; }</span>
+<span class="w"> </span>    bool retains_file(std::uint64_t id, io::FileKind kind) const noexcept;
+<span class="w"> </span>    std::shared_ptr&lt;memory::Budget&gt; budget;
+<span class="w"> </span>    io::Directory directory;
+<span class="gu">@@ -63,6 +65,7 @@</span>
+<span class="w"> </span>        io::FileKind kind = io::FileKind::log;
+<span class="w"> </span>    };
+<span class="w"> </span>    std::size_t slot_for(const void* identity) const noexcept;
+<span class="gi">+    mutable std::mutex mutex_;</span>
+<span class="w"> </span>    ReadLimits limits_;
+<span class="w"> </span>    ReadRetention counts_{};
+<span class="w"> </span>    std::array&lt;Slot, max_retained&gt; slots_{};
+<span class="gu">@@ -133,9 +136,13 @@</span>
+<span class="w"> </span>    ReadCursor scan(Key lower, std::optional&lt;Key&gt; upper = std::nullopt) const;
+<span class="w"> </span>private:
+<span class="w"> </span>    friend class Database;
+<span class="gi">+    friend class MaintenanceJob;</span>
+<span class="gi">+    friend class strata::runtime::Engine;</span>
+<span class="w"> </span>    friend class strata::runtime::FrozenInputs;
+<span class="w"> </span>    ReadView isolate_disk(std::shared_ptr&lt;memory::Budget&gt; budget,
+<span class="w"> </span>                          std::size_t cache_slots, std::size_t cache_bytes) const;
+<span class="gi">+    ReadView isolate(std::shared_ptr&lt;memory::Budget&gt; budget, std::size_t cache_slots,</span>
+<span class="gi">+                     std::size_t cache_bytes, bool allow_memory) const;</span>
+<span class="w"> </span>    explicit ReadView(std::shared_ptr&lt;const read_detail::State&gt; state) noexcept
+<span class="w"> </span>        : state_(std::move(state)) {}
+<span class="w"> </span>    void require_valid() const;
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/read_view.cpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- src/storage/read_view.cpp</span>
+<span class="gi">+++ src/storage/read_view.cpp</span>
+<span class="gu">@@ -45,6 +45,7 @@</span>
+<span class="w"> </span>    return slots_.size();
+<span class="w"> </span>}
+<span class="w"> </span>void Context::check_admission(std::span&lt;const Source&gt; sources) const {
+<span class="gi">+    std::lock_guard lock{mutex_};</span>
+<span class="w"> </span>    if (sources.size() &gt; max_sources) { throw std::length_error("too many view sources"); }
+<span class="w"> </span>    if (counts_.snapshots == limits_.snapshots) {
+<span class="w"> </span>        throw std::length_error("snapshot states exhausted");
+<span class="gu">@@ -69,6 +70,7 @@</span>
+<span class="w"> </span>}
+<span class="w"> </span>
+<span class="w"> </span>void Context::retain(std::span&lt;const Source&gt; sources) noexcept {
+<span class="gi">+    std::lock_guard lock{mutex_};</span>
+<span class="w"> </span>    for (const auto&amp; source : sources) {
+<span class="w"> </span>        auto slot = slot_for(source.identity());
+<span class="w"> </span>        if (slot == slots_.size()) {
+<span class="gu">@@ -84,6 +86,7 @@</span>
+<span class="w"> </span>    ++counts_.snapshots;
+<span class="w"> </span>}
+<span class="w"> </span>void Context::release(std::span&lt;const Source&gt; sources) noexcept {
+<span class="gi">+    std::lock_guard lock{mutex_};</span>
+<span class="w"> </span>    for (const auto&amp; source : sources) {
+<span class="w"> </span>        const auto slot = slot_for(source.identity());
+<span class="w"> </span>        if (slot == slots_.size() || slots_[slot].references == 0) { std::terminate(); }
+<span class="gu">@@ -290,6 +293,7 @@</span>
+<span class="w"> </span>
+<span class="w"> </span>
+<span class="w"> </span>bool read_detail::Context::retains_file(std::uint64_t id, io::FileKind kind) const noexcept {
+<span class="gi">+    std::lock_guard lock{mutex_};</span>
+<span class="w"> </span>    for (const auto&amp; slot : slots_) {
+<span class="w"> </span>        if (slot.references != 0 &amp;&amp; slot.file_id == id &amp;&amp; slot.kind == kind) { return true; }
+<span class="w"> </span>    }
+</code></pre></figure>
+<p>The registry's <code>slot_for</code> helper remains nonlocking and private: its callers
+already hold that mutex. A collector acquires the engine mutex, checks the
+registry briefly, then removes only an unreferenced name. A query releasing its
+last parent takes only the registry and budget locks; it never tries to acquire
+the engine mutex. This direction is important to avoiding a lock cycle.</p>
+<p>A C++ lifetime ending can conflict with accesses to that storage; retaining the
+last source owner is therefore part of the concurrency proof, not merely a
+memory-leak concern. The relevant definition is
+<a href="https://eel.is/c++draft/intro.races">data races and lifetime</a>.</p>
+<h2 id="share-frozen-nodes-reopen-mutable-readers">Share frozen nodes; reopen mutable readers</h2>
+<p>Chapter 19's immutable fixture required every source on disk. Live capture may
+contain a recently sealed memtable. Its nodes, towers, and payloads are now
+immutable: rotation installed a different active writer before the view escaped.
+We can share that generation without copying all its rows.</p>
+<p>Replace <code>ReadView::isolate_disk</code> with this delegating wrapper. The frozen fixture
+retains its stricter disk-only contract; the live engine will opt into frozen
+memory explicitly.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/read_view.cpp — replace ReadView::isolate_disk</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">ReadView</span><span class="w"> </span><span class="nf">ReadView::isolate_disk</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span>
+<span class="w">                               </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_slots</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_bytes</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">isolate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">budget</span><span class="p">),</span><span class="w"> </span><span class="n">cache_slots</span><span class="p">,</span><span class="w"> </span><span class="n">cache_bytes</span><span class="p">,</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Add the next function before the final namespace closing brace in the same
+file. It first validates the complete parent, then allocates one private read
+context. Disk sources reopen by stable file identity and get private cache IDs.
+Memory sources copy only an owning source handle. Their mutable WAL I/O and
+writer methods are never called through this read path.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/read_view.cpp — add isolated reader construction</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">ReadView</span><span class="w"> </span><span class="nf">ReadView::isolate</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_slots</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">cache_bytes</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">allow_memory</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_valid</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">budget</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">isolated</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid isolated read parent"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">sources</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">source</span><span class="p">.</span><span class="n">memory</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">allow_memory</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="o">!</span><span class="n">source</span><span class="p">.</span><span class="n">memory</span><span class="o">-&gt;</span><span class="n">table</span><span class="p">().</span><span class="n">frozen</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"isolated memory source must be explicitly frozen"</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">source</span><span class="p">.</span><span class="n">disk</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"missing isolated source"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">local</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">IsolatedRead</span><span class="o">&gt;</span><span class="p">(</span>
+<span class="w">        </span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">IsolatedRead</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">},</span>
+<span class="w">        </span><span class="n">state_</span><span class="p">,</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">cache_slots</span><span class="p">,</span><span class="w"> </span><span class="n">cache_bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Source</span><span class="p">,</span><span class="w"> </span><span class="n">read_detail</span><span class="o">::</span><span class="n">max_sources</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">{};</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">count</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">held</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">file_id</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">held</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">memory</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">sources</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">held</span><span class="p">[</span><span class="n">i</span><span class="p">];</span><span class="w">  </span><span class="c1">// Only immutable nodes, no shared reader bookkeeping.</span>
+<span class="w">            </span><span class="k">continue</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">file_name</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">FileKind</span><span class="o">::</span><span class="n">table</span><span class="p">);</span>
+<span class="w">        </span><span class="c1">// Read-only open does not change Directory's inventory or shared counters.</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">opened</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">context</span><span class="o">-&gt;</span><span class="n">directory</span><span class="p">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">OpenMode</span><span class="o">::</span><span class="n">read_only</span><span class="p">);</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">reader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">},</span>
+<span class="w">            </span><span class="o">*</span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">opened</span><span class="p">.</span><span class="n">file</span><span class="p">),</span><span class="w"> </span><span class="n">opened</span><span class="p">.</span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">local</span><span class="o">-&gt;</span><span class="n">cache</span><span class="p">,</span><span class="w"> </span><span class="n">local</span><span class="o">-&gt;</span><span class="n">cache</span><span class="p">.</span><span class="n">new_file_id</span><span class="p">());</span>
+<span class="w">        </span><span class="n">sources</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">file_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">id</span><span class="p">;</span>
+<span class="w">        </span><span class="n">sources</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">disk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">reader</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">(</span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">{</span><span class="n">budget</span><span class="p">},</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">local</span><span class="p">),</span><span class="w"> </span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">sequence</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="p">{</span><span class="n">sources</span><span class="p">}.</span><span class="n">first</span><span class="p">(</span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">count</span><span class="p">));</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ReadView</span><span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">state</span><span class="p">)};</span><span class="w">  </span><span class="c1">// Not registered in the parent's mutable retention registry.</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The parent state remains anchored inside <code>IsolatedRead</code>. That parent protects
+file names during all read-only opens and protects memory until every cursor is
+gone. A failed third reader construction destroys the first two private readers
+and releases the parent normally. Nothing is registered twice in the storage
+retention registry.</p>
+<p>The shared <code>Directory</code> object has a deliberately narrow concurrent use here:
+its read-only <code>open</code> branch uses the stable directory descriptor and does not
+change its inventory. Creation, replacement, enumeration, and deletion remain
+coordinated. This is a property of our Chapter 11 implementation, not permission
+to call every <code>Directory</code> method concurrently.</p>
+<p>A copied <code>ReadView</code> still shares its private reader state. Give one isolated
+view to one query worker. Do not share that same view between independently
+running queries; capture another isolated view for the other query instead.</p>
+<h2 id="admit-for-a-stable-upper-bound">Admit for a stable upper bound</h2>
+<p>An executor must know its descriptor requirement <em>before</em> it captures a live
+snapshot. Sampling “currently two source files” at submission is unsafe: the
+writer can create additional generations before admission. Introduce a small
+provider interface whose <code>source_count()</code> means a lifetime-stable <strong>upper
+bound</strong>. The fixed fixture can return its exact immutable count. The live
+engine will return <code>read_detail::max_sources</code>, which is 20.</p>
+<p><code>virtual</code> and <code>override</code> use the same interface mechanism as the file backend
+in Chapter 6. The virtual destructor permits ownership through the base type.
+The interface abstracts the capture boundary, not indexing, query algorithms,
+or storage implementation.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/runtime/frozen_inputs.hpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- include/strata/runtime/frozen_inputs.hpp</span>
+<span class="gi">+++ include/strata/runtime/frozen_inputs.hpp</span>
+<span class="gu">@@ -8,14 +8,21 @@</span>
+<span class="w"> </span>
+<span class="w"> </span>namespace strata::runtime {
+<span class="w"> </span>// Construct before starting workers. No writable Database handle escapes.
+<span class="gd">-class FrozenInputs {</span>
+<span class="gi">+class QueryInputs {</span>
+<span class="gi">+public:</span>
+<span class="gi">+    virtual ~QueryInputs() = default;</span>
+<span class="gi">+    virtual storage::ReadView capture(std::shared_ptr&lt;memory::Budget&gt; budget) const = 0;</span>
+<span class="gi">+    // A lifetime-stable upper bound, not a mutable count sampled at submission.</span>
+<span class="gi">+    virtual std::size_t source_count() const = 0;</span>
+<span class="gi">+};</span>
+<span class="gi">+class FrozenInputs : public QueryInputs {</span>
+<span class="w"> </span>public:
+<span class="w"> </span>    FrozenInputs(const std::string&amp; path, storage::DatabaseOptions options = {},
+<span class="w"> </span>                 std::size_t opening_bytes = 64 * 1024 * 1024);
+<span class="w"> </span>    FrozenInputs(const FrozenInputs&amp;) = delete;
+<span class="w"> </span>    FrozenInputs&amp; operator=(const FrozenInputs&amp;) = delete;
+<span class="gd">-    storage::ReadView capture(std::shared_ptr&lt;memory::Budget&gt; budget) const;</span>
+<span class="gd">-    std::size_t source_count() const { return view_.source_count(); }</span>
+<span class="gi">+    storage::ReadView capture(std::shared_ptr&lt;memory::Budget&gt; budget) const override;</span>
+<span class="gi">+    std::size_t source_count() const override { return view_.source_count(); }</span>
+<span class="w"> </span>    std::uint64_t sequence() const { return view_.sequence(); }
+<span class="w"> </span>private:
+<span class="w"> </span>    storage::ReadView view_;
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/runtime/executor.hpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- include/strata/runtime/executor.hpp</span>
+<span class="gi">+++ include/strata/runtime/executor.hpp</span>
+<span class="gu">@@ -24,7 +24,7 @@</span>
+<span class="w"> </span>class Executor {
+<span class="w"> </span>public:
+<span class="w"> </span>    static constexpr std::size_t max_workers = 8, max_queued = 64;
+<span class="gd">-    Executor(std::shared_ptr&lt;const FrozenInputs&gt; inputs, std::string temporary_parent,</span>
+<span class="gi">+    Executor(std::shared_ptr&lt;const QueryInputs&gt; inputs, std::string temporary_parent,</span>
+<span class="w"> </span>             std::string output_parent, ExecutorOptions options = {},
+<span class="w"> </span>             std::optional&lt;std::size_t&gt; fail_before_launch = std::nullopt,
+<span class="w"> </span>             std::atomic&lt;std::size_t&gt;* live_threads = nullptr);
+<span class="gu">@@ -47,7 +47,7 @@</span>
+<span class="w"> </span>    bool fits(const Request&amp; request) const;
+<span class="w"> </span>    void join_all() noexcept;
+<span class="w"> </span>    static void publish(Request&amp; request, TaskResult result);
+<span class="gd">-    std::shared_ptr&lt;const FrozenInputs&gt; inputs_;</span>
+<span class="gi">+    std::shared_ptr&lt;const QueryInputs&gt; inputs_;</span>
+<span class="w"> </span>    std::string temporary_parent_, output_parent_;
+<span class="w"> </span>    ExecutorOptions options_;
+<span class="w"> </span>    std::shared_ptr&lt;task_detail::Wakeup&gt; wakeup_ = std::make_shared&lt;task_detail::Wakeup&gt;();
+</code></pre></figure>
+<p>The executor keeps the provider owner rather than an unowned reference. A new
+<code>captured</code> checkpoint occurs only after the immutable view and its sequence
+exist; it gives our tests a precise old-snapshot pause without sleeps. All
+previous checkpoints and admission behavior remain in force.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/runtime/cancel.hpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- include/strata/runtime/cancel.hpp</span>
+<span class="gi">+++ include/strata/runtime/cancel.hpp</span>
+<span class="gu">@@ -8,7 +8,7 @@</span>
+<span class="w"> </span>struct Canceled final : std::exception {
+<span class="w"> </span>    const char* what() const noexcept override { return "query canceled"; }
+<span class="w"> </span>};
+<span class="gd">-enum class Boundary { admitted, batch, block, spill_pass, before_publish };</span>
+<span class="gi">+enum class Boundary { admitted, captured, batch, block, spill_pass, before_publish };</span>
+<span class="w"> </span>struct CheckpointHook {
+<span class="w"> </span>    void (*call)(void*, Boundary) = nullptr;
+<span class="w"> </span>    void* argument = nullptr;
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-title">src/runtime/executor.cpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- src/runtime/executor.cpp</span>
+<span class="gi">+++ src/runtime/executor.cpp</span>
+<span class="gu">@@ -7,7 +7,7 @@</span>
+<span class="w"> </span>#include &lt;utility&gt;
+<span class="w"> </span>
+<span class="w"> </span>namespace strata::runtime {
+<span class="gd">-Executor::Executor(std::shared_ptr&lt;const FrozenInputs&gt; inputs, std::string temporary_parent,</span>
+<span class="gi">+Executor::Executor(std::shared_ptr&lt;const QueryInputs&gt; inputs, std::string temporary_parent,</span>
+<span class="w"> </span>                   std::string output_parent, ExecutorOptions options,
+<span class="w"> </span>                   std::optional&lt;std::size_t&gt; fail_before_launch,
+<span class="w"> </span>                   std::atomic&lt;std::size_t&gt;* live_threads)
+<span class="gu">@@ -149,6 +149,7 @@</span>
+<span class="w"> </span>        try {
+<span class="w"> </span>            auto view = inputs_-&gt;capture(budget);
+<span class="w"> </span>            result.sequence = view.sequence();
+<span class="gi">+            checkpoint(Boundary::captured);</span>
+<span class="w"> </span>            events = query::make_sort_stats(budget); groups = query::make_sort_stats(budget);
+<span class="w"> </span>            auto plan = query::make_query(std::move(view), request.options_, temporary_parent_,
+<span class="w"> </span>                                         events, groups, request.query_hooks);
+</code></pre></figure>
+<p>For the fixture, each sort declares three descriptors. Add the provider bound
+and Chapter 19's three other query descriptors:</p>
+<div class="math-input" data-display="true">F_q=20+3+3+3=29.</div>
+<p>The test admits two queries at once, so its executor allowance is <span class="math-input" data-display="false">2F_q=58</span>.
+These are software allowances, not 58 preopened kernel descriptors. Keeping the
+bound conservative prevents later capture from exceeding what admission
+promised. Existing <code>FrozenInputs</code> tests still use their smaller exact bound.</p>
+<h2 id="reserve-a-separate-route-for-maintenance">Reserve a separate route for maintenance</h2>
+<p>Do not make the maintenance worker acquire a query permit while every query
+permit belongs to work waiting for storage progress. Give storage, maintenance
+workspaces, and admitted queries separate budgets. Let <span class="math-input" data-display="false">S</span> be the storage limit,
+<span class="math-input" data-display="false">M</span> the maintenance limit, <span class="math-input" data-display="false">P</span> the query pool, and <span class="math-input" data-display="false">C_s,C_m,C_i</span> their current
+charged bytes. Then our tracked dynamic allocations obey</p>
+<div class="math-input" data-display="true">C_s\le S,\qquad C_m\le M,\qquad \sum_i C_i\le P,
+\qquad C_s+C_m+\sum_i C_i\le S+M+P.</div>
+<p>The test uses <span class="math-input" data-display="false">S=64</span> MiB, <span class="math-input" data-display="false">M=2</span> MiB, and <span class="math-input" data-display="false">P=4</span> MiB: a 70 MiB aggregate charged
+ceiling, not a claim that 70 MiB is resident. Thread stacks, allocator overhead,
+fixed controller objects, library runtime memory, and the operating system's
+file cache are not made into an RSS cap by this equation. Resident table-reader
+metadata belongs to storage; temporary builders and private maintenance readers
+belong to maintenance.</p>
+<p>For at most 16 private input readers and <span class="math-input" data-display="false">O</span> precreated output files, reserve</p>
+<div class="math-input" data-display="true">F_m=16+O+1</div>
+<p>maintenance descriptors. The final 1 covers authority installation. An output
+writer closes before its replacement reader opens, so they do not add two slots
+for the same output. With <span class="math-input" data-display="false">O=4</span>, the test requires 21. Existing storage readers,
+WALs, the directory lock, and query allowances are additional. Leave operating-
+system headroom; an allowance cannot prevent an external descriptor shortage.</p>
+<p>Separate pools prevent queries from consuming maintenance's allowance. They do
+not guarantee progress with an undersized storage budget, permanent I/O failure,
+or snapshots retained forever. Those conditions must fail visibly or reject
+admission, not silently allocate beyond the configured bound.</p>
+<h2 id="separate-preparation-build-and-installation">Separate preparation, build, and installation</h2>
+<p>A <code>MaintenanceJob</code> has three ownership phases. Construction runs under the
+engine mutex: capture input identities, retain immutable sources, reserve output
+IDs, and exclusively create a bounded set of output names. <code>build</code> runs without
+that mutex. <code>install</code> reacquires it and validates that the selected inputs are
+still the authoritative prefix or oldest sealed log.</p>
+<p>Only one split job may exist in an engine. Collection is forbidden until that
+job is destroyed, including after failure or stale rejection. This rule protects
+its selected input names and precreated output names without pretending they
+are already user snapshots or manifest dependencies.</p>
+<p>Add the narrowly scoped database friendship:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/database.hpp — exact prerequisite changes</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="gd">--- include/strata/storage/database.hpp</span>
+<span class="gi">+++ include/strata/storage/database.hpp</span>
+<span class="gu">@@ -59,6 +59,7 @@</span>
+<span class="w"> </span>    const Manifest&amp; manifest() const &amp;&amp; = delete;
+<span class="w"> </span>    std::size_t orphans_at_open() const noexcept { return orphans_at_open_; }
+<span class="w"> </span>private:
+<span class="gi">+    friend class MaintenanceJob;</span>
+<span class="w"> </span>    void require_healthy() const;
+<span class="w"> </span>    std::uint64_t take_id();
+<span class="w"> </span>    Manifest next_manifest() const;
+</code></pre></figure>
+<p>Create the complete job header. <code>database_</code> is an identity check, not a pointer
+that the unlocked build may dereference. <code>context_</code> and <code>workspace_</code> are real
+owners. Fixed arrays bound output metadata even before any file is written.
+<code>Phase</code> prevents a failed or consumed job from being rebuilt or installed twice.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/storage/maintenance.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_STORAGE_MAINTENANCE_HPP</span>
+<span class="cp">#define STRATA_STORAGE_MAINTENANCE_HPP</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/database.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">MaintenanceKind</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">flush</span><span class="p">,</span><span class="w"> </span><span class="n">compact</span><span class="w"> </span><span class="p">};</span>
+<span class="c1">// Exactly one coordinator owns construction and installation. Only build runs unlocked.</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MaintenanceJob</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">MaintenanceJob</span><span class="p">(</span><span class="n">Database</span><span class="o">&amp;</span><span class="w"> </span><span class="n">database</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">workspace</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">MaintenanceKind</span><span class="w"> </span><span class="n">kind</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">selected</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">CompactionOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{});</span>
+<span class="w">    </span><span class="n">MaintenanceJob</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MaintenanceJob</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MaintenanceJob</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MaintenanceJob</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{});</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">install</span><span class="p">(</span><span class="n">Database</span><span class="o">&amp;</span><span class="w"> </span><span class="n">database</span><span class="p">);</span><span class="w">  </span><span class="c1">// False: stale inputs; authority was not changed.</span>
+<span class="w">    </span><span class="n">MaintenanceKind</span><span class="w"> </span><span class="nf">kind</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">kind_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">CompactionStats</span><span class="w"> </span><span class="nf">stats</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">rebased</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">rebased_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Phase</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">prepared</span><span class="p">,</span><span class="w"> </span><span class="n">building</span><span class="p">,</span><span class="w"> </span><span class="n">built</span><span class="p">,</span><span class="w"> </span><span class="n">installed</span><span class="p">,</span><span class="w"> </span><span class="n">stale</span><span class="p">,</span><span class="w"> </span><span class="n">failed</span><span class="w"> </span><span class="p">};</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">finish_output</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="n">TableInfo</span><span class="w"> </span><span class="n">info</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">base</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">build_flush</span><span class="p">(</span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">build_compaction</span><span class="p">(</span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook</span><span class="p">);</span>
+<span class="w">    </span><span class="n">Database</span><span class="o">*</span><span class="w"> </span><span class="n">database_</span><span class="p">;</span><span class="w">  </span><span class="c1">// Identity check only; never accessed by build.</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Context</span><span class="o">&gt;</span><span class="w"> </span><span class="n">context_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">workspace_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">MaintenanceKind</span><span class="w"> </span><span class="n">kind_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Phase</span><span class="w"> </span><span class="n">phase_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Phase</span><span class="o">::</span><span class="n">prepared</span><span class="p">;</span>
+<span class="w">    </span><span class="n">Manifest</span><span class="w"> </span><span class="n">captured_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">LogRecord</span><span class="w"> </span><span class="n">sealed_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">WalMemTable</span><span class="o">&gt;</span><span class="w"> </span><span class="n">memory_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ReadView</span><span class="w"> </span><span class="n">input_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">CompactionOptions</span><span class="w"> </span><span class="n">options_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">io</span><span class="o">::</span><span class="n">SyncMode</span><span class="w"> </span><span class="n">sync_mode_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">end_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">selected_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">output_limit_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">output_count_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">,</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ids_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">io</span><span class="o">::</span><span class="n">File</span><span class="p">,</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="o">&gt;</span><span class="w"> </span><span class="n">files_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">TableRecord</span><span class="p">,</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="o">&gt;</span><span class="w"> </span><span class="n">records_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="o">&gt;</span><span class="w"> </span><span class="n">readers_</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">CompactionStats</span><span class="w"> </span><span class="n">stats_</span><span class="p">{};</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">rebased_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::storage</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>Start the source file with preparation. Flush retains the <strong>oldest sealed</strong>
+memtable. Compaction selects a complete table prefix, including every existing
+base partition. The selection rule is the same tombstone-elision proof as
+Chapter 13; we are changing when the work runs, not weakening its coverage.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/maintenance.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/storage/maintenance.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/runtime/cancel.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">storage</span><span class="w"> </span><span class="p">{</span>
+<span class="n">MaintenanceJob</span><span class="o">::</span><span class="n">MaintenanceJob</span><span class="p">(</span><span class="n">Database</span><span class="o">&amp;</span><span class="w"> </span><span class="n">database</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">memory</span><span class="o">::</span><span class="n">Budget</span><span class="o">&gt;</span><span class="w"> </span><span class="n">workspace</span><span class="p">,</span>
+<span class="w">    </span><span class="n">MaintenanceKind</span><span class="w"> </span><span class="n">kind</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">selected</span><span class="p">,</span><span class="w"> </span><span class="n">CompactionOptions</span><span class="w"> </span><span class="n">options</span><span class="p">)</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">database_</span><span class="p">(</span><span class="o">&amp;</span><span class="n">database</span><span class="p">),</span><span class="w"> </span><span class="n">context_</span><span class="p">(</span><span class="n">database</span><span class="p">.</span><span class="n">context_</span><span class="p">),</span><span class="w"> </span><span class="n">workspace_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">workspace</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">kind_</span><span class="p">(</span><span class="n">kind</span><span class="p">),</span><span class="w"> </span><span class="n">captured_</span><span class="p">(</span><span class="n">database</span><span class="p">.</span><span class="n">manifest_</span><span class="p">),</span><span class="w"> </span><span class="n">options_</span><span class="p">(</span><span class="n">options</span><span class="p">),</span>
+<span class="w">      </span><span class="n">sync_mode_</span><span class="p">(</span><span class="n">database</span><span class="p">.</span><span class="n">options_</span><span class="p">.</span><span class="n">sync_mode</span><span class="p">),</span><span class="w"> </span><span class="n">selected_</span><span class="p">(</span><span class="n">selected</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">database</span><span class="p">.</span><span class="n">require_healthy</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">workspace_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"missing maintenance workspace"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">database</span><span class="p">.</span><span class="n">next_manifest</span><span class="p">();</span><span class="w">  </span><span class="c1">// Epoch exhaustion before creating names.</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kind</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">MaintenanceKind</span><span class="o">::</span><span class="n">flush</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">captured_</span><span class="p">.</span><span class="n">log_count</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">captured_</span><span class="p">.</span><span class="n">table_count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"no flushable log or no table slot"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">sealed_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">captured_</span><span class="p">.</span><span class="n">logs</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span><span class="w"> </span><span class="n">memory_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">database</span><span class="p">.</span><span class="n">logs_</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span><span class="w"> </span><span class="n">end_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sealed_</span><span class="p">.</span><span class="n">end</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">memory_</span><span class="o">-&gt;</span><span class="n">table</span><span class="p">().</span><span class="n">frozen</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"flush input is mutable"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">output_limit_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">database</span><span class="p">.</span><span class="n">options_</span><span class="p">.</span><span class="n">table</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kind</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">MaintenanceKind</span><span class="o">::</span><span class="n">compact</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">selected</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">selected</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">captured_</span><span class="p">.</span><span class="n">base_count</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">selected</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">captured_</span><span class="p">.</span><span class="n">table_count</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="n">options</span><span class="p">.</span><span class="n">max_output_files</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">options</span><span class="p">.</span><span class="n">max_output_files</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="n">options</span><span class="p">.</span><span class="n">max_output_bytes</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"invalid maintenance prefix"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">end_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">captured_</span><span class="p">.</span><span class="n">tables</span><span class="p">[</span><span class="n">selected</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">].</span><span class="n">end</span><span class="p">;</span>
+<span class="w">        </span><span class="n">output_limit_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">options</span><span class="p">.</span><span class="n">max_output_files</span><span class="p">,</span>
+<span class="w">                                </span><span class="n">Manifest</span><span class="o">::</span><span class="n">max_tables</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">captured_</span><span class="p">.</span><span class="n">table_count</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">selected</span><span class="p">));</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">Source</span><span class="p">,</span><span class="w"> </span><span class="n">read_detail</span><span class="o">::</span><span class="n">max_sources</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">{};</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">selected</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">sources</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">file_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">captured_</span><span class="p">.</span><span class="n">tables</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">id</span><span class="p">;</span><span class="w"> </span><span class="n">sources</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">disk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">database</span><span class="p">.</span><span class="n">tables_</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="w">            </span><span class="n">io</span><span class="o">::</span><span class="n">IoBytes</span><span class="o">::</span><span class="n">add</span><span class="p">(</span><span class="n">stats_</span><span class="p">.</span><span class="n">input_entries</span><span class="p">,</span><span class="w"> </span><span class="n">database</span><span class="p">.</span><span class="n">tables_</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-&gt;</span><span class="n">entries</span><span class="p">(),</span><span class="w"> </span><span class="n">stats_</span><span class="p">.</span><span class="n">counters_saturated</span><span class="p">);</span>
+<span class="w">            </span><span class="n">io</span><span class="o">::</span><span class="n">IoBytes</span><span class="o">::</span><span class="n">add</span><span class="p">(</span><span class="n">stats_</span><span class="p">.</span><span class="n">selected_file_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">captured_</span><span class="p">.</span><span class="n">tables</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">bytes</span><span class="p">,</span><span class="w"> </span><span class="n">stats_</span><span class="p">.</span><span class="n">counters_saturated</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">stats_</span><span class="p">.</span><span class="n">selected_files</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">selected</span><span class="p">;</span>
+<span class="w">        </span><span class="n">input_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ReadView</span><span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">(</span>
+<span class="w">            </span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">read_detail</span><span class="o">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">{</span><span class="n">workspace_</span><span class="p">},</span><span class="w"> </span><span class="n">context_</span><span class="p">,</span><span class="w"> </span><span class="n">end_</span><span class="p">,</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">read_detail</span><span class="o">::</span><span class="n">Source</span><span class="o">&gt;</span><span class="p">{</span><span class="n">sources</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">selected</span><span class="p">})};</span>
+<span class="w">        </span><span class="c1">// This private state is not a user snapshot. The coordinator forbids collection</span>
+<span class="w">        </span><span class="c1">// until the job has been destroyed, including on a stale result.</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"unknown maintenance kind"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// Reserve identities and namespace entries while the coordinator owns Database.</span>
+<span class="w">    </span><span class="c1">// Unused output names stay orphaned until the next explicit collection.</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">output_limit_</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">ids_</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">database</span><span class="p">.</span><span class="n">take_id</span><span class="p">();</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">file_name</span><span class="p">(</span><span class="n">ids_</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">FileKind</span><span class="o">::</span><span class="n">table</span><span class="p">);</span>
+<span class="w">        </span><span class="n">files_</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">directory</span><span class="p">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">OpenMode</span><span class="o">::</span><span class="n">create_new</span><span class="p">).</span><span class="n">file</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>An output creation failure can leave earlier newly created names behind. Their
+IDs have already advanced and must not be reused. Ordinary member cleanup closes
+the descriptors; later collection or reopening handles the nonauthoritative
+names. The existing manifest never references an incomplete output merely
+because its pathname exists.</p>
+<p>The private compaction <code>State</code> is intentionally not activated in user retention.
+The coordinator's no-collection rule is therefore essential. A second arbitrary
+collector thread would violate this protocol even though all shared pointers
+were individually valid.</p>
+<h2 id="validate-each-output-before-it-can-become-authoritative">Validate each output before it can become authoritative</h2>
+<p>The output transfer counter is computed from the job's file owners. A closed
+<code>File</code> preserves its byte counters, so a partial output remains observable after
+failure. Completed-file bytes and installed authority remain separate facts.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/maintenance.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">CompactionStats</span><span class="w"> </span><span class="nf">MaintenanceJob::stats</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stats_</span><span class="p">;</span>
+<span class="w">    </span><span class="c1">// File preserves its transfer counters after close. Count partial output too.</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">files_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">traffic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="n">io_bytes</span><span class="p">();</span>
+<span class="w">        </span><span class="n">io</span><span class="o">::</span><span class="n">IoBytes</span><span class="o">::</span><span class="n">add</span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">output_write_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">traffic</span><span class="p">.</span><span class="n">written</span><span class="p">,</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">counters_saturated</span><span class="p">);</span>
+<span class="w">        </span><span class="n">result</span><span class="p">.</span><span class="n">counters_saturated</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="n">traffic</span><span class="p">.</span><span class="n">saturated</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>An output is synchronized and closed, then reopened through a new reader with
+<strong>no shared cache</strong>. Its resident metadata is charged to the storage budget;
+its builder has already been destroyed. Full verification and a semantic scan
+check the interval, row kind, key ordering, and base-partition boundaries before
+that reader is placed in the prepared owner array.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/maintenance.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">MaintenanceJob::finish_output</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="n">TableInfo</span><span class="w"> </span><span class="n">info</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">base</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">files_</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">sync</span><span class="p">(</span><span class="n">sync_mode_</span><span class="p">);</span>
+<span class="w">    </span><span class="n">files_</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">close_checked</span><span class="p">();</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">TableRecord</span><span class="w"> </span><span class="n">record</span><span class="p">{</span><span class="n">ids_</span><span class="p">[</span><span class="n">index</span><span class="p">],</span><span class="w"> </span><span class="n">base</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">sealed_</span><span class="p">.</span><span class="n">base</span><span class="p">,</span><span class="w"> </span><span class="n">end_</span><span class="p">,</span><span class="w"> </span><span class="n">info</span><span class="p">.</span><span class="n">file_bytes</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">file_name</span><span class="p">(</span><span class="n">record</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">FileKind</span><span class="o">::</span><span class="n">table</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">opened</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">directory</span><span class="p">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">io</span><span class="o">::</span><span class="n">OpenMode</span><span class="o">::</span><span class="n">read_only</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">opened</span><span class="p">.</span><span class="n">bytes</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"maintenance output length"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// Resident metadata uses the storage ledger. No shared cache is touched here.</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">reader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">allocate_shared</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="p">(</span>
+<span class="w">        </span><span class="n">memory</span><span class="o">::</span><span class="n">SharedAllocator</span><span class="o">&lt;</span><span class="n">TableReader</span><span class="o">&gt;</span><span class="p">{</span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">budget</span><span class="p">},</span><span class="w"> </span><span class="o">*</span><span class="n">context_</span><span class="o">-&gt;</span><span class="n">budget</span><span class="p">,</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">opened</span><span class="p">.</span><span class="n">file</span><span class="p">),</span><span class="w"> </span><span class="n">opened</span><span class="p">.</span><span class="n">bytes</span><span class="p">);</span>
+<span class="w">    </span><span class="n">reader</span><span class="o">-&gt;</span><span class="n">verify_all</span><span class="p">();</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">reader</span><span class="o">-&gt;</span><span class="n">begin</span><span class="p">();</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Key</span><span class="o">&gt;</span><span class="w"> </span><span class="n">previous</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">smallest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">(),</span><span class="w"> </span><span class="n">largest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">valid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">entry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">entry</span><span class="p">();</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">base</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">end</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">entry</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">EntryKind</span><span class="o">::</span><span class="n">put</span><span class="w"> </span><span class="o">||</span>
+<span class="w">                      </span><span class="p">(</span><span class="n">previous</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">KeyLess</span><span class="p">{}(</span><span class="o">*</span><span class="n">previous</span><span class="p">,</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">)))))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"maintenance output semantics"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">previous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">user</span><span class="p">;</span>
+<span class="w">        </span><span class="n">smallest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">smallest</span><span class="p">,</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="p">);</span><span class="w"> </span><span class="n">largest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">max</span><span class="p">(</span><span class="n">largest</span><span class="p">,</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">key</span><span class="p">.</span><span class="n">sequence</span><span class="p">);</span>
+<span class="w">        </span><span class="n">cursor</span><span class="p">.</span><span class="n">next</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">previous</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">base</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">smallest</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">largest</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="n">end</span><span class="p">)))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"maintenance output interval endpoints"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">KeyLess</span><span class="p">{}(</span><span class="o">*</span><span class="n">readers_</span><span class="p">[</span><span class="n">index</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="o">-&gt;</span><span class="n">last_key</span><span class="p">(),</span><span class="w"> </span><span class="o">*</span><span class="n">reader</span><span class="o">-&gt;</span><span class="n">first_key</span><span class="p">()))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"maintenance base ranges overlap"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">records_</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record</span><span class="p">;</span><span class="w"> </span><span class="n">readers_</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">reader</span><span class="p">);</span><span class="w"> </span><span class="o">++</span><span class="n">output_count_</span><span class="p">;</span>
+<span class="w">    </span><span class="o">++</span><span class="n">stats_</span><span class="p">.</span><span class="n">output_files</span><span class="p">;</span><span class="w"> </span><span class="n">stats_</span><span class="p">.</span><span class="n">completed_file_bytes</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">info</span><span class="p">.</span><span class="n">file_bytes</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>For a flushed interval <span class="math-input" data-display="false">(b,e]</span>, its minimum sequence must be <span class="math-input" data-display="false">b+1</span> and its maximum
+must be <span class="math-input" data-display="false">e</span>. For a compacted base through <span class="math-input" data-display="false">e</span>, surviving rows may have older
+sequences, but each must be a put with <span class="math-input" data-display="false">0&lt;s\le e</span> and strictly increasing user
+keys. An entirely deleted prefix produces no output reader; the manifest still
+records its coverage boundary in Part 2.</p>
+<p><code>output_files</code> counts verified prepared files here. <code>output_write_bytes</code> includes
+partial writes as well. <code>merge_read_bytes</code> below counts private input-reader
+traffic, including their metadata reads; it does <strong>not</strong> count output verification
+reads, directory metadata, WAL traffic, or physical device amplification. Do not
+label it total engine I/O.</p>
+<h2 id="reuse-the-ordered-scans-and-bounded-builder">Reuse the ordered scans and bounded builder</h2>
+<p>Flush has no sorting step. The frozen skip list already supplies the required
+internal-key order. Its cancellation boundary occurs between rows; the file
+layer also checks at block I/O boundaries. A hook may throw after a row to test
+failure cleanup, but it must not reenter the engine.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/maintenance.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">MaintenanceJob::build_flush</span><span class="p">(</span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">TableInfo</span><span class="w"> </span><span class="n">info</span><span class="p">{};</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="n">TableBuilder</span><span class="w"> </span><span class="n">builder</span><span class="p">{</span><span class="o">*</span><span class="n">workspace_</span><span class="p">,</span><span class="w"> </span><span class="n">files_</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">output</span><span class="p">};</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">memory_</span><span class="o">-&gt;</span><span class="n">table</span><span class="p">().</span><span class="n">begin</span><span class="p">();</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">valid</span><span class="p">();</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">next</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">runtime</span><span class="o">::</span><span class="n">checkpoint</span><span class="p">(</span><span class="n">runtime</span><span class="o">::</span><span class="n">Boundary</span><span class="o">::</span><span class="n">batch</span><span class="p">);</span>
+<span class="w">            </span><span class="n">builder</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">entry</span><span class="p">());</span><span class="w"> </span><span class="o">++</span><span class="n">stats_</span><span class="p">.</span><span class="n">output_entries</span><span class="p">;</span><span class="w"> </span><span class="n">hook</span><span class="p">(</span><span class="s">"maintenance-row"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">info</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">finish_output</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">info</span><span class="p">,</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Compaction reopens private disk readers and uses the existing bounded heap merge.
+One output builder exists at a time. <code>can_append</code> includes directory, Bloom, and
+footer costs from Chapter 13; it is not a test of row bytes alone.</p>
+<p>The local <code>ReadTraffic</code> object is a small scope guard: its destructor collects
+counters on both success and exception. Its source span borrows from <code>local</code>,
+which was constructed first and therefore outlives the guard. The cursor is
+constructed last and dies first. No heap allocation is needed to record these
+fixed-size observations.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/maintenance.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">MaintenanceJob::build_compaction</span><span class="p">(</span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">local</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input_</span><span class="p">.</span><span class="n">isolate_disk</span><span class="p">(</span><span class="n">workspace_</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">256</span><span class="p">);</span>
+<span class="w">    </span><span class="k">struct</span><span class="w"> </span><span class="nc">ReadTraffic</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">read_detail</span><span class="o">::</span><span class="n">Source</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sources</span><span class="p">;</span>
+<span class="w">        </span><span class="n">CompactionStats</span><span class="o">&amp;</span><span class="w"> </span><span class="n">report</span><span class="p">;</span>
+<span class="w">        </span><span class="o">~</span><span class="n">ReadTraffic</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">sources</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">traffic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">source</span><span class="p">.</span><span class="n">disk</span><span class="o">-&gt;</span><span class="n">io_bytes</span><span class="p">();</span>
+<span class="w">                </span><span class="n">io</span><span class="o">::</span><span class="n">IoBytes</span><span class="o">::</span><span class="n">add</span><span class="p">(</span><span class="n">report</span><span class="p">.</span><span class="n">merge_read_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">traffic</span><span class="p">.</span><span class="n">read</span><span class="p">,</span><span class="w"> </span><span class="n">report</span><span class="p">.</span><span class="n">counters_saturated</span><span class="p">);</span>
+<span class="w">                </span><span class="n">report</span><span class="p">.</span><span class="n">counters_saturated</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="n">traffic</span><span class="p">.</span><span class="n">saturated</span><span class="p">;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="n">meter</span><span class="p">{</span><span class="n">local</span><span class="p">.</span><span class="n">state_</span><span class="o">-&gt;</span><span class="n">sources</span><span class="p">(),</span><span class="w"> </span><span class="n">stats_</span><span class="p">};</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">local</span><span class="p">.</span><span class="n">scan</span><span class="p">({</span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">});</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">valid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">output_count_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">output_limit_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"maintenance output slots"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">output_options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">options_</span><span class="p">.</span><span class="n">output</span><span class="p">;</span>
+<span class="w">        </span><span class="n">output_options</span><span class="p">.</span><span class="n">file_limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">output_options</span><span class="p">.</span><span class="n">file_limit</span><span class="p">,</span>
+<span class="w">            </span><span class="n">options_</span><span class="p">.</span><span class="n">max_output_bytes</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">stats_</span><span class="p">.</span><span class="n">completed_file_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="n">TableInfo</span><span class="w"> </span><span class="n">info</span><span class="p">{};</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">TableBuilder</span><span class="w"> </span><span class="n">builder</span><span class="p">{</span><span class="o">*</span><span class="n">workspace_</span><span class="p">,</span><span class="w"> </span><span class="n">files_</span><span class="p">[</span><span class="n">output_count_</span><span class="p">],</span><span class="w"> </span><span class="n">output_options</span><span class="p">};</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">rows</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">            </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">valid</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="n">can_append</span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">entry</span><span class="p">()))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="n">runtime</span><span class="o">::</span><span class="n">checkpoint</span><span class="p">(</span><span class="n">runtime</span><span class="o">::</span><span class="n">Boundary</span><span class="o">::</span><span class="n">batch</span><span class="p">);</span>
+<span class="w">                </span><span class="n">builder</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="p">.</span><span class="n">entry</span><span class="p">());</span><span class="w"> </span><span class="o">++</span><span class="n">rows</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">stats_</span><span class="p">.</span><span class="n">output_entries</span><span class="p">;</span>
+<span class="w">                </span><span class="n">hook</span><span class="p">(</span><span class="s">"maintenance-row"</span><span class="p">);</span><span class="w"> </span><span class="n">cursor</span><span class="p">.</span><span class="n">next</span><span class="p">();</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rows</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"one compacted row cannot fit"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">            </span><span class="n">info</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="n">finish</span><span class="p">();</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">finish_output</span><span class="p">(</span><span class="n">output_count_</span><span class="p">,</span><span class="w"> </span><span class="n">info</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>If <span class="math-input" data-display="false">D</span> is the total output-byte allowance and <span class="math-input" data-display="false">d</span> the completed bytes so far,
+the next file has limit <span class="math-input" data-display="false">\min(L_f,D-d)</span>, where <span class="math-input" data-display="false">L_f</span> is its individual file cap.
+Each completed file fits the remaining allowance, so the subtraction is valid.
+If even one row cannot fit, fail; do not create an infinite series of empty runs.</p>
+<p>Complete the build wrapper. It closes precreated but unused writers, leaving
+their names explicitly nonauthoritative. Its state becomes <code>built</code> only after
+the final test hook returns. Append the installation function in Part 2 before
+closing this namespace; this source file is intentionally continued there.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/storage/maintenance.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">MaintenanceJob::build</span><span class="p">(</span><span class="n">InstallHook</span><span class="w"> </span><span class="n">hook</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">phase_</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Phase</span><span class="o">::</span><span class="n">prepared</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"maintenance job cannot be rebuilt"</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">phase_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Phase</span><span class="o">::</span><span class="n">building</span><span class="p">;</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">hook</span><span class="p">(</span><span class="n">kind_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">MaintenanceKind</span><span class="o">::</span><span class="n">flush</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="s">"flush-build"</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s">"compact-build"</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kind_</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">MaintenanceKind</span><span class="o">::</span><span class="n">flush</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">build_flush</span><span class="p">(</span><span class="n">hook</span><span class="p">);</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">build_compaction</span><span class="p">(</span><span class="n">hook</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="c1">// Close precreated-but-unused descriptors. Their names remain nonauthoritative.</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">output_count_</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">output_limit_</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">files_</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">close_checked</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">        </span><span class="n">hook</span><span class="p">(</span><span class="s">"maintenance-built"</span><span class="p">);</span><span class="w"> </span><span class="n">phase_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Phase</span><span class="o">::</span><span class="n">built</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(...)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">phase_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Phase</span><span class="o">::</span><span class="n">failed</span><span class="p">;</span><span class="w"> </span><span class="k">throw</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>At this boundary the output is valid, but the database still serves its original
+source set. The writer may already have advanced. We have prepared a candidate,
+not acquired permission to overwrite newer history.</p>
+<p>Continue with <a href="https://25d-228.github.io/cplusplus-learning/chapter-20-part-2.html">Part 2 — Build outside the lock; install against current authority</a>.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-19-part-3.html"><small>Previous · Chapter 19 · Part 3</small><span>Force the waiting and publication boundaries</span></a><a href="chapter-20-part-2.html"><small>Next · Chapter 20 · Part 2</small><span>Build outside the lock; install against current authority</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 20 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-share-lifetimes-not-mutable-readers">Part 1 — Share lifetimes, not mutable readers</a></li><li class="toc-h2"><a href="#choose-an-owner-for-every-mutation">Choose an owner for every mutation</a></li><li class="toc-h2"><a href="#repair-the-ledger-before-owners-cross-threads">Repair the ledger before owners cross threads</a></li><li class="toc-h2"><a href="#a-final-snapshot-release-is-a-registry-mutation">A final snapshot release is a registry mutation</a></li><li class="toc-h2"><a href="#share-frozen-nodes-reopen-mutable-readers">Share frozen nodes; reopen mutable readers</a></li><li class="toc-h2"><a href="#admit-for-a-stable-upper-bound">Admit for a stable upper bound</a></li><li class="toc-h2"><a href="#reserve-a-separate-route-for-maintenance">Reserve a separate route for maintenance</a></li><li class="toc-h2"><a href="#separate-preparation-build-and-installation">Separate preparation, build, and installation</a></li><li class="toc-h2"><a href="#validate-each-output-before-it-can-become-authoritative">Validate each output before it can become authoritative</a></li><li class="toc-h2"><a href="#reuse-the-ordered-scans-and-bounded-builder">Reuse the ordered scans and bounded builder</a></li></ul></aside>
+</div></body></html>

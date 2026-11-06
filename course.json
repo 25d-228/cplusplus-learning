@@ -1,0 +1,466 @@
+{
+  "title": "C++ Systems Engineering: Strata",
+  "course_key": "cpp-systems",
+  "repository": "https://github.com/25d-228/cplusplus-learning",
+  "pages_url": "https://25d-228.github.io/cplusplus-learning/",
+  "description": "Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.",
+  "complete": true,
+  "pages": [
+    {
+      "id": "roadmap",
+      "label": "Roadmap",
+      "title": "Strata: a C++ storage and query engine",
+      "source": "roadmap.md",
+      "output": "index.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/1"
+    },
+    {
+      "id": "chapter-01",
+      "label": "Chapter 1",
+      "title": "From C files to a native C++ program",
+      "source": "chapter-01.md",
+      "output": "chapter-01.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/2"
+    },
+    {
+      "id": "chapter-02",
+      "label": "Chapter 2",
+      "title": "Values, references, containers, and views",
+      "source": "chapter-02.md",
+      "output": "chapter-02.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/3"
+    },
+    {
+      "id": "chapter-03",
+      "label": "Chapter 3",
+      "title": "Lifetime, RAII, and move-only owners",
+      "source": "chapter-03.md",
+      "output": "chapter-03.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/4"
+    },
+    {
+      "id": "chapter-04",
+      "label": "Chapter 4",
+      "title": "Errors and failure-safe state changes",
+      "source": "chapter-04.md",
+      "output": "chapter-04.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/5"
+    },
+    {
+      "id": "chapter-05",
+      "label": "Chapter 5",
+      "title": "Templates, concepts, and ordering contracts",
+      "source": "chapter-05.md",
+      "output": "chapter-05.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/6"
+    },
+    {
+      "id": "chapter-06",
+      "label": "Chapter 6 · Part 1",
+      "title": "Records, bytes, and a dependable file boundary",
+      "source": "chapter-06.md",
+      "output": "chapter-06.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/7"
+    },
+    {
+      "id": "chapter-06-part-2",
+      "label": "Chapter 6 · Part 2",
+      "title": "Deterministic faults and native checks",
+      "source": "chapter-06-part-2.md",
+      "output": "chapter-06-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/8"
+    },
+    {
+      "id": "chapter-07",
+      "label": "Chapter 7 · Part 1",
+      "title": "An arena-backed skip-list memtable",
+      "source": "chapter-07.md",
+      "output": "chapter-07.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/9"
+    },
+    {
+      "id": "chapter-07-part-2",
+      "label": "Chapter 7 · Part 2",
+      "title": "Prepare, publish, and verify",
+      "source": "chapter-07-part-2.md",
+      "output": "chapter-07-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/10"
+    },
+    {
+      "id": "chapter-08",
+      "label": "Chapter 8 · Part 1",
+      "title": "Indexed immutable tables",
+      "source": "chapter-08.md",
+      "output": "chapter-08.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/11"
+    },
+    {
+      "id": "chapter-08-part-2",
+      "label": "Chapter 8 · Part 2",
+      "title": "Seek, verify, and diagnose",
+      "source": "chapter-08-part-2.md",
+      "output": "chapter-08-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/12"
+    },
+    {
+      "id": "chapter-08-part-3",
+      "label": "Chapter 8 · Part 3",
+      "title": "Verification and native checks",
+      "source": "chapter-08-part-3.md",
+      "output": "chapter-08-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/13"
+    },
+    {
+      "id": "chapter-09",
+      "label": "Chapter 9 · Part 1",
+      "title": "Memory budgets and a pinned block cache",
+      "source": "chapter-09.md",
+      "output": "chapter-09.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/14"
+    },
+    {
+      "id": "chapter-09-part-2",
+      "label": "Chapter 9 · Part 2",
+      "title": "Recency, pins, and admission",
+      "source": "chapter-09-part-2.md",
+      "output": "chapter-09-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/15"
+    },
+    {
+      "id": "chapter-09-part-3",
+      "label": "Chapter 9 · Part 3",
+      "title": "Reader integration and pressure tests",
+      "source": "chapter-09-part-3.md",
+      "output": "chapter-09-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/16"
+    },
+    {
+      "id": "chapter-10",
+      "label": "Chapter 10 · Part 1",
+      "title": "Atomic batches and write-ahead recovery",
+      "source": "chapter-10.md",
+      "output": "chapter-10.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/17"
+    },
+    {
+      "id": "chapter-10-part-2",
+      "label": "Chapter 10 · Part 2",
+      "title": "Commit, uncertainty, and strict replay",
+      "source": "chapter-10-part-2.md",
+      "output": "chapter-10-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/18"
+    },
+    {
+      "id": "chapter-10-part-3",
+      "label": "Chapter 10 · Part 3",
+      "title": "Failure images, pressure, and native checks",
+      "source": "chapter-10-part-3.md",
+      "output": "chapter-10-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/19"
+    },
+    {
+      "id": "chapter-11",
+      "label": "Chapter 11 · Part 1",
+      "title": "Flush installation and database reopening",
+      "source": "chapter-11.md",
+      "output": "chapter-11.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/20"
+    },
+    {
+      "id": "chapter-11-part-2",
+      "label": "Chapter 11 · Part 2",
+      "title": "Install, rotate, flush, and reopen",
+      "source": "chapter-11-part-2.md",
+      "output": "chapter-11-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/21"
+    },
+    {
+      "id": "chapter-11-part-3",
+      "label": "Chapter 11 · Part 3",
+      "title": "Failure cases across process lifetimes",
+      "source": "chapter-11-part-3.md",
+      "output": "chapter-11-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/22"
+    },
+    {
+      "id": "chapter-12",
+      "label": "Chapter 12 · Part 1",
+      "title": "Immutable snapshots and merged reads",
+      "source": "chapter-12.md",
+      "output": "chapter-12.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/23"
+    },
+    {
+      "id": "chapter-12-part-2",
+      "label": "Chapter 12 · Part 2",
+      "title": "Merge versions without borrowing dead bytes",
+      "source": "chapter-12-part-2.md",
+      "output": "chapter-12-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/24"
+    },
+    {
+      "id": "chapter-12-part-3",
+      "label": "Chapter 12 · Part 3",
+      "title": "Retention, failure, and ownership checks",
+      "source": "chapter-12-part-3.md",
+      "output": "chapter-12-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/25"
+    },
+    {
+      "id": "chapter-13",
+      "label": "Chapter 13 · Part 1",
+      "title": "Streaming compaction and safe reclamation",
+      "source": "chapter-13.md",
+      "output": "chapter-13.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/26"
+    },
+    {
+      "id": "chapter-13-part-2",
+      "label": "Chapter 13 · Part 2",
+      "title": "Install new owners, then reclaim old names",
+      "source": "chapter-13-part-2.md",
+      "output": "chapter-13-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/27"
+    },
+    {
+      "id": "chapter-13-part-3",
+      "label": "Chapter 13 · Part 3",
+      "title": "Retention, bounds, and restart checks",
+      "source": "chapter-13-part-3.md",
+      "output": "chapter-13-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/28"
+    },
+    {
+      "id": "chapter-14",
+      "label": "Chapter 14 · Part 1",
+      "title": "Owned batches and a streaming query pipeline",
+      "source": "chapter-14.md",
+      "output": "chapter-14.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/29"
+    },
+    {
+      "id": "chapter-14-part-2",
+      "label": "Chapter 14 · Part 2",
+      "title": "Pull without confusing emptiness and completion",
+      "source": "chapter-14-part-2.md",
+      "output": "chapter-14-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/30"
+    },
+    {
+      "id": "chapter-14-part-3",
+      "label": "Chapter 14 · Part 3",
+      "title": "Boundary, retention, and refill checks",
+      "source": "chapter-14-part-3.md",
+      "output": "chapter-14-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/31"
+    },
+    {
+      "id": "chapter-15",
+      "label": "Chapter 15 · Part 1",
+      "title": "External sorting with bounded fan-in",
+      "source": "chapter-15.md",
+      "output": "chapter-15.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/32"
+    },
+    {
+      "id": "chapter-15-part-2",
+      "label": "Chapter 15 · Part 2",
+      "title": "Merge only what fits",
+      "source": "chapter-15-part-2.md",
+      "output": "chapter-15-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/33"
+    },
+    {
+      "id": "chapter-15-part-3",
+      "label": "Chapter 15 · Part 3",
+      "title": "Pressure, corruption, and the native run oracle",
+      "source": "chapter-15-part-3.md",
+      "output": "chapter-15-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/34"
+    },
+    {
+      "id": "chapter-16",
+      "label": "Chapter 16 · Part 1",
+      "title": "A streaming many-to-one merge join",
+      "source": "chapter-16.md",
+      "output": "chapter-16.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/35"
+    },
+    {
+      "id": "chapter-16-part-2",
+      "label": "Chapter 16 · Part 2",
+      "title": "Resume without borrowing stale rows",
+      "source": "chapter-16-part-2.md",
+      "output": "chapter-16-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/36"
+    },
+    {
+      "id": "chapter-16-part-3",
+      "label": "Chapter 16 · Part 3",
+      "title": "Skew, invalid streams, and snapshot checks",
+      "source": "chapter-16-part-3.md",
+      "output": "chapter-16-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/37"
+    },
+    {
+      "id": "chapter-17",
+      "label": "Chapter 17 · Part 1",
+      "title": "Grouping, checked aggregates, and complete queries",
+      "source": "chapter-17.md",
+      "output": "chapter-17.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/38"
+    },
+    {
+      "id": "chapter-17-part-2",
+      "label": "Chapter 17 · Part 2",
+      "title": "Keep one group; publish one complete result",
+      "source": "chapter-17-part-2.md",
+      "output": "chapter-17-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/39"
+    },
+    {
+      "id": "chapter-17-part-3",
+      "label": "Chapter 17 · Part 3",
+      "title": "Boundary, failure, and two-sort checks",
+      "source": "chapter-17-part-3.md",
+      "output": "chapter-17-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/40"
+    },
+    {
+      "id": "chapter-18",
+      "label": "Chapter 18 · Part 1",
+      "title": "Synchronization and thread lifetime",
+      "source": "chapter-18.md",
+      "output": "chapter-18.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/41"
+    },
+    {
+      "id": "chapter-18-part-2",
+      "label": "Chapter 18 · Part 2",
+      "title": "Join before destroying shared state",
+      "source": "chapter-18-part-2.md",
+      "output": "chapter-18-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/42"
+    },
+    {
+      "id": "chapter-19",
+      "label": "Chapter 19 · Part 1",
+      "title": "Bounded execution and cooperative cancellation",
+      "source": "chapter-19.md",
+      "output": "chapter-19.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/43"
+    },
+    {
+      "id": "chapter-19-part-2",
+      "label": "Chapter 19 · Part 2",
+      "title": "A terminal result owns no running query",
+      "source": "chapter-19-part-2.md",
+      "output": "chapter-19-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/44"
+    },
+    {
+      "id": "chapter-19-part-3",
+      "label": "Chapter 19 · Part 3",
+      "title": "Force the waiting and publication boundaries",
+      "source": "chapter-19-part-3.md",
+      "output": "chapter-19-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/45"
+    },
+    {
+      "id": "chapter-20",
+      "label": "Chapter 20 · Part 1",
+      "title": "Concurrent readers, ingestion, and maintenance",
+      "source": "chapter-20.md",
+      "output": "chapter-20.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/46"
+    },
+    {
+      "id": "chapter-20-part-2",
+      "label": "Chapter 20 · Part 2",
+      "title": "Build outside the lock; install against current authority",
+      "source": "chapter-20-part-2.md",
+      "output": "chapter-20-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/47"
+    },
+    {
+      "id": "chapter-20-part-3",
+      "label": "Chapter 20 · Part 3",
+      "title": "Force publication, failure, and shutdown boundaries",
+      "source": "chapter-20-part-3.md",
+      "output": "chapter-20-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/48"
+    },
+    {
+      "id": "chapter-21",
+      "label": "Chapter 21 · Part 1",
+      "title": "Reproducible workloads and independent answers",
+      "source": "chapter-21.md",
+      "output": "chapter-21.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/49"
+    },
+    {
+      "id": "chapter-21-part-2",
+      "label": "Chapter 21 · Part 2",
+      "title": "Parse bounded input; drive the existing engine",
+      "source": "chapter-21-part-2.md",
+      "output": "chapter-21-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/50"
+    },
+    {
+      "id": "chapter-21-part-3",
+      "label": "Chapter 21 · Part 3",
+      "title": "Force old, new, canceled, and reopened answers",
+      "source": "chapter-21-part-3.md",
+      "output": "chapter-21-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/51"
+    },
+    {
+      "id": "chapter-22",
+      "label": "Chapter 22 · Part 1",
+      "title": "Recovery and resource-pressure experiments",
+      "source": "chapter-22.md",
+      "output": "chapter-22.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/52"
+    },
+    {
+      "id": "chapter-22-part-2",
+      "label": "Chapter 22 · Part 2",
+      "title": "Recover an allowed history, not a convenient answer",
+      "source": "chapter-22-part-2.md",
+      "output": "chapter-22-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/53"
+    },
+    {
+      "id": "chapter-22-part-3",
+      "label": "Chapter 22 · Part 3",
+      "title": "Kill the process; retain the observer",
+      "source": "chapter-22-part-3.md",
+      "output": "chapter-22-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/54"
+    },
+    {
+      "id": "chapter-23",
+      "label": "Chapter 23 · Part 1",
+      "title": "Profiling, optimization, and the final demonstration",
+      "source": "chapter-23.md",
+      "output": "chapter-23.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/55"
+    },
+    {
+      "id": "chapter-23-part-2",
+      "label": "Chapter 23 · Part 2",
+      "title": "Remove work without changing the answer",
+      "source": "chapter-23-part-2.md",
+      "output": "chapter-23-part-2.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/56"
+    },
+    {
+      "id": "chapter-23-part-3",
+      "label": "Chapter 23 · Part 3",
+      "title": "Verify, repeat, and explain the result",
+      "source": "chapter-23-part-3.md",
+      "output": "chapter-23-part-3.html",
+      "issue_url": "https://github.com/25d-228/cplusplus-learning/issues/57"
+    }
+  ]
+}

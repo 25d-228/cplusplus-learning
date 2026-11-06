@@ -1,0 +1,1190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 2 — Values, references, containers, and views · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-02.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html" aria-current="page"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 2</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/3">Read on GitHub</a><a href="source/chapter-02.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#one-normal-program-and-two-isolated-diagnostics">One normal program and two isolated diagnostics</a></li><li class="toc-h2"><a href="#a-fixed-array-is-an-owning-value">A fixed array is an owning value</a></li><li class="toc-h2"><a href="#a-reference-names-the-callers-object">A reference names the caller&#x27;s object</a></li><li class="toc-h3"><a href="#auto-deduces-a-type-not-an-ownership-policy">auto deduces a type, not an ownership policy</a></li><li class="toc-h3"><a href="#assignment-through-a-reference-does-not-rebind-it">Assignment through a reference does not rebind it</a></li><li class="toc-h2"><a href="#a-range-loop-still-chooses-between-values-and-references">A range loop still chooses between values and references</a></li><li class="toc-h2"><a href="#a-span-combines-an-address-and-an-element-count">A span combines an address and an element count</a></li><li class="toc-h3"><a href="#read-the-position-of-const">Read the position of const</a></li><li class="toc-h3"><a href="#check-an-index-before-modifying-an-element">Check an index before modifying an element</a></li><li class="toc-h3"><a href="#preserve-the-accumulators-range-proof">Preserve the accumulator&#x27;s range proof</a></li><li class="toc-h3"><a href="#slicing-changes-the-description-not-the-owner">Slicing changes the description, not the owner</a></li><li class="toc-h2"><a href="#a-vector-owns-storage-that-can-move">A vector owns storage that can move</a></li><li class="toc-h3"><a href="#size-is-not-allocated-payload">Size is not allocated payload</a></li><li class="toc-h3"><a href="#a-live-vector-object-can-still-invalidate-its-views">A live vector object can still invalidate its views</a></li><li class="toc-h2"><a href="#a-string-view-is-a-borrowed-character-range-not-a-c-string">A string view is a borrowed character range, not a C string</a></li><li class="toc-h3"><a href="#a-six-character-view-need-not-end-at-a-zero-byte">A six-character view need not end at a zero byte</a></li><li class="toc-h2"><a href="#connect-the-checks-to-one-executable">Connect the checks to one executable</a></li><li class="toc-h2"><a href="#confirm-read-only-access-at-compile-time">Confirm read-only access at compile time</a></li><li class="toc-h2"><a href="#observe-invalidation-in-a-disposable-sanitizer-process">Observe invalidation in a disposable sanitizer process</a></li><li class="toc-h2"><a href="#diagnose-the-relationship-not-just-the-line-that-crashed">Diagnose the relationship, not just the line that crashed</a></li><li class="toc-h2"><a href="#what-carries-forward">What carries forward</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-2-values-references-containers-and-views">Chapter 2 — Values, references, containers, and views</h1>
+<p>A query operator will eventually receive a buffer, examine part of it, and hand
+results to another operator. Before doing that, it must answer three questions:
+who owns the elements, which access path may change them, and what operation
+ends the validity of a borrowed range? A pointer and a length cannot answer all
+three. Neither can a modern-looking type used without its lifetime contract.</p>
+<p>This chapter makes those questions executable. A value parameter changes its own
+copy of <code>{3, 5, 8}</code> without changing its caller. A mutable view changes the caller's
+middle element to 7. A read-only view then observes a sum of 18. A growing vector
+and a text field show why a view is neither an owner nor a snapshot.</p>
+<p><strong>Starting code:</strong> keep the complete five-file exercise from
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-01.html">Chapter 1</a>, including
+its final subrange checks. Keep <code>foundation-01-stats</code>, <code>foundation-01</code>, and
+<code>cxx20-probe</code> in the root CMake file. This chapter adds a separate executable; it
+does not change those sources or require any engine code.</p>
+<blockquote>
+<p><strong>Learning objectives</strong></p>
+<p>Distinguish an owning value from a reference and a copied view; use <code>const</code>,
+<code>auto</code>, and range-based loops deliberately; explain array and vector storage;
+write mutable and read-only span interfaces; preserve an owner's lifetime;
+predict invalidation before changing a container; distinguish text length from
+null termination; use a focused diagnostic without putting undefined behavior
+into the normal test suite.</p>
+</blockquote>
+<p>The implementation allocation is <strong>2.0 hours</strong>: 1.0 for the programs, 0.5 for the
+interface variations, and 0.5 for invalidation diagnosis and tests. Reading is
+separate. There is no speed target for these tiny fixtures.</p>
+<h2 id="one-normal-program-and-two-isolated-diagnostics">One normal program and two isolated diagnostics</h2>
+<p>Run commands from the learner workspace root, using the working native C++20
+compiler from Chapter 1. In a new shell on the Mac, restore its selection:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — prepare this chapter</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nv">CXX</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span>exercises/chapter-02
+</code></pre></figure>
+<p>The new files are:</p>
+<figure class="code-block"><figcaption><span class="code-title">Files added or extended</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>CMakeLists.txt                          append one executable and test
+exercises/chapter-02/values.cpp         the normal, passing program
+exercises/chapter-02/readonly_rejected.cpp  compile-only negative example
+exercises/chapter-02/dangling_span.cpp   sanitizer-only negative example
+</code></pre></figure>
+<p>Every C++ block labelled <strong><code>exercises/chapter-02/values.cpp</code></strong>, in reading order,
+appends to that one file. Together they form its complete contents. Other labelled
+files are independent. The negative examples are deliberately <strong>not</strong> sources of
+<code>foundation-02</code> and are not ordinary CTest entries. No globbing of all <code>.cpp</code>
+files should silently add them to the build.</p>
+<h2 id="a-fixed-array-is-an-owning-value">A fixed array is an owning value</h2>
+<p><code>std::array&lt;std::uint32_t, 3&gt;</code> is a library type containing three unsigned 32-bit
+integers. The angle brackets supply arguments to a library <em>class template</em>:
+the element type and the element count. Using this existing type does not require
+writing a template. Chapter 5 will develop that separate skill.</p>
+<p>Unlike a C array parameter, a parameter of this <code>std::array</code> type does not
+silently turn into a pointer. Passing it by value gives the function its own
+three-element value. The count is part of the type, so an array of four elements
+is a different type. The elements are contiguous, and the array's <code>.size()</code> is
+always three; see the <a href="https://eel.is/c++draft/array.overview">array overview</a>.</p>
+<p>Start the normal source file:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string_view&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">using</span><span class="w"> </span><span class="n">Triple</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="o">&gt;</span><span class="p">;</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="kt">bool</span><span class="w"> </span><span class="n">condition</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"FAIL "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">Triple</span><span class="w"> </span><span class="nf">with_middle</span><span class="p">(</span><span class="n">Triple</span><span class="w"> </span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">replacement</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">values</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">replacement</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">values</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>using Triple = ...;</code> gives the existing type a shorter name; it creates no
+object and adds no runtime layer. An object declared as <code>Triple values{3, 5, 8}</code>
+contains those three integers. <code>Triple zeros{}</code> instead initializes all three
+to zero. Do not infer that a bare <code>Triple uninitialized;</code> initializes its integer
+elements: keep initialization explicit.</p>
+<p>The helper <code>check</code> is the same active-control-flow idea as Chapter 1. A failed
+condition prints a label and returns <code>false</code>; later callers propagate that to
+<code>main</code>. It is not disabled by a Release build. <code>&lt;limits&gt;</code> and the view/string
+headers will be used below, after their interfaces are explained.</p>
+<p><code>with_middle</code> receives an owning value. Its assignment changes its <strong>parameter</strong>,
+not the caller's array. Returning that array gives the caller an owning result,
+not a pointer into a dead local object. For an input named <code>original</code>, the
+semantic trace is:</p>
+<table>
+<thead>
+<tr>
+<th>Moment</th>
+<th><code>original</code></th>
+<th>Function's value / returned value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before the call</td>
+<td><code>{3, 5, 8}</code></td>
+<td>No parameter yet</td>
+</tr>
+<tr>
+<td>Parameter initialized</td>
+<td><code>{3, 5, 8}</code></td>
+<td><code>{3, 5, 8}</code></td>
+</tr>
+<tr>
+<td>After replacing index 1</td>
+<td><code>{3, 5, 8}</code></td>
+<td><code>{3, 99, 8}</code></td>
+</tr>
+<tr>
+<td>After return</td>
+<td><code>{3, 5, 8}</code></td>
+<td>Caller owns <code>{3, 99, 8}</code></td>
+</tr>
+</tbody>
+</table>
+<p>This is an explanation of observable values, not a promise that machine code
+performs two physical copies. An optimizer may remove unnecessary copying while
+preserving those observations. Three copied integers are also a very different
+cost from copying a million-element vector. Avoid turning “pass by value” into
+either a universal mistake or a universal optimization.</p>
+<h2 id="a-reference-names-the-callers-object">A reference names the caller's object</h2>
+<p>An <code>&amp;</code> in a parameter declaration changes the relationship. <code>Triple&amp;</code> is an
+<em>lvalue reference</em>: it binds to an existing <code>Triple</code>, and uses of the parameter
+access that same object. There is no separate array payload for the parameter.
+A normal reference must refer to a live suitable object; it is not a nullable
+optional argument. The <a href="https://eel.is/c++draft/dcl.ref">reference rules</a> specify
+the language relationship, without promising a particular reference representation.</p>
+<p><code>const Triple&amp;</code> also refers to the existing array, but it disallows modifying
+its elements <strong>through that reference</strong>. It does not promise that no other access
+path can change a non-const owner. Append these functions:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">set_middle</span><span class="p">(</span><span class="n">Triple</span><span class="o">&amp;</span><span class="w"> </span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">replacement</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">values</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">replacement</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="nf">read_middle</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Triple</span><span class="o">&amp;</span><span class="w"> </span><span class="n">values</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">values</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The call syntax is <code>set_middle(original, 7)</code>, not <code>set_middle(&amp;original, 7)</code>.
+The declaration supplies the reference binding. Inside the function, ordinary
+<code>values[1]</code> accesses the caller's element; there is no explicit dereference.
+This differs from a C pointer interface while preserving the ability to mutate
+a caller-owned object.</p>
+<p><code>read_middle</code> returns an integer value. That returned integer does not borrow
+from the array and remains usable after the array is gone. Returning a
+<code>const Triple&amp;</code> or a span would be a different lifetime promise.</p>
+<h3 id="auto-deduces-a-type-not-an-ownership-policy"><code>auto</code> deduces a type, not an ownership policy</h3>
+<p>In a local declaration, <code>auto</code> asks the compiler to deduce the type from the
+initializer. It does not mean dynamically typed, and it does not universally
+mean reference. For the array <code>original</code>, the following spellings express
+different relationships:</p>
+<table>
+<thead>
+<tr>
+<th>Declaration</th>
+<th>Relationship</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auto copy = original;</code></td>
+<td>A new <code>Triple</code>, with its own three integers</td>
+</tr>
+<tr>
+<td><code>auto&amp; alias = original;</code></td>
+<td>A mutable reference to <code>original</code></td>
+</tr>
+<tr>
+<td><code>const auto&amp; observed = original;</code></td>
+<td>A read-only reference to <code>original</code></td>
+</tr>
+<tr>
+<td><code>const auto copy = original;</code></td>
+<td>A new, non-mutable <code>Triple</code> value</td>
+</tr>
+</tbody>
+</table>
+<p>For these ordinary value initializers, plain <code>auto</code> does not carry over an
+initializer's reference or its top-level <code>const</code>. The explicit <code>&amp;</code> and <code>const</code>
+in the declaration matter; the <a href="https://eel.is/c++draft/dcl.spec.auto">placeholder deduction rules</a>
+give the full specification. We are not using <code>decltype(auto)</code> or forwarding
+references here.</p>
+<p>Append a complete check of these relationships:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_values</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Triple</span><span class="w"> </span><span class="n">original</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">changed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">with_middle</span><span class="p">(</span><span class="n">original</span><span class="p">,</span><span class="w"> </span><span class="mi">99</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">original</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Triple</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">},</span><span class="w"> </span><span class="s">"value parameter preserves caller"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">changed</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Triple</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">99</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">},</span><span class="w"> </span><span class="s">"returned value owns changed array"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"values: caller middle="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">original</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" returned middle="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">changed</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">detached</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">original</span><span class="p">;</span>
+<span class="w">    </span><span class="n">detached</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">50</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">original</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">detached</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">50</span><span class="p">,</span><span class="w"> </span><span class="s">"auto value is independent"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">alias</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">original</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">observed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">original</span><span class="p">;</span>
+<span class="w">    </span><span class="n">set_middle</span><span class="p">(</span><span class="n">alias</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">read_middle</span><span class="p">(</span><span class="n">observed</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">7</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">original</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"const reference observes mutation through another alias"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"references: observed middle="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">read_middle</span><span class="p">(</span><span class="n">observed</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">Triple</span><span class="w"> </span><span class="n">fixed</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">};</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">writable_copy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fixed</span><span class="p">;</span>
+<span class="w">    </span><span class="n">writable_copy</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">42</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">check</span><span class="p">(</span><span class="n">fixed</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">writable_copy</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<span class="w">                 </span><span class="s">"copying a const owner does not make the copy const"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>std::array</code> equality compares the elements, so <code>original == Triple{3, 5, 8}</code>
+checks the complete fixture rather than just its middle value. <code>&amp;&amp;</code> requires
+both conditions; <code>||</code> short-circuits the failure checks. Every subscript here
+is within the known three-element array.</p>
+<p>The crucial observation is that <code>observed</code> sees 7 even though it was declared
+before the mutation. A const reference is not a captured historical value. Nor
+is <code>const</code> a synchronization mechanism; this entire exercise is single-threaded.
+In the engine, an immutable snapshot will require ownership and publication
+rules in addition to read-only access syntax.</p>
+<h3 id="assignment-through-a-reference-does-not-rebind-it">Assignment through a reference does not rebind it</h3>
+<p>A reference is bound when it is initialized. Later assignment through it assigns
+to its object; it does not select a new referent. The
+<a href="https://eel.is/c++draft/dcl.init.ref">reference initialization rules</a> make this
+distinction explicit. Predict which array changes in the following variation,
+then append the complete check:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_reference_assignment</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Triple</span><span class="w"> </span><span class="n">left</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">};</span>
+<span class="w">    </span><span class="n">Triple</span><span class="w"> </span><span class="n">right</span><span class="p">{</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">30</span><span class="p">};</span>
+<span class="w">    </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">alias</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">left</span><span class="p">;</span>
+<span class="w">    </span><span class="n">alias</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">right</span><span class="p">;</span>
+<span class="w">    </span><span class="n">alias</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">99</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">check</span><span class="p">(</span><span class="n">left</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Triple</span><span class="p">{</span><span class="mi">99</span><span class="p">,</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">30</span><span class="p">}</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">right</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Triple</span><span class="p">{</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">30</span><span class="p">},</span>
+<span class="w">                 </span><span class="s">"reference assignment changes its original referent"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>After <code>alias = right</code>, <code>left</code> contains a copy of <code>right</code>. After the next line,
+<code>left[0]</code> becomes 99. <code>alias</code> still names <code>left</code>. This matters when an API accepts
+a reference to an owner: assigning a new owner value through that parameter can
+replace the caller's contents, not merely change a local handle.</p>
+<h2 id="a-range-loop-still-chooses-between-values-and-references">A range loop still chooses between values and references</h2>
+<p>A range-based loop visits the elements of a range in order. In
+<code>for (auto value : values)</code>, the loop variable is a new value for each iteration.
+In <code>for (auto&amp; value : values)</code>, it is a reference to the current element. The
+colon separates the loop variable's declaration from the range expression.</p>
+<p>Append this experiment:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_range_loops</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Triple</span><span class="w"> </span><span class="n">values</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">copied_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">values</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">value</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1U</span><span class="p">;</span>
+<span class="w">        </span><span class="n">copied_sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">values</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Triple</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">}</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">copied_sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">19</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"range-for by value changes only each local copy"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">values</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">value</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1U</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">observed_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">values</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">observed_sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">values</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Triple</span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">}</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">observed_sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">19</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"range-for by reference changes the elements"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"range-for: copied sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">copied_sum</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" mutated sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">observed_sum</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The first loop produces local values 4, 6, and 9, but the array remains 3, 5,
+and 8. The second loop writes 4, 6, and 9 into the array. The final loop borrows
+each element read-only. <code>1U</code> is the unsigned literal one. These three small
+values make every increment and sum exact; no overflow behavior is being used.</p>
+<p>Copying a small integer for reading is normally appropriate. <code>const auto&amp;</code> is
+also a useful spelling for reading a larger record without copying it, but it
+is not inherently faster for every type. More importantly, <code>auto</code> applied to an
+element that is itself a view copies that view, not its referenced payload.
+The type being copied determines the copy's meaning.</p>
+<p>The <a href="https://eel.is/c++draft/stmt.ranged">range-for specification</a> describes
+iteration using a beginning position and an end position obtained before the
+loop. An iterator is a position used to traverse a container; for contiguous
+storage it behaves in many ways like a pointer, though its actual type need
+not be a pointer. <code>end()</code> denotes the position after the final element and is
+not itself an element. Do not structurally modify a vector inside a loop over
+that vector: even an append without reallocation invalidates the old end
+iterator. Element assignments, such as the second loop above, do not change
+the range's size or storage.</p>
+<h2 id="a-span-combines-an-address-and-an-element-count">A span combines an address and an element count</h2>
+<p><code>std::span&lt;T&gt;</code> describes a contiguous sequence of <code>T</code> objects owned elsewhere.
+The spelling without a second template argument uses a count stored at runtime.
+It is useful to reason about the descriptor as a start address plus an element
+count, without assuming a particular binary representation or <code>sizeof(span)</code>.
+The <a href="https://eel.is/c++draft/span.overview">span overview</a> defines this non-owning
+relationship.</p>
+<p>Constructing <code>std::span&lt;std::uint32_t&gt;{owner}</code> from our array derives the range
+from the array itself. It avoids manually repeating a possibly wrong count.
+Copying the span copies the description, not the integers. Destroying the span
+does not destroy its owner's elements. A span does not pin storage, extend an
+owner's lifetime, or repair an invalid raw pointer supplied to a constructor.</p>
+<p>The element type controls write access. <code>std::span&lt;const std::uint32_t&gt;</code> reads
+integers but cannot assign them through its subscript. A mutable-element span
+can be converted to a read-only-element span; the reverse conversion is not a
+way to obtain write permission.</p>
+<h3 id="read-the-position-of-const">Read the position of <code>const</code></h3>
+<p>These types make two distinct choices:</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Can the descriptor be assigned a different range?</th>
+<th>Can an element be assigned through it?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>std::span&lt;std::uint32_t&gt;</code></td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>const std::span&lt;std::uint32_t&gt;</code></td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>std::span&lt;const std::uint32_t&gt;</code></td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>const std::span&lt;const std::uint32_t&gt;</code></td>
+<td>No</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>A const span is a fixed descriptor; it need not describe const elements. Span's
+<a href="https://eel.is/c++draft/span.elem">subscript operation</a> is const-qualified for
+the descriptor while returning access to the declared element type. In contrast,
+a const array or const vector gives read-only access to its owned elements.
+Do not generalize a container's const behavior to every handle-like type.</p>
+<p>For a read-only input range, pass <code>std::span&lt;const T&gt;</code> by value. A
+<code>const std::span&lt;T&gt;&amp;</code> only makes the descriptor read-only and still permits
+writes to its elements. Passing a descriptor by reference is not necessary to
+avoid copying the whole payload: that payload was never copied by span.</p>
+<h3 id="check-an-index-before-modifying-an-element">Check an index before modifying an element</h3>
+<p><code>std::size_t</code>, supplied by <code>&lt;cstddef&gt;</code>, is an unsigned size type. It is the
+natural type for a span's element count and index. An index is not a byte offset.
+For a valid index <code>i</code>, <code>values[i]</code> names one element. In the C++20 interface used
+here, <code>operator[]</code> does not provide a portable checked-error result for an invalid
+index. The current draft also describes newer facilities; this program does
+not depend on later <code>span::at</code> or library hardening modes.</p>
+<p>Append the complete mutation function:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">replace_at</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">values</span><span class="p">,</span>
+<span class="w">                </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index</span><span class="p">,</span>
+<span class="w">                </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">replacement</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">index</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">values</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">values</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">replacement</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Its contract is precise: for a <strong>live, valid input span</strong>, success changes exactly
+one element; an index at or beyond the end returns <code>false</code> and changes nothing.
+An empty span rejects every index. The function does not retain the span after
+return. The owner must remain alive, with this range valid, throughout the call.
+The bounds check cannot establish whether already-dangling storage is alive.</p>
+<p>The span parameter is copied by value. Assignment through its subscript still
+reaches the caller's element, unlike assignment through the owning value parameter
+in <code>with_middle</code>. This is why “value parameter” alone does not tell us whether
+an operation affects caller-owned bytes.</p>
+<h3 id="preserve-the-accumulators-range-proof">Preserve the accumulator's range proof</h3>
+<p>Chapter 1 used 32-bit elements and a 32-bit count to prove that a 64-bit sum fits.
+A span's count is <code>std::size_t</code>, so adopting a span must not silently discard the
+count bound. We will reject counts above the original bound and keep the output
+unchanged on rejection. The return value reports success; a mutable reference
+carries the numeric result. This also distinguishes an empty sum of zero from
+a rejected call.</p>
+<p><code>std::numeric_limits&lt;T&gt;::max()</code> returns the greatest representable value of the
+numeric type <code>T</code>; see <a href="https://eel.is/c++draft/numeric.limits.members">numeric limits</a>.
+Here <code>::max()</code> calls a type-associated function; no limit object is needed. Append
+the reader and its complete test helper:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">sum_values</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">values</span><span class="p">,</span>
+<span class="w">                </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">values</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">values</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">total</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">total</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">check_sum</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">values</span><span class="p">,</span>
+<span class="w">               </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">expected</span><span class="p">,</span>
+<span class="w">               </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">actual</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">sum_values</span><span class="p">(</span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="n">actual</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"FAIL "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">": element count rejected</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">actual</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">expected</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"FAIL "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">": expected sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">expected</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">", got sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">actual</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Let <span class="math-input" data-display="false">n</span> be the accepted count and <span class="math-input" data-display="false">x_i</span> the unsigned value at index <span class="math-input" data-display="false">i</span>. The
+loop's accumulator after <span class="math-input" data-display="false">k</span> iterations is the sum of the first <span class="math-input" data-display="false">k</span> elements.
+The guard enforces <span class="math-input" data-display="false">n \leq 2^{32}-1</span>, and the element type enforces
+<span class="math-input" data-display="false">x_i \leq 2^{32}-1</span>. Therefore</p>
+<div class="math-input" data-display="true">0 \leq \sum_{i=0}^{n-1} x_i \leq (2^{32}-1)^2 &lt; 2^{64}.</div>
+<p>All terms are nonnegative, so every partial sum also fits. <code>total</code> is already
+64-bit when an element is added. A failed count check returns before assigning
+<code>result</code>. An accepted empty range performs no reads and assigns zero. Read-only
+here means the <strong>input elements</strong> cannot be changed through this interface;
+the separate result reference is intentionally mutable.</p>
+<p>This is a bounded 32-bit-element exercise, not the later engine's general
+64-bit-amount aggregate. Do not claim to exercise the large-count rejection by
+constructing a fake span over a tiny array: the span would already violate its
+valid-range precondition. The guard is directly inspectable; the runnable
+fixtures test empty, ordinary, and wide-element sums using real storage.</p>
+<h3 id="slicing-changes-the-description-not-the-owner">Slicing changes the description, not the owner</h3>
+<p>A span's <code>subspan(offset, count)</code> returns a new view. Let <span class="math-input" data-display="false">n</span> be the original
+length, <span class="math-input" data-display="false">o</span> the offset, and <span class="math-input" data-display="false">c</span> the requested length, all measured in elements.
+The required inequalities are</p>
+<div class="math-input" data-display="true">o \leq n, \qquad c \leq n-o.</div>
+<p>Using <code>c &lt;= n - o</code> <strong>after</strong> checking <code>o &lt;= n</code> avoids an overflowing <code>o + c</code>
+validation expression. It also prevents unsigned subtraction from wrapping.
+For <code>{3, 7, 8}</code>, choosing <span class="math-input" data-display="false">o=1</span> and <span class="math-input" data-display="false">c=2</span> describes <code>{7, 8}</code>. Its sum is 15.
+Choosing <span class="math-input" data-display="false">o=2</span> and <span class="math-input" data-display="false">c=2</span> violates the second inequality and must not be executed.
+At <span class="math-input" data-display="false">o=n</span>, the only permitted count is zero. The
+<a href="https://eel.is/c++draft/span.sub">subview specification</a> gives this contract;
+<code>subspan</code> is not a replacement for validating untrusted offsets.</p>
+<p>On the verified four-byte element layout, a view starting at address <span class="math-input" data-display="false">A</span> with
+length three describes elements at <span class="math-input" data-display="false">A</span>, <span class="math-input" data-display="false">A+4</span>, and <span class="math-input" data-display="false">A+8</span>. The suffix starts at
+<span class="math-input" data-display="false">A+4</span> and contains two elements. It does not allocate another eight-byte payload.
+Neither descriptor owns those bytes.</p>
+<p>Append the complete span exercise:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_spans</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Triple</span><span class="w"> </span><span class="n">owner</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">writable</span><span class="p">{</span><span class="n">owner</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">read_only</span><span class="p">{</span><span class="n">writable</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">copied_view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">writable</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">copied_view</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">writable</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">copied_view</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"copying a span preserves the same borrowed range"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">replace_at</span><span class="p">(</span><span class="n">writable</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">),</span><span class="w"> </span><span class="s">"middle replacement accepted"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">owner</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Triple</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">},</span><span class="w"> </span><span class="s">"span changes its owner"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">sum_values</span><span class="p">(</span><span class="n">read_only</span><span class="p">,</span><span class="w"> </span><span class="n">total</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">18</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"read-only span observes the updated sum"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">suffix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">read_only</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check_sum</span><span class="p">(</span><span class="n">suffix</span><span class="p">,</span><span class="w"> </span><span class="mi">15</span><span class="p">,</span><span class="w"> </span><span class="s">"suffix sum"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check_sum</span><span class="p">(</span><span class="n">read_only</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="n">read_only</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s">"empty suffix"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="o">!</span><span class="n">replace_at</span><span class="p">(</span><span class="n">writable</span><span class="p">,</span><span class="w"> </span><span class="n">writable</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="mi">99</span><span class="p">),</span><span class="w"> </span><span class="s">"end index rejected"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">owner</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Triple</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">},</span><span class="w"> </span><span class="s">"rejected replacement preserves owner"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">writable</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">owner</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">read_only</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"const descriptor still permits mutable-element access"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">writable</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">empty</span><span class="p">{};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="o">!</span><span class="n">replace_at</span><span class="p">(</span><span class="n">empty</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="s">"empty span rejects replacement"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">check_sum</span><span class="p">(</span><span class="n">empty</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s">"default empty span"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;</span><span class="w"> </span><span class="n">wide</span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">(),</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">()</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check_sum</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">{</span><span class="n">wide</span><span class="p">},</span><span class="w"> </span><span class="mi">8'589'934'590ULL</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"sum wider than one element"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"spans: size="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">read_only</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>.data()</code> exposes the address stored by a range, and <code>.size()</code> exposes its count.
+The pointer comparison occurs while both views and the owner are valid; it
+checks that a copied descriptor still describes the same storage. It is not a
+technique for diagnosing a pointer after its storage has been released.</p>
+<p>The two read-only descriptors were created before the middle replacement. They
+observe it because their elements are the same elements owned by <code>owner</code>. The
+<code>const</code> descriptor also allows the direct assignment <code>writable[0] = 4</code> because
+its element type is mutable. The code restores that element to 3, keeping the
+main fixture <code>{3, 7, 8}</code>. <code>total</code> is an independent integer result, not a live
+sum that recomputes itself when an element changes.</p>
+<p>An empty range is identified by a zero length, not by an assumed null address.
+A default empty span and an empty suffix are both valid inputs. No element may
+be accessed in either. The owner remains alive until this function returns, and
+none of its borrowed descriptors escapes.</p>
+<h2 id="a-vector-owns-storage-that-can-move">A vector owns storage that can move</h2>
+<p><code>std::vector&lt;std::uint32_t&gt;</code> owns a dynamically sized contiguous sequence.
+The vector object and its element allocation are distinct: a local vector can
+own a buffer elsewhere in memory. Copying this integer vector creates independent
+elements; copying a span of it does not. The standard library manages the
+allocation and releases it on normal destruction. Do not <code>delete</code> the address
+returned by <code>.data()</code>. The <a href="https://eel.is/c++draft/vector.overview">vector overview</a>
+describes automatic storage management and contiguous storage for this element
+type. We are not using the specialized <code>vector&lt;bool&gt;</code> representation.</p>
+<p>Three quantities must remain distinct:</p>
+<table>
+<thead>
+<tr>
+<th>Quantity</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>size()</code></td>
+<td>Number of current elements; valid subscript indices are below it</td>
+</tr>
+<tr>
+<td><code>capacity()</code></td>
+<td>Number of elements that fit before an append needs reallocation</td>
+</tr>
+<tr>
+<td><code>max_size()</code></td>
+<td>A container limit, not available physical memory or an allocation promise</td>
+</tr>
+</tbody>
+</table>
+<p><code>reserve(8)</code> asks for capacity of at least eight; it does not create eight
+elements. Writing <code>v[7]</code> into a vector of size three is invalid even when its
+capacity is eight. <code>resize(8)</code> changes the element count to eight. With this
+integer type and the default allocator, newly appended elements are initialized
+to zero. Shrinking removes the trailing elements. The
+<a href="https://eel.is/c++draft/vector.capacity">capacity operations</a> specify these
+different effects.</p>
+<p>Brace and parenthesis initialization also express different requests here:
+<code>std::vector&lt;std::uint32_t&gt; a{3}</code> contains one element equal to 3;
+<code>std::vector&lt;std::uint32_t&gt; b(3)</code> contains three zero-valued elements. The
+initializer-list form describes element values, while the count constructor
+creates that many elements. Neither is universally the “safer spelling”; choose
+the constructor that means what the program requires. The
+<a href="https://eel.is/c++draft/vector.cons">vector constructor specification</a> describes
+the count forms.</p>
+<h3 id="size-is-not-allocated-payload">Size is not allocated payload</h3>
+<p>Let <span class="math-input" data-display="false">n</span> be the size, <span class="math-input" data-display="false">c</span> the capacity, and <span class="math-input" data-display="false">e</span> the bytes per element. The logical
+element payload is <span class="math-input" data-display="false">ne</span> bytes; capacity accounts for <span class="math-input" data-display="false">ce</span> bytes of element
+storage. If an observed vector has <span class="math-input" data-display="false">n=3</span>, <span class="math-input" data-display="false">c=8</span>, and <span class="math-input" data-display="false">e=4</span>, those quantities are
+12 and 32 bytes. They exclude the vector object, allocator overhead, and any
+other process memory. This is a capacity illustration, not a claim that a
+particular <code>reserve(8)</code> must report exactly eight.</p>
+<p>In the engine, charging only size would let retained spare capacity escape the
+memory budget. Here, it also explains why a successful reserve is not a hard
+cap: appending past capacity can request another allocation. A bounded builder
+must enforce its own admission limit.</p>
+<p>A successful allocation is not guaranteed. Vector construction, copying, and
+growth can throw if resources are unavailable. This foundation executable has
+no recovery handler for allocation failure; such an uncaught exception is a
+failed run, not a passing ownership test. Chapters 3 and 4 teach owned-resource
+cleanup and explicit error boundaries. No manual resource-release code is
+hidden in these container examples.</p>
+<h3 id="a-live-vector-object-can-still-invalidate-its-views">A live vector object can still invalidate its views</h3>
+<p>A borrow can expire before its owner object is destroyed. Reallocation replaces
+the element storage and invalidates references, pointers, and iterators into
+the old allocation. Appending without reallocation preserves existing element
+access, but does not enlarge a previously created span and does invalidate the
+old vector end iterator. Erasing elements can invalidate positions even without
+reallocation. See the <a href="https://eel.is/c++draft/vector.modifiers">vector modifier rules</a>.</p>
+<p>Use the following distinctions when predicting a mutation:</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Consequence for earlier access paths</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Assign an existing integer element</td>
+<td>Existing views remain valid and observe the new value</td>
+</tr>
+<tr>
+<td>Append with spare capacity</td>
+<td>Existing element references remain valid; an earlier span keeps its old length</td>
+</tr>
+<tr>
+<td>Grow beyond capacity or reserve above capacity</td>
+<td>All earlier element access paths expire</td>
+</tr>
+<tr>
+<td>Insert without reallocation</td>
+<td>Positions before insertion survive; those at or after it do not</td>
+</tr>
+<tr>
+<td>Erase or shrink</td>
+<td>Removed elements cannot be accessed; earlier prefix elements can remain valid</td>
+</tr>
+<tr>
+<td>Destroy the owner</td>
+<td>No nonempty view into its elements remains usable</td>
+</tr>
+</tbody>
+</table>
+<p>A span spanning removed elements is not safe just because its first element
+survives. An unchanged numeric address is not proof of a valid object or a
+still-correct logical record. Our default discipline is simple: finish borrowing,
+perform a structural mutation, and then construct fresh views from the live
+owner. Use a narrower exception only when its actual invalidation rule is part
+of the interface.</p>
+<p>Append the first vector check. Its extra braces form a nested scope; locals in
+that scope cease to exist at its closing brace. This deliberately ends the first
+borrow before the later forced reallocation.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_vectors</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">};</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">copied_owner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">owner</span><span class="p">;</span>
+<span class="w">    </span><span class="n">copied_owner</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">99</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">owner</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">5</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">copied_owner</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">99</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"copying an integer vector copies its elements"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">three_zeros</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">one_three</span><span class="p">{</span><span class="mi">3</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">three_zeros</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">three_zeros</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">three_zeros</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">three_zeros</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">one_three</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">one_three</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"count construction differs from list construction"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">owner</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="mi">8</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">owner</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"reserve changes available storage, not element count"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">prefix</span><span class="p">{</span><span class="n">owner</span><span class="p">};</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">first</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">owner</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+<span class="w">        </span><span class="n">owner</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="mi">13</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">first</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">prefix</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"append within capacity preserves old elements, not old end"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="o">!</span><span class="n">check_sum</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="s">"earlier span still describes three elements"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="o">!</span><span class="n">check_sum</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">{</span><span class="n">owner</span><span class="p">},</span><span class="w"> </span><span class="mi">29</span><span class="p">,</span><span class="w"> </span><span class="s">"new full span"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"vector: prefix size="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">prefix</span><span class="p">.</span><span class="n">size</span><span class="p">()</span>
+<span class="w">                  </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" owner size="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+</code></pre></figure>
+<p>This block opens <code>check_vectors</code>; the next block completes the <strong>same function</strong>.
+The only intentionally split function in the file is split at this scope
+boundary, not at an unexplained operation.</p>
+<p>The observed capacity is at least eight, so appending a fourth element cannot
+require reallocation. <code>prefix</code> continues to describe <code>{3, 5, 8}</code>; it is not a
+subscription to the vector's current size. The freshly constructed full span
+also includes 13. Their sums are 16 and 29. We do not retain or use the vector's
+old <code>end()</code> iterator.</p>
+<p>To force reallocation, ask for <strong>more than the actual capacity</strong>, not a guessed
+growth threshold. The capacity guard below also establishes that adding one
+stays within <code>max_size()</code> and cannot wrap the size type. Reallocation can still
+fail to allocate; the guard is not a memory-availability test.</p>
+<p>Append the remainder of <code>check_vectors</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">old_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">old_capacity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">capacity</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">old_capacity</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">max_size</span><span class="p">(),</span><span class="w"> </span><span class="s">"room for a capacity-growth request"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">owner</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="n">old_capacity</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">owner</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">old_size</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">old_capacity</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"reserve above actual capacity reallocates without adding elements"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">grown_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fresh</span><span class="p">{</span><span class="n">owner</span><span class="p">};</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">sum_values</span><span class="p">(</span><span class="n">fresh</span><span class="p">,</span><span class="w"> </span><span class="n">grown_sum</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">grown_sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">29</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"fresh view reads the reallocated storage"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">owner</span><span class="p">.</span><span class="n">resize</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+<span class="w">    </span><span class="n">owner</span><span class="p">.</span><span class="n">resize</span><span class="p">(</span><span class="mi">4</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">resized_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fresh</span><span class="p">{</span><span class="n">owner</span><span class="p">};</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">fresh</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">fresh</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">fresh</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">5</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                       </span><span class="n">fresh</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">fresh</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"resize removes trailing values, then creates zero elements"</span><span class="p">)</span><span class="w"> </span><span class="o">||</span>
+<span class="w">            </span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">sum_values</span><span class="p">(</span><span class="n">fresh</span><span class="p">,</span><span class="w"> </span><span class="n">resized_sum</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">resized_sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<span class="w">                   </span><span class="s">"new elements are not the removed old values"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"vector: reacquired sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">grown_sum</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" resized sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">resized_sum</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Every new view is obtained from <code>owner</code> <strong>after</strong> its relevant mutation. We never
+compare, print, or dereference an old pointer after reallocation. There is no
+assumption about whether the implementation grows by a factor of two or reports
+an exact requested capacity.</p>
+<p>The final pair of <code>resize</code> calls starts with <code>{3, 5, 8, 13}</code>, removes the last
+two elements, then appends two initialized integers. The result is <code>{3, 5, 0, 0}</code>,
+not the old four-element value. Reserved bytes do not preserve a removed element's
+logical existence. This distinction will matter when a query batch reuses its
+allocation for a different set of rows.</p>
+<h2 id="a-string-view-is-a-borrowed-character-range-not-a-c-string">A string view is a borrowed character range, not a C string</h2>
+<p><code>std::string</code> owns a character sequence. <code>std::string_view</code> describes a read-only
+character range owned elsewhere. Think of the latter as the text counterpart
+of a read-only span: copying it does not copy the characters, and its <code>.size()</code>
+is a length, not a search for a terminating zero. Its elements are <code>char</code> units;
+a byte count is not generally a count of human-readable Unicode characters.
+Our fixtures use ASCII and one explicit zero byte.</p>
+<p>We will return the part of a line before the first <code>=</code>. The input is borrowed
+for the call. The result continues borrowing from the <strong>same character owner</strong>.
+No separator means the entire input; a leading separator or empty input yields
+an empty name. No allocation is required for that extraction.</p>
+<p><code>find('=')</code> returns an index or the special value <code>std::string_view::npos</code> when
+there is no match. Test that sentinel before treating it as an index. <code>substr(0, separator)</code> on a <strong>string view</strong> returns another view, not an owned string. Its
+position is valid here, and its length comes from the successful search. The
+<a href="https://eel.is/c++draft/string.view.find">searching</a> and
+<a href="https://eel.is/c++draft/string.view.ops">substring</a> contracts describe these
+operations.</p>
+<p>Append the extraction function and an owning-result alternative:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="w"> </span><span class="nf">field_name</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="w"> </span><span class="n">line</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">separator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">line</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="sc">'='</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">separator</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="o">::</span><span class="n">npos</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">line</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">line</span><span class="p">.</span><span class="n">substr</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">separator</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="nf">owned_field_name</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="w"> </span><span class="n">line</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">{</span><span class="n">field_name</span><span class="p">(</span><span class="n">line</span><span class="p">)};</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>Returning a copied descriptor from a function is not itself a bug. The parameter
+<code>line</code> dies on return, but the characters were not owned by that parameter in the
+first place. The caller must keep their actual owner alive and avoid invalidating
+its storage for as long as it uses the result.</p>
+<p>The second function explicitly copies the selected characters into a new
+<code>std::string</code>, using its <a href="https://eel.is/c++draft/string.cons">view-compatible constructor</a>. That result owns its contents and can outlive the input owner.
+The copy costs work proportional to the selected length and can require an
+allocation. A later subsystem retaining a name after its parsing buffer is
+reused needs this kind of ownership, not a more elaborate dangling view.</p>
+<h3 id="a-six-character-view-need-not-end-at-a-zero-byte">A six-character view need not end at a zero byte</h3>
+<p>For the owner <code>&quot;amount=7&quot;</code>, the field view has length six. The next character in
+the owner's sequence is <code>=</code>, not <code>\0</code>. Printing the view with <code>std::cout &lt;&lt; view</code>
+uses the view's length, as specified by its
+<a href="https://eel.is/c++draft/string.view.io">stream insertion operation</a>. Passing <code>view.data()</code> alone to an interface requiring a
+null-terminated C string loses that length and can consume unrelated characters
+or read beyond the owner. The <a href="https://eel.is/c++draft/string.view.access">string-view data contract</a>
+explicitly does not promise null termination.</p>
+<p>To pass an ordinary text field to a C-string API, create an owning <code>std::string</code>
+from the view and use that string's <code>.c_str()</code> <strong>while it remains alive</strong>. That
+addresses termination, not arbitrary binary input: an embedded zero still
+terminates a C string early. Prefer pointer-plus-length APIs when zero bytes
+are meaningful data. Do not read <code>view[view.size()]</code> to check termination; it is
+outside the view's element range.</p>
+<p>Append the complete string checks:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">bool</span><span class="w"> </span><span class="nf">check_strings</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">line</span><span class="p">{</span><span class="s">"amount=7"</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">borrowed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">field_name</span><span class="p">(</span><span class="n">line</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">saved</span><span class="p">{</span><span class="n">borrowed</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">borrowed</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">"amount"</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">borrowed</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">6</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">line</span><span class="p">[</span><span class="n">borrowed</span><span class="p">.</span><span class="n">size</span><span class="p">()]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">'='</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"field is a counted prefix, not a null-terminated string"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">line</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sc">'A'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">borrowed</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">"Amount"</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">saved</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">"amount"</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"borrowed text observes mutation, owned text is independent"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"strings: borrowed="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">borrowed</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" owned="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">saved</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">field_name</span><span class="p">(</span><span class="s">"plain"</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">"plain"</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">field_name</span><span class="p">(</span><span class="s">"=7"</span><span class="p">).</span><span class="n">empty</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">field_name</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="p">{}).</span><span class="n">empty</span><span class="p">(),</span>
+<span class="w">               </span><span class="s">"text boundary cases"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="kt">char</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bytes</span><span class="p">{</span><span class="sc">'a'</span><span class="p">,</span><span class="w"> </span><span class="sc">'\0'</span><span class="p">,</span><span class="w"> </span><span class="sc">'b'</span><span class="p">,</span><span class="w"> </span><span class="sc">'='</span><span class="p">,</span><span class="w"> </span><span class="sc">'9'</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="w"> </span><span class="n">counted</span><span class="p">{</span><span class="n">bytes</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">bytes</span><span class="p">.</span><span class="n">size</span><span class="p">()};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">binary_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">field_name</span><span class="p">(</span><span class="n">counted</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check</span><span class="p">(</span><span class="n">binary_name</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">binary_name</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">'a'</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">                   </span><span class="n">binary_name</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">'\0'</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">binary_name</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sc">'b'</span><span class="p">,</span>
+<span class="w">               </span><span class="s">"explicit text length includes embedded zero bytes"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">independent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">owned_field_name</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">{</span><span class="s">"region=2"</span><span class="p">});</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">check</span><span class="p">(</span><span class="n">independent</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">"region"</span><span class="p">,</span><span class="w"> </span><span class="s">"owned result outlives temporary input"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>std::string</code> can supply a view of its characters to the parameter. The explicit
+pointer/count constructor used for <code>counted</code> instead derives its length from the
+five-element array. It does not scan for a zero byte; both constructor forms
+are described in <a href="https://eel.is/c++draft/string.view.cons">string-view construction</a>.
+All subscripts are guarded by a known size or a preceding short-circuit size
+check. The lack of a terminator in <code>bytes</code> is harmless because none of our
+operations requires one.</p>
+<p>Assigning <code>line[0]</code> changes an existing character without a structural change.
+Other operations such as appending or replacing the string can invalidate its
+character access paths; consult the <a href="https://eel.is/c++draft/string.require">string invalidation rules</a>
+rather than assuming every non-growing string operation is safe for a saved
+view. The program does not mutate the owner's structure while borrowing it.</p>
+<p>The last fixture supplies a temporary string to <code>owned_field_name</code>. That input
+survives through the call, and the selected characters are copied before its
+destruction at the end of the statement. The returned string is independent.
+The superficially similar borrowed form is <strong>not</strong> safe to retain:</p>
+<figure class="code-block"><figcaption><span class="code-title">Prediction only — do not add this dangling view to the normal program</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="w"> </span><span class="n">bad</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">field_name</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">{</span><span class="s">"amount=7"</span><span class="p">});</span>
+<span class="c1">// The temporary owner has been destroyed at this semicolon.</span>
+<span class="c1">// Later reading bad would access characters outside their owner's lifetime.</span>
+</code></pre></figure>
+<p>A <code>const</code> qualifier on <code>bad</code> would not help. Copying it into another view would
+not help either. A named owner kept alive, or an owning result, changes the
+lifetime relationship. The <a href="https://eel.is/c++draft/class.temporary">temporary lifetime rules</a>
+explain the end-of-statement destruction here. Binding a reference directly to
+some temporaries has separate lifetime-extension rules; constructing a view is
+not such a binding to its underlying owner.</p>
+<p>Also distinguish <code>line.substr(...)</code> when <code>line</code> is a <strong>string</strong> from the same
+method name on a <strong>string view</strong>. A <a href="https://eel.is/c++draft/string.substr">string substring</a> is a new owning string.
+Saving a view of that temporary substring can dangle. Establish the exact type
+before reasoning from a method name or from <code>auto</code>.</p>
+<h2 id="connect-the-checks-to-one-executable">Connect the checks to one executable</h2>
+<p>The remaining block closes the namespace and supplies the program entry point.
+All called functions have been defined above; there are no hidden helpers or
+future engine dependencies.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/values.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="p">}</span><span class="w"> </span><span class="c1">// namespace strata</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">strata</span><span class="o">::</span><span class="n">check_values</span><span class="p">()</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">strata</span><span class="o">::</span><span class="n">check_reference_assignment</span><span class="p">()</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">strata</span><span class="o">::</span><span class="n">check_range_loops</span><span class="p">()</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">strata</span><span class="o">::</span><span class="n">check_spans</span><span class="p">()</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">strata</span><span class="o">::</span><span class="n">check_vectors</span><span class="p">()</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="o">!</span><span class="n">strata</span><span class="o">::</span><span class="n">check_strings</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"all checks passed</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>A failure stops subsequent checks and returns nonzero. No essential operation
+is hidden in <code>assert</code>. The C++20 features already probed in Chapter 1 remain the
+baseline; no compiler upgrade or newer language mode is required merely for
+this chapter.</p>
+<p>Append the following block <strong>after the existing contents</strong> of the root
+<code>CMakeLists.txt</code>. Do not replace Chapter 1's targets or warning settings:</p>
+<figure class="code-block"><figcaption><span class="code-title">CMakeLists.txt</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nb">add_executable</span><span class="p">(</span><span class="s">foundation-02</span><span class="w"> </span><span class="s">exercises/chapter-02/values.cpp</span><span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span><span class="s">foundation-02</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">cxx_std_20</span><span class="p">)</span>
+<span class="nb">if</span><span class="p">(</span><span class="s">CMAKE_CXX_COMPILER_ID</span><span class="w"> </span><span class="s">MATCHES</span><span class="w"> </span><span class="s2">"Clang|GNU"</span><span class="p">)</span>
+<span class="w">    </span><span class="nb">target_compile_options</span><span class="p">(</span><span class="s">foundation-02</span><span class="w"> </span><span class="s">PRIVATE</span>
+<span class="w">        </span><span class="s">-Wall</span><span class="w"> </span><span class="s">-Wextra</span><span class="w"> </span><span class="s">-Wpedantic</span><span class="w"> </span><span class="s">-Wconversion</span><span class="w"> </span><span class="s">-Wsign-conversion</span>
+<span class="w">    </span><span class="p">)</span>
+<span class="nb">endif</span><span class="p">()</span>
+<span class="nb">add_test</span><span class="p">(</span><span class="s">NAME</span><span class="w"> </span><span class="s">foundation-02</span><span class="w"> </span><span class="s">COMMAND</span><span class="w"> </span><span class="s">foundation-02</span><span class="p">)</span>
+</code></pre></figure>
+<p>The <a href="https://cmake.org/cmake/help/latest/command/add_executable.html">executable target</a>
+contains only <code>values.cpp</code>. It does not link <code>foundation-01-stats</code>: the value/view
+exercise supplies its own small functions. The old warning loop ran before this
+target existed, so this new target receives its warning options explicitly.
+CMake's root <code>enable_testing()</code> and extension policy are already supplied by
+Chapter 1.</p>
+<p>Reconfigure the same single-configuration build trees with the same compiler
+and generator. These are native macOS commands, not Linux setup instructions:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — cumulative Debug tests</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/debug<span class="w"> </span>-G<span class="w"> </span><span class="s2">"Unix Makefiles"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Debug<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_OSX_ARCHITECTURES<span class="o">=</span>arm64
+cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+./build/debug/foundation-02
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — cumulative Release tests</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/release<span class="w"> </span>-G<span class="w"> </span><span class="s2">"Unix Makefiles"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Release<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_OSX_ARCHITECTURES<span class="o">=</span>arm64
+cmake<span class="w"> </span>--build<span class="w"> </span>build/release<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+./build/release/foundation-02
+</code></pre></figure>
+<p>Stop at an unexpected configuration or build failure; do not treat a surviving
+old executable as the new result. The complete test set now contains <strong>three</strong>
+entries: <code>foundation-01</code>, <code>cxx20-probe</code>, and <code>foundation-02</code>. All should pass in
+both configurations. The new executable's expected output is:</p>
+<figure class="code-block"><figcaption><span class="code-title">Expected foundation-02 output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>values: caller middle=5 returned middle=99
+references: observed middle=7
+range-for: copied sum=19 mutated sum=19
+spans: size=3 sum=18
+vector: prefix size=3 owner size=4
+vector: reacquired sum=29 resized sum=8
+strings: borrowed=Amount owned=amount
+all checks passed
+</code></pre></figure>
+<p>The reference-assignment, rejection, empty, wide-sum, and embedded-zero cases
+pass silently. No address or implementation-specific capacity appears in the
+expected output.</p>
+<p>For one brief test-harness check, temporarily change <strong>only</strong> the span assertion
+<code>sum_values(read_only, total) &amp;&amp; total == 18</code> to expect <code>19</code>. Build Release and
+run that test:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — a wrong expected sum must fail</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>--build<span class="w"> </span>build/release<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>-R<span class="w"> </span><span class="s1">'^foundation-02$'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+</code></pre></figure>
+<p>The test must fail with <code>FAIL read-only span observes the updated sum</code>. Restore
+18, rebuild, and return the full test sets to passing. This failure exercise
+changes no ownership logic and belongs within the chapter's test allocation.</p>
+<h2 id="confirm-read-only-access-at-compile-time">Confirm read-only access at compile time</h2>
+<p>Runtime tests cannot demonstrate an operation that the type system forbids.
+Create this separate complete source file. It has no <code>main</code> because it will only
+be compiled to an object, and its compilation is deliberately expected to fail:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/readonly_rejected.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">forbidden_write</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">values</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">7</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The error is assignment to a const element. No runtime call is made, so this
+experiment does not manufacture an out-of-bounds access to an empty span. Compile
+it independently after the normal program builds:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — expect a const-element compilation error</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>build/diagnostics
+<span class="k">if</span><span class="w"> </span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-arch<span class="w"> </span>arm64<span class="w"> </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-c<span class="w"> </span>exercises/chapter-02/readonly_rejected.cpp<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-o<span class="w"> </span>build/diagnostics/readonly-rejected.o<span class="p">;</span><span class="w"> </span><span class="k">then</span>
+<span class="w">  </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'Unexpected compilation success: inspect the element type.\n'</span>
+<span class="k">else</span>
+<span class="w">  </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'Inspect the diagnostic: assignment to a const element is expected.\n'</span>
+<span class="k">fi</span>
+</code></pre></figure>
+<p>A missing header or invalid compiler option is not the expected result. Read
+the diagnostic at the assignment. Changing the parameter to
+<code>const std::span&lt;std::uint32_t&gt;</code> would permit the element assignment, because it
+changes descriptor constness rather than element constness. Do not make that
+change to the real read-only interface just to silence the error.</p>
+<h2 id="observe-invalidation-in-a-disposable-sanitizer-process">Observe invalidation in a disposable sanitizer process</h2>
+<p>The normal vector check obeys the borrowing contract. A separate process can
+show the consequence of violating it without contaminating that program. The
+next source deliberately retains a view across an operation that <strong>forces
+reallocation if it succeeds</strong>, then reads the stale view. Use it only as the following
+sanitizer experiment, never as ordinary application logic or a passing test.</p>
+<p>Create the entire diagnostic file:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-02/dangling_span.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">owner</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">stale</span><span class="p">{</span><span class="n">owner</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">old_capacity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">capacity</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">old_capacity</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">owner</span><span class="p">.</span><span class="n">max_size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"Diagnostic could not request a larger capacity</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">owner</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="n">old_capacity</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">stale</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span><span class="w"> </span><span class="c1">// Deliberate use after reallocation.</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>reserve</code> may fail to allocate; that is a different outcome from reaching the
+stale read. <strong>If it returns successfully</strong>, the larger request forces
+reallocation. The vector object is still alive, and the saved view still has
+length three, but its element address refers to the old released allocation.
+Checking only <code>stale.size()</code> would not make <code>stale[1]</code> valid.</p>
+<p>Compile and link with the same compatible native Clang driver and
+AddressSanitizer enabled:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — build the isolated invalid-access diagnostic</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>build/diagnostics
+<span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-arch<span class="w"> </span>arm64<span class="w"> </span>-O1<span class="w"> </span>-g<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-Wconversion<span class="w"> </span>-Wsign-conversion<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-fsanitize<span class="o">=</span>address<span class="w"> </span>-fno-omit-frame-pointer<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>exercises/chapter-02/dangling_span.cpp<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span>build/diagnostics/dangling-span
+</code></pre></figure>
+<p>Run only after that build succeeds. Preserve the failing process's status
+without a pipeline replacing it:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — inspect the expected sanitizer failure</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">if</span><span class="w"> </span><span class="nv">ASAN_OPTIONS</span><span class="o">=</span><span class="nv">halt_on_error</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>./build/diagnostics/dangling-span<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>&gt;<span class="w"> </span>build/diagnostics/dangling-span.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+<span class="w">  </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'No sanitizer failure observed; this does not make the stale view valid.\n'</span>
+<span class="k">else</span>
+<span class="w">  </span><span class="nv">status</span><span class="o">=</span><span class="nv">$?</span>
+<span class="w">  </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'Diagnostic process exit status=%s\n'</span><span class="w"> </span><span class="s2">"</span><span class="nv">$status</span><span class="s2">"</span>
+<span class="k">fi</span>
+cat<span class="w"> </span>build/diagnostics/dangling-span.log
+</code></pre></figure>
+<p>The useful expected observation is an AddressSanitizer <strong>heap-use-after-free</strong>
+report at the stale read, with allocation and release stacks involving the
+vector. The exact address, line layout, and status number are not portable
+constants. A loader failure, unsupported sanitizer runtime, allocation failure,
+or the explicit status 2 guard is not that observation. The
+<a href="https://clang.llvm.org/docs/AddressSanitizer.html#usage">Clang AddressSanitizer documentation</a>
+describes instrumentation and linking; its
+<a href="https://clang.llvm.org/docs/AddressSanitizer.html#symbolizing-the-reports">report-symbolization section</a>
+discusses readable source locations. On macOS, <code>xcrun dsymutil build/diagnostics/dangling-span</code> can help produce source-location information
+when the report lacks it; it is not a repair for the memory error.</p>
+<p>There is no defined “old value” that this invalid program must print. A run
+that seems to print 5 does not establish correctness. Sanitizers are diagnostics,
+not the definition of validity; the invalidation rule already determines the
+bug. Reacquiring a span <strong>from <code>owner</code> after <code>reserve</code></strong>, as the normal program
+does, is the repair. Increasing an earlier reserve only postpones the problem
+unless the interface also enforces a no-growth borrowing interval.</p>
+<p>Finally, build the <strong>normal</strong> program separately with memory diagnostics:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — the safe program must still pass</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-arch<span class="w"> </span>arm64<span class="w"> </span>-O1<span class="w"> </span>-g<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-Wconversion<span class="w"> </span>-Wsign-conversion<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-fsanitize<span class="o">=</span>address,undefined<span class="w"> </span>-fno-omit-frame-pointer<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>exercises/chapter-02/values.cpp<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span>build/diagnostics/foundation-02-sanitized
+./build/diagnostics/foundation-02-sanitized
+</code></pre></figure>
+<p>The combined build also enables
+<a href="https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html">UndefinedBehaviorSanitizer</a>.
+Expected behavior is the normal eight-line output, success status, and no
+sanitizer report. Do not use this diagnostic binary for performance measurements.
+A toolchain lacking the requested runtime has an unperformed diagnostic check,
+not a passed one; the ordinary Debug/Release checks remain separate.</p>
+<h2 id="diagnose-the-relationship-not-just-the-line-that-crashed">Diagnose the relationship, not just the line that crashed</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely misunderstanding</th>
+<th>Useful next inspection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A loop's changes disappear</td>
+<td>Its element variable is a value</td>
+<td>Compare <code>auto</code> with <code>auto&amp;</code>, then inspect the owner after the loop</td>
+</tr>
+<tr>
+<td>A supposed read-only parameter permits writes</td>
+<td><code>const</code> applies to a descriptor</td>
+<td>Read the span's element type, not only its outer qualifiers</td>
+</tr>
+<tr>
+<td>An older span misses a new vector element</td>
+<td>A view's length was mistaken for a live subscription</td>
+<td>Inspect its creation time and reacquire the intended range</td>
+</tr>
+<tr>
+<td>A reserved vector rejects or crashes on indexing</td>
+<td>Capacity was used as size</td>
+<td>Establish <code>index &lt; size()</code>; create elements before indexing them</td>
+</tr>
+<tr>
+<td>A string field contains extra text in a C API</td>
+<td>A counted range was treated as terminated</td>
+<td>Preserve the length or create a suitable owning terminated string</td>
+</tr>
+<tr>
+<td>A view fails after a function returns</td>
+<td>The actual owner was local or temporary</td>
+<td>Trace the character/element owner, not merely the returned descriptor</td>
+</tr>
+<tr>
+<td>A view fails after growth</td>
+<td>Storage was reallocated while borrowed</td>
+<td>End the borrow before mutation and reconstruct from the live owner</td>
+</tr>
+<tr>
+<td>Failure appears only under memory diagnostics</td>
+<td>Invalid behavior happened to look plausible before</td>
+<td>Follow the invalidation/lifetime rule; do not suppress the report</td>
+</tr>
+</tbody>
+</table>
+<p>Bounds, lifetime, and meaning are separate checks. A range can be in bounds
+inside its old allocation yet dead. A live, in-bounds element can also hold a
+different row after a buffer is reused. A future operator contract will need
+to state both how long its batch is valid and what advancing that operator does
+to previous views.</p>
+<h2 id="what-carries-forward">What carries forward</h2>
+<p>Keep all three new sources and the appended CMake target. Only <code>values.cpp</code>
+belongs to <code>foundation-02</code>; the other two remain named diagnostic examples.
+Keep Chapter 1's sources and targets unchanged. The normal code now demonstrates
+owning copies, mutable and const references, returned values, range loops,
+array/vector storage, borrowed spans, text views, and safe reacquisition after
+structural mutation.</p>
+<p>For each future borrowed interface, state the owner, permitted mutation,
+valid interval, and invalidating operations. A span makes range boundaries
+visible; it does not enforce those lifetime promises. A value type's copy can
+provide independent contents, while a copied descriptor still aliases its
+original contents. That distinction is the bridge to the
+<a href="https://25d-228.github.io/cplusplus-learning/index.html">roadmap's</a> next chapter:
+<strong>Lifetime, RAII, and move-only owners</strong>. It will implement an owner and trace
+resource release rather than merely using ownership supplied by a container.</p>
+<h2 id="technical-references">Technical references</h2>
+<p>These references specify the mechanisms developed above. The public working
+draft evolves beyond C++20; newer overloads, hardening language, and later library
+facilities visible there are not additional course requirements. This chapter
+uses C++20-compatible interfaces and gives all code needed for its exercises.</p>
+<ul>
+<li><strong>References and deduction:</strong> <a href="https://eel.is/c++draft/dcl.ref">reference declarations</a>,
+<a href="https://eel.is/c++draft/dcl.init.ref">reference initialization and assignment</a>,
+<a href="https://eel.is/c++draft/dcl.spec.auto"><code>auto</code> deduction</a>,
+<a href="https://eel.is/c++draft/stmt.ranged">range-based for</a>, and
+<a href="https://eel.is/c++draft/numeric.limits.members">numeric limits</a>.</li>
+<li><strong>Owned and borrowed ranges:</strong> <a href="https://eel.is/c++draft/array.overview">array</a>,
+<a href="https://eel.is/c++draft/vector.overview">vector</a>,
+<a href="https://eel.is/c++draft/vector.cons">vector constructors</a>,
+<a href="https://eel.is/c++draft/vector.capacity">vector capacity</a>,
+<a href="https://eel.is/c++draft/vector.modifiers">vector modifiers</a>,
+<a href="https://eel.is/c++draft/span.overview">span ownership</a>,
+<a href="https://eel.is/c++draft/span.elem">span element access</a>, and
+<a href="https://eel.is/c++draft/span.sub">span subviews</a>.</li>
+<li><strong>Text and lifetime:</strong> <a href="https://eel.is/c++draft/string.view.cons">string-view construction</a>,
+<a href="https://eel.is/c++draft/string.view.find">search</a>,
+<a href="https://eel.is/c++draft/string.view.ops">substrings</a>,
+<a href="https://eel.is/c++draft/string.view.access">element/data access</a>,
+<a href="https://eel.is/c++draft/string.cons">string constructors</a>,
+<a href="https://eel.is/c++draft/string.substr">string substrings</a>,
+<a href="https://eel.is/c++draft/string.view.io">view stream insertion</a>,
+<a href="https://eel.is/c++draft/string.require">string invalidation</a>, and
+<a href="https://eel.is/c++draft/class.temporary">temporary lifetimes</a>.</li>
+<li><strong>Build and diagnosis:</strong> <a href="https://cmake.org/cmake/help/latest/command/add_executable.html">CMake executable targets</a>,
+<a href="https://clang.llvm.org/docs/AddressSanitizer.html">Clang AddressSanitizer</a>, and
+<a href="https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html">UndefinedBehaviorSanitizer</a>.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-01.html"><small>Previous · Chapter 1</small><span>From C files to a native C++ program</span></a><a href="chapter-03.html"><small>Next · Chapter 3</small><span>Lifetime, RAII, and move-only owners</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 2</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#one-normal-program-and-two-isolated-diagnostics">One normal program and two isolated diagnostics</a></li><li class="toc-h2"><a href="#a-fixed-array-is-an-owning-value">A fixed array is an owning value</a></li><li class="toc-h2"><a href="#a-reference-names-the-callers-object">A reference names the caller&#x27;s object</a></li><li class="toc-h3"><a href="#auto-deduces-a-type-not-an-ownership-policy">auto deduces a type, not an ownership policy</a></li><li class="toc-h3"><a href="#assignment-through-a-reference-does-not-rebind-it">Assignment through a reference does not rebind it</a></li><li class="toc-h2"><a href="#a-range-loop-still-chooses-between-values-and-references">A range loop still chooses between values and references</a></li><li class="toc-h2"><a href="#a-span-combines-an-address-and-an-element-count">A span combines an address and an element count</a></li><li class="toc-h3"><a href="#read-the-position-of-const">Read the position of const</a></li><li class="toc-h3"><a href="#check-an-index-before-modifying-an-element">Check an index before modifying an element</a></li><li class="toc-h3"><a href="#preserve-the-accumulators-range-proof">Preserve the accumulator&#x27;s range proof</a></li><li class="toc-h3"><a href="#slicing-changes-the-description-not-the-owner">Slicing changes the description, not the owner</a></li><li class="toc-h2"><a href="#a-vector-owns-storage-that-can-move">A vector owns storage that can move</a></li><li class="toc-h3"><a href="#size-is-not-allocated-payload">Size is not allocated payload</a></li><li class="toc-h3"><a href="#a-live-vector-object-can-still-invalidate-its-views">A live vector object can still invalidate its views</a></li><li class="toc-h2"><a href="#a-string-view-is-a-borrowed-character-range-not-a-c-string">A string view is a borrowed character range, not a C string</a></li><li class="toc-h3"><a href="#a-six-character-view-need-not-end-at-a-zero-byte">A six-character view need not end at a zero byte</a></li><li class="toc-h2"><a href="#connect-the-checks-to-one-executable">Connect the checks to one executable</a></li><li class="toc-h2"><a href="#confirm-read-only-access-at-compile-time">Confirm read-only access at compile time</a></li><li class="toc-h2"><a href="#observe-invalidation-in-a-disposable-sanitizer-process">Observe invalidation in a disposable sanitizer process</a></li><li class="toc-h2"><a href="#diagnose-the-relationship-not-just-the-line-that-crashed">Diagnose the relationship, not just the line that crashed</a></li><li class="toc-h2"><a href="#what-carries-forward">What carries forward</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></aside>
+</div></body></html>

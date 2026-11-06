@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 1 — From C files to a native C++ program · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-01.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html" aria-current="page"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/2">Read on GitHub</a><a href="source/chapter-01.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#observe-the-tools-before-changing-them">Observe the tools before changing them</a></li><li class="toc-h2"><a href="#a-small-source-tree-with-a-real-boundary">A small source tree with a real boundary</a></li><li class="toc-h2"><a href="#describe-the-result-before-writing-the-loop">Describe the result before writing the loop</a></li><li class="toc-h3"><a href="#what-the-pointer-promises-and-what-it-cannot-prove">What the pointer promises, and what it cannot prove</a></li><li class="toc-h3"><a href="#choose-a-numeric-range-that-makes-the-loop-exact">Choose a numeric range that makes the loop exact</a></li><li class="toc-h2"><a href="#turn-the-recurrence-into-one-complete-function">Turn the recurrence into one complete function</a></li><li class="toc-h2"><a href="#make-a-wrong-answer-observable">Make a wrong answer observable</a></li><li class="toc-h2"><a href="#compile-pieces-then-link-a-program">Compile pieces, then link a program</a></li><li class="toc-h3"><a href="#an-include-guard-is-not-a-linker-fix">An include guard is not a linker fix</a></li><li class="toc-h2"><a href="#probe-the-language-and-library-that-later-chapters-need">Probe the language and library that later chapters need</a></li><li class="toc-h2"><a href="#give-the-build-graph-to-cmake">Give the build graph to CMake</a></li><li class="toc-h3"><a href="#configure-build-then-test">Configure, build, then test</a></li><li class="toc-h2"><a href="#follow-the-state-in-lldb">Follow the state in LLDB</a></li><li class="toc-h2"><a href="#prove-that-the-check-can-fail-in-release">Prove that the check can fail in Release</a></li><li class="toc-h3"><a href="#locate-a-failure-at-the-right-layer">Locate a failure at the right layer</a></li><li class="toc-h2"><a href="#a-legal-subrange-and-an-empty-range">A legal subrange and an empty range</a></li><li class="toc-h2"><a href="#what-carries-forward">What carries forward</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-1-from-c-files-to-a-native-c-program">Chapter 1 — From C files to a native C++ program</h1>
+<p>Strata will eventually have separate implementations for files, indexes, recovery,
+query operators, and scheduling. Before those parts can cooperate, their declarations
+must agree, their object files must be linked, and a failed check must actually
+make the program fail. This chapter establishes that working cycle with an
+accumulation function small enough to inspect one statement at a time.</p>
+<p>The program summarizes three unsigned integers. It returns a count and a sum;
+<code>{10, 20, 12}</code> produces <code>count=3 sum=42</code>. An empty input produces two zeros.
+There is no engine code to start from. Basic C functions, arrays, pointers, and
+shell commands are sufficient prerequisites.</p>
+<blockquote>
+<p><strong>Learning objectives</strong></p>
+<p>Separate a header declaration from a function definition and a linked program;
+use a namespace and an initialized aggregate; explain a pointer's valid range;
+select and probe a native C++20 toolchain; build and test with CMake/CTest;
+distinguish a compilation error, a linkage error, and an incorrect result;
+inspect a live call with LLDB.</p>
+</blockquote>
+<p>The implementation allocation is <strong>2.0 hours</strong>, including the small experiments:
+0.5 for tool observation and probes, 0.5 for the program, 0.5 for CMake/CTest,
+and 0.5 for debugger and failure diagnosis. Reading is separate. An already
+configured machine may make setup shorter; a long explanation is not additional
+coding time.</p>
+<h2 id="observe-the-tools-before-changing-them">Observe the tools before changing them</h2>
+<p>Use a native terminal on the M4 Mac. Run these observation commands; none changes
+the selected developer tools or installs software:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — observe the native environment</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>sw_vers
+uname<span class="w"> </span>-m
+xcode-select<span class="w"> </span>--print-path
+xcrun<span class="w"> </span>--find<span class="w"> </span>clang++
+xcrun<span class="w"> </span>--show-sdk-path
+xcrun<span class="w"> </span>clang++<span class="w"> </span>--version
+xcrun<span class="w"> </span>lldb<span class="w"> </span>--version
+cmake<span class="w"> </span>--version
+ctest<span class="w"> </span>--version
+make<span class="w"> </span>--version
+</code></pre></figure>
+<p><code>sw_vers</code> reports the installed macOS rather than a version assumed by this book.
+The native architecture should be <code>arm64</code>. An <code>x86_64</code> result on an Apple-silicon
+machine is a reason to check whether the terminal is running under translation.
+Use a native terminal and native tools for this course, then inspect the produced
+executable as well; the shell's architecture alone does not prove the executable's
+architecture.</p>
+<p><code>xcode-select</code> identifies the active developer directory. <code>xcrun</code> locates tools
+and the software development kit, or SDK, associated with that selection. A
+compiler path, compiler banner, standard-library implementation, and deployment
+target are different observations. Apple's <a href="https://developer.apple.com/xcode/cpp/">C++ support page</a>
+distinguishes compiler features from library and operating-system support. A
+compiler that recognizes <code>-std=c++20</code> has not thereby demonstrated every C++20
+library facility.</p>
+<p>When command-line developer tools are absent, Apple's installation entry point is:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — only when developer tools are absent</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>xcode-select<span class="w"> </span>--install
+</code></pre></figure>
+<p>Complete the local installer, then repeat the observations. A working Command
+Line Tools installation is sufficient for these command-line examples; a full
+Xcode application is not a requirement. An existing compatible installation
+should not be replaced just to match a version in a screenshot. Apple's
+<a href="https://developer.apple.com/library/archive/technotes/tn2339/_index.html">command-line tools FAQ</a>
+documents installation and selection; its historical macOS examples are not this
+course's minimum operating-system version.</p>
+<p>CMake and CTest are separate from the C++ compiler. Use an installed maintained
+release, or a macOS package compatible with the installed system from the
+<a href="https://cmake.org/download/">official CMake download page</a>. If the application
+bundle is installed at <code>/Applications/CMake.app</code>, its command-line programs can
+be made visible in the current shell with:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — for a CMake application installed at this path</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">"/Applications/CMake.app/Contents/bin:</span><span class="nv">$PATH</span><span class="s2">"</span>
+cmake<span class="w"> </span>--version
+ctest<span class="w"> </span>--version
+</code></pre></figure>
+<p>This chapter's script declares <strong>CMake 3.20</strong> as its compatibility floor because
+its commands use <code>ctest --test-dir</code>, <a href="https://cmake.org/cmake/help/latest/manual/ctest.1.html#cmdoption-ctest-test-dir">introduced in that release</a>.
+That is a script-interface requirement, not a recommendation to install an old
+release. Use compatible installed tools rather than matching a particular compiler
+version banner. The actual language/library probes below are the compatibility
+check.</p>
+<p>Select the compiler executable once in this shell:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — use the selected Apple C++ compiler</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nv">CXX</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span>
+<span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>--version
+</code></pre></figure>
+<p><code>$(...)</code> substitutes the output of a command. Quoting <code>&quot;$CXX&quot;</code> treats the resulting
+path as one command name even if it contains spaces. <code>CXX</code> holds an executable
+path, not a string of compiler flags. A maintained alternative macOS LLVM
+installation is also usable: assign its actual <code>clang++</code> path, retain a compatible
+SDK/library pairing, and run the same probes. Do not mix headers from one
+installation with runtime libraries from another to silence an error. Selecting a
+different compiler later calls for a separate CMake build directory.</p>
+<h2 id="a-small-source-tree-with-a-real-boundary">A small source tree with a real boundary</h2>
+<p>Work in the learner workspace, normally on <code>work/strata</code>, not inside the generated
+website. Publication and remote repository access are unnecessary for this
+exercise: an ordinary local directory is enough. All terminal commands below
+assume the <strong>learner workspace root</strong> as the current directory.</p>
+<p>Create only this chapter's directory:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — create the exercise directory</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>exercises/chapter-01
+</code></pre></figure>
+<p>By the end of the chapter the source tree will be:</p>
+<figure class="code-block"><figcaption><span class="code-title">Files written in this chapter</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>CMakeLists.txt
+exercises/
+  chapter-01/
+    stats.hpp
+    stats.cpp
+    main.cpp
+    cxx20_probe.cpp
+</code></pre></figure>
+<p>Generated objects, executables, and CMake state go under <code>build/</code>, not beside the
+source files. Add <code>/build/</code> to an existing workspace <code>.gitignore</code> if it is not
+already ignored; do not replace unrelated ignore rules. No later chapter's
+source file is needed by the targets introduced here.</p>
+<p>The dependency is deliberately simple. <code>main.cpp</code> calls a function whose type it
+learns from <code>stats.hpp</code>. <code>stats.cpp</code> supplies the function body. The C++ compiler
+can compile either source independently once its included declarations are
+available. Linking makes the resulting pieces into one executable.</p>
+<h2 id="describe-the-result-before-writing-the-loop">Describe the result before writing the loop</h2>
+<p>Create the following <strong>complete header</strong>, <code>exercises/chapter-01/stats.hpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-01/stats.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_EXERCISES_CHAPTER_01_STATS_HPP</span>
+<span class="cp">#define STRATA_EXERCISES_CHAPTER_01_STATS_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Stats</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="c1">// For nonzero length, values must name at least length readable elements.</span>
+<span class="c1">// A null pointer is permitted only when length is zero.</span>
+<span class="n">Stats</span><span class="w"> </span><span class="nf">summarize</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">*</span><span class="w"> </span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">length</span><span class="p">);</span>
+
+<span class="p">}</span><span class="w"> </span><span class="c1">// namespace strata</span>
+
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p><code>#ifndef</code>, <code>#define</code>, and <code>#endif</code> form an <em>include guard</em>. The first inclusion
+in a translation unit defines the guard's name; another inclusion in that same
+unit skips the guarded text. It prevents repeated definitions of the structure
+within that unit. It does not arrange linking or prevent every cross-file
+one-definition error.</p>
+<p>The standard header <code>&lt;cstdint&gt;</code> supplies fixed-width integer type names in
+namespace <code>std</code>. Here <code>std::uint32_t</code> is an unsigned 32-bit integer and
+<code>std::uint64_t</code> an unsigned 64-bit integer. These exact-width types are available
+on the target toolchains; the <a href="https://eel.is/c++draft/cstdint.syn">header specification</a>
+marks them optional on implementations that cannot supply the corresponding
+representation. The feature probe will also check the byte sizes we use.</p>
+<p><code>namespace strata { ... }</code> groups these declarations. Outside that namespace,
+write <code>strata::Stats</code> and <code>strata::summarize</code>; <code>::</code> selects a name from its scope.
+A namespace neither allocates an object nor creates a runtime wrapper. Inside
+its body, the short name <code>Stats</code> already refers to this declaration. Avoid a
+header-level <code>using namespace std;</code>: a header should not inject an entire
+library's names into every source file that includes it.</p>
+<p>A <code>struct</code> introduces a type; <code>Stats</code> can be used as a type name without C's
+<code>struct Stats</code> spelling or a separate <code>typedef</code>. Its members are public. This
+particular structure is an <em>aggregate</em>: brace initialization can give values to
+its members in declaration order. The <code>= 0</code> on each member provides a default
+initializer, so a member omitted from an aggregate initializer starts at zero.
+The <a href="https://eel.is/c++draft/dcl.init.aggr">aggregate initialization rules</a>
+specify that behavior.</p>
+<p>These are examples of declarations, not additional required file contents:</p>
+<figure class="code-block"><figcaption><span class="code-title">Reading the initialization syntax</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">strata</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">empty</span><span class="p">{};</span><span class="w">          </span><span class="c1">// count = 0, sum = 0</span>
+<span class="n">strata</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">expected</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">42</span><span class="p">};</span><span class="w">  </span><span class="c1">// count = 3, sum = 42</span>
+<span class="k">const</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">fixed</span><span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">};</span>
+</code></pre></figure>
+<p>The <code>const</code> object <code>fixed</code> cannot have its fields changed through ordinary
+assignment. <code>Stats empty;</code> would also use these particular member initializers;
+we write braces to make initialization conspicuous. This does <strong>not</strong> mean an
+arbitrary local integer such as <code>int x;</code> is automatically initialized to zero.</p>
+<p>The line ending in <code>summarize(...);</code> is a function <strong>declaration</strong>. It specifies
+the return type and parameter types, enough for a caller to be type-checked.
+It contains no executable loop. A <strong>definition</strong> will provide the body.</p>
+<h3 id="what-the-pointer-promises-and-what-it-cannot-prove">What the pointer promises, and what it cannot prove</h3>
+<p>The parameter <code>const std::uint32_t* values</code> points to integers that this function
+may read but not modify through that pointer. It does not own those integers.
+The caller must keep the array alive for the call and supply a length that fits
+that actual array. Passing an address does not copy the array.</p>
+<p>For a positive <code>length</code>, the readable range is <code>values[0]</code> through
+<code>values[length - 1]</code>. A null pointer is accepted for an empty range, where the
+function must perform no dereference and no pointer arithmetic. A null pointer
+with a positive length, or a length longer than the allocation, violates the
+interface's precondition. Raw pointers carry no allocation-length information
+that this function could use to validate that claim. We will not manufacture
+such an invalid access as a normal test.</p>
+<p>This is an internal range interface, not a parser for untrusted input. Chapter 2
+will place pointer and length together in a view and teach the associated
+lifetime rules. A view still cannot make dead storage live again.</p>
+<h3 id="choose-a-numeric-range-that-makes-the-loop-exact">Choose a numeric range that makes the loop exact</h3>
+<p>This foundation function deliberately limits both an element and the element
+count to 32 unsigned bits, while accumulating into 64 bits. It accepts no
+negative values. This narrow domain lets us prove that every permitted sum fits,
+instead of adding an exception or overflow-status mechanism before those have
+been taught.</p>
+<p>Let <span class="math-input" data-display="false">n</span> be the element count, <span class="math-input" data-display="false">x_i</span> the value at zero-based index <span class="math-input" data-display="false">i</span>, and <span class="math-input" data-display="false">S_k</span>
+the sum after consuming <span class="math-input" data-display="false">k</span> elements. The result we want is</p>
+<div class="math-input" data-display="true">S_0 = 0, \qquad S_{k+1} = S_k + x_k, \qquad
+S_n = \sum_{i=0}^{n-1} x_i.</div>
+<p>Both <span class="math-input" data-display="false">n</span> and every <span class="math-input" data-display="false">x_i</span> are at most <span class="math-input" data-display="false">2^{32}-1</span>. Values are nonnegative, so no
+partial sum is greater than the final sum. Its maximum is bounded by</p>
+<div class="math-input" data-display="true">S_n \leq (2^{32}-1)^2
+     = 2^{64} - 2^{33} + 1
+     &lt; 2^{64}.</div>
+<p>An unsigned 64-bit integer represents zero through <span class="math-input" data-display="false">2^{64}-1</span>, so the sum fits.
+The count increments at most <span class="math-input" data-display="false">n</span> times and fits its own type. At the maximum
+length, the loop index reaches <code>length</code> and stops; it never needs to increment
+past that value. The <a href="https://eel.is/c++draft/basic.fundamental">integer-type rules</a>
+define unsigned arithmetic, but our bound avoids relying on wraparound.</p>
+<p>This is a range proof, <strong>not</strong> a claim that a four-billion-element array fits
+the machine. Actual arrays must still exist. Nor is it a general replacement
+for checked arithmetic: the engine later accepts 64-bit amounts, for which a
+64-bit accumulator needs explicit overflow checks. Do not widen this exercise's
+input type or count type and silently keep the old proof.</p>
+<h2 id="turn-the-recurrence-into-one-complete-function">Turn the recurrence into one complete function</h2>
+<p>Create <code>exercises/chapter-01/stats.cpp</code>:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-01/stats.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"stats.hpp"</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="w"> </span><span class="p">{</span>
+
+<span class="n">Stats</span><span class="w"> </span><span class="nf">summarize</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">*</span><span class="w"> </span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">length</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Stats</span><span class="w"> </span><span class="n">result</span><span class="p">{};</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">length</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">result</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="w">        </span><span class="o">++</span><span class="n">result</span><span class="p">.</span><span class="n">count</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w"> </span><span class="c1">// namespace strata</span>
+</code></pre></figure>
+<p>Include the function's own header first. The compiler now sees its declaration
+and definition together and can diagnose disagreements in this translation
+unit. The namespace is reopened, so this body defines <code>strata::summarize</code>, not
+an unrelated global function with a similar name.</p>
+<p><code>result</code> is a local value whose initialized fields hold the state. On entry to
+iteration <code>i</code>, <code>result.count</code> equals <code>i</code> and <code>result.sum</code> equals <span class="math-input" data-display="false">S_i</span>. The first
+statement adds the current element; the second records that one element has
+been consumed. At the next loop test both fields describe the same prefix.
+Inside the body, between those two statements, the sum has advanced before the
+count. That intermediate state is useful to recognize in the debugger.</p>
+<p>The left operand of <code>+=</code> has type <code>std::uint64_t</code>; the 32-bit element is added in
+the wider unsigned arithmetic type on the target. This matters. Computing a
+32-bit addition first and only then assigning its result to a 64-bit field
+would not repair an overflow that had already occurred.</p>
+<p>For the three-element fixture, the concrete states are:</p>
+<table>
+<thead>
+<tr>
+<th>Point in execution</th>
+<th style="text-align:right">Next index</th>
+<th style="text-align:right">Count</th>
+<th style="text-align:right">Sum</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before the loop</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">0</td>
+</tr>
+<tr>
+<td>After reading 10</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">10</td>
+</tr>
+<tr>
+<td>After reading 20</td>
+<td style="text-align:right">2</td>
+<td style="text-align:right">2</td>
+<td style="text-align:right">30</td>
+</tr>
+<tr>
+<td>After reading 12</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">3</td>
+<td style="text-align:right">42</td>
+</tr>
+</tbody>
+</table>
+<p>Each array element occupies four bytes on the intended platform. If the first
+one is at address <span class="math-input" data-display="false">A</span>, element <span class="math-input" data-display="false">i</span> begins at <span class="math-input" data-display="false">A + 4i</span>. <code>values[i]</code> expresses the
+correct element step without handwritten byte-address arithmetic. The array
+payload occupies 12 bytes; the two scalar result fields and any structure
+padding are separate. We do not serialize the structure's object representation
+or assume it has no padding.</p>
+<p>For <code>length == 0</code>, the first comparison is false, the loop body never runs, and
+<code>result</code> stays zero. This is why the empty case works with <code>nullptr</code>, C++'s null
+pointer literal. No special zero-sized C array is needed.</p>
+<p><code>return result;</code> returns a <strong>value</strong>, not a pointer to a dead local object. The
+caller obtains the two fields as its own result object; the implementation may
+eliminate a physical copy. Neither field refers into the input array. There is
+no dynamically allocated storage or file to clean up here, and the function
+performs no I/O. All source-array storage stays with the caller.</p>
+<h2 id="make-a-wrong-answer-observable">Make a wrong answer observable</h2>
+<p>Create <code>exercises/chapter-01/main.cpp</code> with the following first block. The next
+block is appended to the <strong>same file</strong>; together they are its complete contents.</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-01/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"stats.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+
+<span class="kt">bool</span><span class="w"> </span><span class="nf">check_stats</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">name</span><span class="p">,</span>
+<span class="w">                 </span><span class="n">strata</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">actual</span><span class="p">,</span>
+<span class="w">                 </span><span class="n">strata</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">expected</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">actual</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">expected</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">actual</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">expected</span><span class="p">.</span><span class="n">sum</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"FAIL "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">name</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">": expected count="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">expected</span><span class="p">.</span><span class="n">count</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">expected</span><span class="p">.</span><span class="n">sum</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">", got count="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">actual</span><span class="p">.</span><span class="n">count</span>
+<span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">actual</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The helper takes <code>actual</code> and <code>expected</code> <strong>by value</strong>. Each parameter is its own
+small <code>Stats</code> object. It tests both fields; a correct sum with a wrong count is
+not a pass. The <code>bool</code> return type has values <code>true</code> and <code>false</code>.</p>
+<p><code>&lt;iostream&gt;</code> declares standard streams. In this context <code>&lt;&lt;</code> inserts the next
+value into the stream; it is not an integer bit shift. Chaining insertions
+builds one diagnostic. <code>std::cerr</code> is the standard error stream, while normal
+results go to <code>std::cout</code>. <code>&quot;FAIL &quot;</code> is a string literal and <code>'\n'</code> is a newline
+character. <code>name</code> points to a caller-supplied string literal that remains alive;
+the helper neither owns nor frees it.</p>
+<p>Append this complete <code>main</code> function:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-01/main.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">values</span><span class="p">[]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">12</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">actual</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">summarize</span><span class="p">(</span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check_stats</span><span class="p">(</span><span class="s">"three values"</span><span class="p">,</span><span class="w"> </span><span class="n">actual</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">42</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">empty</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">summarize</span><span class="p">(</span><span class="nb">nullptr</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check_stats</span><span class="p">(</span><span class="s">"empty"</span><span class="p">,</span><span class="w"> </span><span class="n">empty</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">zero</span><span class="p">[]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check_stats</span><span class="p">(</span><span class="s">"one zero"</span><span class="p">,</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">summarize</span><span class="p">(</span><span class="n">zero</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">wide</span><span class="p">[]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="mi">4'294'967'295U</span><span class="p">,</span><span class="w"> </span><span class="mi">4'294'967'295U</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check_stats</span><span class="p">(</span><span class="s">"wide sum"</span><span class="p">,</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">summarize</span><span class="p">(</span><span class="n">wide</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span>
+<span class="w">                     </span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">8'589'934'590ULL</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"count="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">actual</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">actual</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"count="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">empty</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">" sum="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">empty</span><span class="p">.</span><span class="n">sum</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"all checks passed</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>main</code> is the program entry point. It remains in the global namespace. Its zero
+return value means success; on the target platform the nonzero value <code>1</code> reports
+failure to the calling shell and test runner. The logical-not operator <code>!</code> turns
+a failed check into the branch that exits unsuccessfully.</p>
+<p>At the first call, the array expression <code>values</code> converts to a pointer to its
+first element. The <code>3</code> is a count of elements, not bytes. <code>const</code> prevents
+accidental mutation of the local fixtures. The brace expression <code>{3, 42}</code> is
+used to initialize the helper's <code>Stats</code> parameter: count first, sum second.
+All arguments are evaluated before the function body runs, but this code does
+not rely on an ordering between independent argument evaluations.</p>
+<p>The apostrophes in <code>4'294'967'295</code> are digit separators for readability, not
+characters in the integer's value. <code>U</code> requests an unsigned integer literal;
+<code>ULL</code> requests an unsigned <code>long long</code> literal large enough for the expected
+wide sum on the supported tools. The element value is <span class="math-input" data-display="false">2^{32}-1</span>. Adding it
+twice gives 8,589,934,590, which does not fit 32 bits but does fit 64. A mistakenly
+narrow accumulator can pass the <code>42</code> fixture and still fail this one.</p>
+<p>The one-zero fixture distinguishes “one element whose value is zero” from “no
+elements.” Both sums are zero; their counts differ. The checks are ordinary
+control flow, not a call hidden inside <code>assert</code>. Defining <code>NDEBUG</code> disables
+<a href="https://eel.is/c++draft/assertions"><code>assert</code> evaluation</a>; it does not disable
+these function calls or their failure returns. Assertions can document internal
+invariants later, but required test work must remain observable in Release.</p>
+<h2 id="compile-pieces-then-link-a-program">Compile pieces, then link a program</h2>
+<p>A source file plus the text included into it, after preprocessing, forms the
+input for a translation unit. In our conventional header-based build, each
+<code>.cpp</code> is compiled separately. The header participates in both compilations;
+it is not a third executable component. The language's
+<a href="https://eel.is/c++draft/lex.separate">separate-translation model</a> permits these
+units to be translated and later linked.</p>
+<p>For this program, the build has the following shape:</p>
+<figure class="code-block"><figcaption><span class="code-title">Two compilations and one link</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>main.cpp  + stats.hpp + library declarations -&gt; main.o
+stats.cpp + stats.hpp                        -&gt; stats.o
+main.o + stats.o + standard-library support -&gt; foundation-01
+</code></pre></figure>
+<p>An <em>object file</em> contains generated code/data and information about symbols it
+defines or still needs. The body of <code>strata::summarize</code> is in <code>stats.o</code>.
+<code>main.o</code> contains a call that needs that definition. The C++ compiler driver
+selects the appropriate standard-library and runtime linkage when it performs
+the final link. Use <code>clang++</code>, not a direct invocation of <code>ld</code> or an improvised
+list of C++ runtime libraries.</p>
+<p>Run each command from the workspace root, stopping at an unexpected error:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — separate native compilations</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>mkdir<span class="w"> </span>-p<span class="w"> </span>build/manual
+
+<span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-arch<span class="w"> </span>arm64<span class="w"> </span>-O0<span class="w"> </span>-g<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-Wconversion<span class="w"> </span>-Wsign-conversion<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-I<span class="w"> </span>exercises/chapter-01<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>exercises/chapter-01/stats.cpp<span class="w"> </span>-o<span class="w"> </span>build/manual/stats.o
+
+<span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-arch<span class="w"> </span>arm64<span class="w"> </span>-O0<span class="w"> </span>-g<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-Wconversion<span class="w"> </span>-Wsign-conversion<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-I<span class="w"> </span>exercises/chapter-01<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>exercises/chapter-01/main.cpp<span class="w"> </span>-o<span class="w"> </span>build/manual/main.o
+
+<span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-arch<span class="w"> </span>arm64<span class="w"> </span>build/manual/main.o<span class="w"> </span>build/manual/stats.o<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span>build/manual/foundation-01
+
+file<span class="w"> </span>build/manual/foundation-01
+./build/manual/foundation-01
+<span class="nb">echo</span><span class="w"> </span><span class="s2">"program exit status=</span><span class="nv">$?</span><span class="s2">"</span>
+</code></pre></figure>
+<p>Here <code>-std=c++20</code> selects the language mode, <code>-arch arm64</code> selects the macOS
+architecture, <code>-O0</code> disables ordinary optimization for this debugging build,
+and <code>-g</code> emits debugging information. <code>-c</code> stops before linking, and <code>-o</code>
+names the output file. The <code>-I</code> option adds a header search directory. Because
+our quoted header is beside both source files, their local include search also
+finds it; a future consumer in another directory will need the advertised include
+path. The <a href="https://clang.llvm.org/docs/CommandGuide/clang.html#stage-selection-options">Clang command guide</a>
+describes the stage-selection switches.</p>
+<p>The warning options ask the compiler to diagnose suspicious constructs,
+nonstandard extensions, and conversions that can change a value or its sign.
+They are diagnostic help, not a proof of memory safety or correctness. An
+intentional conversion still needs an explanation rather than an added cast
+whose only purpose is silencing a warning. We do not make every warning from
+every compiler version a mandatory build failure.</p>
+<p><code>file</code> should identify a Mach-O executable for ARM64 on the target Mac. Exact
+wording varies. The program itself should print exactly:</p>
+<figure class="code-block"><figcaption><span class="code-title">Expected program output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>count=3 sum=42
+count=0 sum=0
+all checks passed
+</code></pre></figure>
+<p>The following shell line should report <code>program exit status=0</code>. <code>$?</code> is the
+status of the <strong>immediately preceding command</strong>; running an unrelated command
+first loses the status you intended to inspect. The printed results show the
+two main fixtures, while the zero-value and wide-sum checks pass silently.</p>
+<p>These are native macOS commands. On a separate Linux machine the C++ sources
+also work with a compatible compiler, but Apple's <code>xcrun</code> and <code>-arch arm64</code>
+options are not Linux setup instructions. A successful Linux execution is not
+evidence of native Mac toolchain support.</p>
+<h3 id="an-include-guard-is-not-a-linker-fix">An include guard is not a linker fix</h3>
+<p>Now deliberately omit the object that contains <code>summarize</code>. Do <strong>not</strong> alter the
+source files or the working executable:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — a deliberately incomplete link</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">if</span><span class="w"> </span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-arch<span class="w"> </span>arm64<span class="w"> </span>build/manual/main.o<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-o<span class="w"> </span>build/manual/missing-definition<span class="p">;</span><span class="w"> </span><span class="k">then</span>
+<span class="w">  </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'Unexpected success: inspect which objects were linked.\n'</span>
+<span class="k">else</span>
+<span class="w">  </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'Expected link failure: summarize has no linked definition.\n'</span>
+<span class="k">fi</span>
+</code></pre></figure>
+<p>Compilation of <code>main.cpp</code> already succeeded: its header supplied a declaration
+with the correct type. The final link cannot supply the called function's body.
+On macOS, look for an undefined-symbol diagnostic mentioning <code>strata::summarize</code>;
+the spelling of the integer types may reflect their underlying implementation
+types. The test succeeds as an experiment when <strong>linking fails for that missing
+symbol</strong>, not merely for any unrelated command error.</p>
+<p>Repair the link by including <code>stats.o</code>, as in the successful command. Including
+<code>stats.cpp</code> from <code>main.cpp</code> is not the repair. If that body is also compiled
+separately, it can create a duplicate non-inline definition. Our intended
+organization is one ordinary function declaration visible to callers and one
+linked ordinary function definition. The <a href="https://eel.is/c++draft/basic.def.odr">one-definition rules</a>
+also permit matching class definitions in multiple translation units under
+specified conditions; that is why a guarded structure definition belongs in
+this header. Templates and inline functions have further rules, introduced when
+we need them.</p>
+<p>Similarly, writing the body outside <code>namespace strata</code> would define a different
+function. A linker error is not an instruction to change <code>strata::summarize</code>'s
+declaration until a differently named symbol happens to match. Compare the
+intended signature, definition, namespace, and actual linked objects.</p>
+<h2 id="probe-the-language-and-library-that-later-chapters-need">Probe the language and library that later chapters need</h2>
+<p>The statistics function uses only a small portion of C++. It can compile even
+when a later required library facility is missing. Before adopting the toolchain,
+compile a separate <strong>capability probe</strong> for C++20 concepts and <code>std::span</code>.</p>
+<p>Two small pieces of syntax appear here before their deeper treatment. In
+<code>template &lt;std::integral T&gt;</code>, <code>T</code> names a type parameter and <code>std::integral</code>
+restricts it to integer types. Calling <code>echo_integer(10)</code> selects the version
+with <code>T</code> equal to <code>int</code>; its parameter and return value are both <code>int</code>. This is
+a language constraint, not a runtime tag test.</p>
+<p><code>std::span&lt;const int&gt;</code> is a library type that refers to a contiguous range of
+read-only integers without owning them. Its constructor can obtain the length
+from the local array, <code>.size()</code> reports that length, and <code>[i]</code> reads an element.
+In this probe the array stays alive for the entire use of the span. Chapter 2
+will develop borrowing and invalidation; Chapter 5 will develop templates and
+constraints. No engine design depends on learning those subjects from this probe
+alone.</p>
+<p>Create <code>exercises/chapter-01/cxx20_probe.cpp</code> with this first block, then append
+the second block to the same file:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-01/cxx20_probe.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;climits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;concepts&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;version&gt;</span>
+
+<span class="k">static_assert</span><span class="p">(</span><span class="n">__cplusplus</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">202002L</span><span class="p">,</span><span class="w"> </span><span class="s">"C++20 language mode is required"</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="n">CHAR_BIT</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="s">"The course byte layouts use 8-bit bytes"</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="s">"Use a 64-bit target"</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">8</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">integral</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="o">!</span><span class="n">std</span><span class="o">::</span><span class="n">integral</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">);</span>
+
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">integral</span><span class="w"> </span><span class="n">T</span><span class="o">&gt;</span>
+<span class="n">T</span><span class="w"> </span><span class="n">echo_integer</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>static_assert</code> asks the compiler to reject the translation unit when a condition
+known at compile time is false. Unlike the runtime <code>assert</code> macro, it is not
+disabled by <code>NDEBUG</code>. <code>sizeof</code> measures a type in C++ bytes; <code>CHAR_BIT</code>, from
+<code>&lt;climits&gt;</code>, states how many bits a byte has. Checking both keeps the
+four-byte/eight-byte claims explicit. A 64-bit pointer check does not distinguish
+ARM64 from x86-64, so still inspect the executable's architecture.</p>
+<p><code>__cplusplus</code> is the language-mode macro. <code>202002L</code> is the C++20 marker; <code>L</code> is
+an integer literal suffix, not a compiler version. The two <code>std::integral</code>
+checks cover an accepted and a rejected type. The function definition remains
+in this one source file, so no template-linkage issue is being concealed.</p>
+<p>Append the complete entry point:</p>
+<figure class="code-block"><figcaption><span class="code-title">exercises/chapter-01/cxx20_probe.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">values</span><span class="p">[]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="mi">12</span><span class="p">};</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="kt">int</span><span class="o">&gt;</span><span class="w"> </span><span class="n">view</span><span class="p">{</span><span class="n">values</span><span class="p">};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">view</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">echo_integer</span><span class="p">(</span><span class="n">view</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">20</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="n">view</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">view</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">view</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">42</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">cerr</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"C++20 probe failed</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"__cplusplus="</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">__cplusplus</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="cp">#if defined(_LIBCPP_VERSION)</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"standard library: libc++ "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">_LIBCPP_VERSION</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="cp">#elif defined(__GLIBCXX__)</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"standard library: libstdc++ "</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">__GLIBCXX__</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sc">'\n'</span><span class="p">;</span>
+<span class="cp">#else</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"standard library: vendor not identified by this probe</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="cp">#endif</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">"C++20 probe passed</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>||</code> is short-circuit logical OR: when the size test fails, the remaining
+operands are not evaluated. With the actual fixture, the size is three and every
+read is in bounds. <code>#if defined(...)</code> selects diagnostic output based on the
+library's identification macro. These vendor numbers are observations, not a
+cross-vendor compatibility scale. The code's successful compilation <strong>and
+execution</strong> are more useful than comparing them to an arbitrary threshold.</p>
+<p>Build and run the complete probe:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — native feature probe</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span>-std<span class="o">=</span>c++20<span class="w"> </span>-arch<span class="w"> </span>arm64<span class="w"> </span>-O0<span class="w"> </span>-g<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-Wall<span class="w"> </span>-Wextra<span class="w"> </span>-Wpedantic<span class="w"> </span>-Wconversion<span class="w"> </span>-Wsign-conversion<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>exercises/chapter-01/cxx20_probe.cpp<span class="w"> </span>-o<span class="w"> </span>build/manual/cxx20-probe
+./build/manual/cxx20-probe
+</code></pre></figure>
+<p>In explicit C++20 mode the language marker should be <code>202002</code>. The library line
+depends on the installed toolchain; read the reported value rather than expecting
+a fixed library version. The last line must be <code>C++20 probe passed</code>, and the process must
+exit successfully. This exercises the facilities actually used here, not every
+feature carrying the C++20 label. The <a href="https://eel.is/c++draft/span.overview">span overview</a>
+and <a href="https://eel.is/c++draft/concepts.arithmetic">integral concept</a> are precise
+references for the two probe mechanisms.</p>
+<p>A missing <code>&lt;span&gt;</code> header, an unrecognized constrained template, a compile-time
+assertion, and a runtime loader error point to different problems. Confirm the
+selected compiler, language flag, SDK, library, and produced architecture before
+changing versions. The probe intentionally does not require modules, C++23
+<code>std::expected</code>, <code>std::format</code>, or <code>std::jthread</code>.</p>
+<h2 id="give-the-build-graph-to-cmake">Give the build graph to CMake</h2>
+<p>Repeating the manual commands explains the machinery, but hand-maintaining every
+object dependency will become unreliable as the engine grows. CMake describes a
+graph of <em>targets</em>. The build tool then compiles changed inputs and links their
+consumers. CTest runs the registered executable tests; it is not the compiler.</p>
+<p>Create the root <code>CMakeLists.txt</code>. The following two blocks, in order, are the
+complete file. There is no generated file to edit and no future target to add.</p>
+<figure class="code-block"><figcaption><span class="code-title">CMakeLists.txt</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span><span class="w"> </span><span class="s">3.20</span><span class="p">)</span>
+<span class="nb">project</span><span class="p">(</span><span class="s">Strata</span><span class="w"> </span><span class="s">LANGUAGES</span><span class="w"> </span><span class="s">CXX</span><span class="p">)</span>
+
+<span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_CXX_EXTENSIONS</span><span class="w"> </span><span class="s">OFF</span><span class="p">)</span>
+<span class="nb">enable_testing</span><span class="p">()</span>
+
+<span class="nb">add_library</span><span class="p">(</span><span class="s">foundation-01-stats</span><span class="w"> </span><span class="s">STATIC</span>
+<span class="w">    </span><span class="s">exercises/chapter-01/stats.cpp</span>
+<span class="p">)</span>
+<span class="nb">target_include_directories</span><span class="p">(</span><span class="s">foundation-01-stats</span><span class="w"> </span><span class="s">PUBLIC</span>
+<span class="w">    </span><span class="s2">"${CMAKE_CURRENT_SOURCE_DIR}/exercises/chapter-01"</span>
+<span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span><span class="s">foundation-01-stats</span><span class="w"> </span><span class="s">PUBLIC</span><span class="w"> </span><span class="s">cxx_std_20</span><span class="p">)</span>
+
+<span class="nb">add_executable</span><span class="p">(</span><span class="s">foundation-01</span><span class="w"> </span><span class="s">exercises/chapter-01/main.cpp</span><span class="p">)</span>
+<span class="nb">target_link_libraries</span><span class="p">(</span><span class="s">foundation-01</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">foundation-01-stats</span><span class="p">)</span>
+<span class="nb">add_test</span><span class="p">(</span><span class="s">NAME</span><span class="w"> </span><span class="s">foundation-01</span><span class="w"> </span><span class="s">COMMAND</span><span class="w"> </span><span class="s">foundation-01</span><span class="p">)</span>
+</code></pre></figure>
+<p><code>project(... LANGUAGES CXX)</code> enables C++ toolchain detection. The first target
+is a <strong>static library</strong>: an archive of compiled objects, not a running service
+or a new implementation dependency. CMake compiles <code>stats.cpp</code> once into that
+library and links its needed code into <code>foundation-01</code>.</p>
+<p><code>target_include_directories</code> advertises the header location. The quoted
+<code>${CMAKE_CURRENT_SOURCE_DIR}</code> expands to the directory containing this root
+CMake file; it does not depend on which directory the build tool uses later.
+<code>PUBLIC</code> means the requirement applies both to this target and to targets that
+consume it. Thus <code>foundation-01</code> acquires the include directory and the C++20
+minimum through <code>target_link_libraries</code>. <code>PRIVATE</code> on that link says that the
+executable uses the library without making a public interface promise to further
+consumers.</p>
+<p>CMake's <a href="https://cmake.org/cmake/help/latest/manual/cmake-compile-features.7.html#requiring-language-standards"><code>cxx_std_20</code> meta-feature</a>
+requests a compiler mode at least as new as C++20. It does not guarantee each
+library facility; that is why the probe remains a target. <code>CMAKE_CXX_EXTENSIONS</code>
+being <code>OFF</code> requests a non-extension language mode rather than, for example,
+a GNU dialect. It is not a proof that every extension would be rejected.</p>
+<p><a href="https://cmake.org/cmake/help/latest/command/add_test.html"><code>add_test(NAME ... COMMAND ...)</code></a>
+accepts an executable target name and substitutes its built path. Do not hard-code
+an absolute binary path from this machine. <code>enable_testing()</code> makes the root
+build tree testable. We use the process return status as the check, not a fragile
+search for the words “passed” in its output.</p>
+<p>Append the probe target and the warning policy:</p>
+<figure class="code-block"><figcaption><span class="code-title">CMakeLists.txt</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nb">add_executable</span><span class="p">(</span><span class="s">cxx20-probe</span><span class="w"> </span><span class="s">exercises/chapter-01/cxx20_probe.cpp</span><span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span><span class="s">cxx20-probe</span><span class="w"> </span><span class="s">PRIVATE</span><span class="w"> </span><span class="s">cxx_std_20</span><span class="p">)</span>
+<span class="nb">add_test</span><span class="p">(</span><span class="s">NAME</span><span class="w"> </span><span class="s">cxx20-probe</span><span class="w"> </span><span class="s">COMMAND</span><span class="w"> </span><span class="s">cxx20-probe</span><span class="p">)</span>
+
+<span class="nb">if</span><span class="p">(</span><span class="s">CMAKE_CXX_COMPILER_ID</span><span class="w"> </span><span class="s">MATCHES</span><span class="w"> </span><span class="s2">"Clang|GNU"</span><span class="p">)</span>
+<span class="w">    </span><span class="nb">foreach</span><span class="p">(</span><span class="s">target</span><span class="w"> </span><span class="s">IN</span><span class="w"> </span><span class="s">ITEMS</span><span class="w"> </span><span class="s">foundation-01-stats</span><span class="w"> </span><span class="s">foundation-01</span><span class="w"> </span><span class="s">cxx20-probe</span><span class="p">)</span>
+<span class="w">        </span><span class="nb">target_compile_options</span><span class="p">(</span><span class="o">${</span><span class="nv">target</span><span class="o">}</span><span class="w"> </span><span class="s">PRIVATE</span>
+<span class="w">            </span><span class="s">-Wall</span><span class="w"> </span><span class="s">-Wextra</span><span class="w"> </span><span class="s">-Wpedantic</span><span class="w"> </span><span class="s">-Wconversion</span><span class="w"> </span><span class="s">-Wsign-conversion</span>
+<span class="w">        </span><span class="p">)</span>
+<span class="w">    </span><span class="nb">endforeach</span><span class="p">()</span>
+<span class="nb">endif</span><span class="p">()</span>
+</code></pre></figure>
+<p>The probe does not call the statistics library, so it declares its own language
+requirement. CMake's <code>foreach</code> iterates through target names; <code>${target}</code> expands
+to the current one. The compiler-ID condition matches Apple Clang, upstream
+Clang, and GNU for these warning switches. It does not claim to configure every
+vendor's diagnostic interface. Options are attached to our targets rather than
+injected into an unrelated dependency's build.</p>
+<h3 id="configure-build-then-test">Configure, build, then test</h3>
+<p>Use separate build trees for Debug and Release. A <strong>single-configuration</strong> generator
+is selected explicitly here so binary locations and <code>CMAKE_BUILD_TYPE</code> have one
+meaning. The supplied Apple command-line tools provide <code>make</code>; Ninja is a valid
+alternative when installed, not a prerequisite.</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — native Debug build</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/debug<span class="w"> </span>-G<span class="w"> </span><span class="s2">"Unix Makefiles"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Debug<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_OSX_ARCHITECTURES<span class="o">=</span>arm64
+cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span>
+ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+./build/debug/foundation-01
+file<span class="w"> </span>build/debug/foundation-01
+</code></pre></figure>
+<p><code>-S .</code> names the source tree and <code>-B build/debug</code> names an out-of-source build
+tree. <code>-D</code> supplies a configuration value; the compiler path is recorded in the
+CMake cache. <code>--parallel 4</code> permits up to four build jobs, not four runtime
+threads in the program. <code>--no-tests=error</code> prevents an accidentally empty test
+selection from masquerading as success. Read the result: this chapter registers
+<strong>two tests</strong>, named <code>foundation-01</code> and <code>cxx20-probe</code>.</p>
+<p>The expected CTest result is two passing tests. Use the program directly for its
+exact three-line output, or request verbose test output:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — inspect one test and the actual build commands</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>-R<span class="w"> </span><span class="s1">'^foundation-01$'</span><span class="w"> </span>-V<span class="w"> </span>--no-tests<span class="o">=</span>error
+cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--clean-first<span class="w"> </span>--verbose
+</code></pre></figure>
+<p>The regular expression selects exactly the named test. The second command
+cleans and rebuilds <strong>generated outputs in this build tree</strong>, not source files,
+so the compile and link invocations are visible even after a successful build.
+Inspect the compiler path, selected language mode, debug flags, architecture,
+and static library on the link line. The
+<a href="https://cmake.org/cmake/help/latest/manual/cmake.1.html">CMake command-line manual</a>
+describes source/build trees and build mode; the
+<a href="https://cmake.org/cmake/help/latest/manual/ctest.1.html">CTest manual</a> describes
+selection and failure reporting.</p>
+<p>Do not run CTest after a failed build and interpret an old executable's pass as
+a new result. Build and test are distinct operations. In an automated shell
+sequence, connect them with <code>&amp;&amp;</code> so testing happens only after a successful build.</p>
+<p>Now configure a separate optimized tree:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — native Release build</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-B<span class="w"> </span>build/release<span class="w"> </span>-G<span class="w"> </span><span class="s2">"Unix Makefiles"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Release<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_CXX_COMPILER<span class="o">=</span><span class="s2">"</span><span class="nv">$CXX</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DCMAKE_OSX_ARCHITECTURES<span class="o">=</span>arm64
+cmake<span class="w"> </span>--build<span class="w"> </span>build/release<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+./build/release/foundation-01
+</code></pre></figure>
+<p>The same answers must pass. This is a correctness comparison, not a meaningful
+performance benchmark of a three-element loop. The exact optimization switches
+belong to the actual toolchain configuration; inspect a verbose build rather
+than claiming that a configuration name proves a particular flag set.</p>
+<p>Changing compiler or generator inside an existing cached build directory can
+leave an invalid configuration. Use a newly named directory for that change.
+An Xcode or Ninja Multi-Config generator is also usable, but its workflow uses
+<code>--config Debug</code> when building and <code>-C Debug</code> when testing; its executable path
+can include the configuration. Do not combine those path assumptions with the
+single-configuration commands above.</p>
+<h2 id="follow-the-state-in-lldb">Follow the state in LLDB</h2>
+<p>The output verifies the result. A debugger lets us inspect <em>how</em> it was reached.
+Use the Debug executable and keep its build directory and object files available.
+Do not start with an optimized build where locals or entire calls may have been
+eliminated.</p>
+<p>Launch the debugger from the workspace root:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — start LLDB on the Debug executable</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>xcrun<span class="w"> </span>lldb<span class="w"> </span>./build/debug/foundation-01
+</code></pre></figure>
+<p>Enter the next commands at the LLDB prompt, not in the shell. In a fresh session,
+the first breakpoint normally has ID 1. Use the actual ID LLDB reports if the
+session already contains breakpoints.</p>
+<figure class="code-block"><figcaption><span class="code-title">LLDB — stop in the accumulation function</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>breakpoint set --name strata::summarize
+run
+frame variable length
+frame variable values[0] values[1] values[2]
+thread backtrace
+</code></pre></figure>
+<p>The first call should have <code>length = 3</code> and elements <code>10</code>, <code>20</code>, and <code>12</code>.
+The backtrace should contain <code>strata::summarize</code> called from <code>main</code>. Addresses,
+line numbers, and displayed underlying integer type names depend on the build;
+they are not expected constants.</p>
+<p><code>frame variable</code> reads parameters and locals using debug information. It supports
+simple member and subscript paths, so the pointer expression can be inspected
+as three elements for this <strong>known valid first call</strong>. Do not use the same
+three-element inspection at the empty-input call. A function breakpoint normally
+stops before its first source statement; <code>result</code> is not meaningful until its
+initialization has executed. The <a href="https://lldb.llvm.org/use/tutorial.html#examining-stack-frame-state">LLDB tutorial</a>
+explains this inspection interface.</p>
+<p>Place a second breakpoint at the addition itself. Disable the entry breakpoint
+first so that subsequent tests do not repeatedly stop at function entry:</p>
+<figure class="code-block"><figcaption><span class="code-title">LLDB — stop before an addition</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>breakpoint disable 1
+breakpoint set -f stats.cpp -p 'result[.]sum'
+continue
+frame variable i length result
+</code></pre></figure>
+<p>Here <code>-f</code> selects a source file and <code>-p</code> searches its lines with a regular
+expression. <code>[.]</code> matches the literal dot in <code>result.sum</code>. The expression avoids
+depending on the chapter's line numbers; it should match the one addition line
+in <code>stats.cpp</code>. This <a href="https://lldb.llvm.org/use/map.html#set-a-breakpoint-by-regular-expression-on-source-file-contents">source-pattern breakpoint</a>
+should be breakpoint 2 in this fresh session. Check its resolved location before
+continuing.</p>
+<p>At the first hit, <code>i</code> is zero and both result fields are zero. The highlighted
+addition has <strong>not executed yet</strong>. Step over it, inspect, then step over the count
+increment:</p>
+<figure class="code-block"><figcaption><span class="code-title">LLDB — inspect the intermediate state</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>thread step-over
+frame variable result
+thread step-over
+frame variable result
+</code></pre></figure>
+<p>After the addition, expect <code>sum = 10</code> and <code>count = 0</code>. After the count increment,
+expect <code>sum = 10</code> and <code>count = 1</code>. This temporary mismatch is normal: the fields
+advance in two source statements. No other thread reads them, and the function
+returns only the finished value.</p>
+<p>Continue to the next two hits of the addition breakpoint:</p>
+<figure class="code-block"><figcaption><span class="code-title">LLDB — inspect the remaining iterations</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>continue
+frame variable i result
+continue
+frame variable i result
+breakpoint disable 2
+continue
+quit
+</code></pre></figure>
+<p>Before the second addition, expect <code>i = 1</code>, <code>count = 1</code>, <code>sum = 10</code>. Before the
+third, expect <code>i = 2</code>, <code>count = 2</code>, <code>sum = 30</code>. Disabling breakpoint 2 allows the
+last addition and the remaining tests to finish. The normal output should appear
+and the process should exit successfully. These are expected program states,
+not a requirement that every debugger version print the same transcript.</p>
+<p>If a breakpoint has no resolved location, confirm the executable path, spelling
+of the namespace, and debug information. If a changed line does not match the
+running program, leave LLDB, rebuild successfully, and launch the rebuilt binary.
+Do not keep editing source while assuming a stopped old process has changed.
+<a href="https://lldb.llvm.org/use/troubleshooting.html#file-and-line-breakpoints-are-not-getting-hit">LLDB's breakpoint troubleshooting</a>
+discusses debug information and source-path mismatches.</p>
+<p>A launch failure, missing debugger runtime, or denied local debugging permission
+is an environment problem to diagnose separately; it is not a passed walkthrough
+or a failed arithmetic check. Use the installed developer tools and ordinary
+local authorization flow. Do not disable operating-system security protections
+as a general debugging recipe.</p>
+<h2 id="prove-that-the-check-can-fail-in-release">Prove that the check can fail in Release</h2>
+<p>A test system that has only ever displayed green output has not yet demonstrated
+its failure path. Make one temporary change in <code>main.cpp</code>: in
+<code>check_stats(&quot;three values&quot;, actual, {3, 42})</code>, change <strong>only the expected sum</strong>
+from <code>42</code> to <code>41</code>. Keep the function and input unchanged. Save the file.</p>
+<p>Build the changed source and run just that test in both configurations:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — the intentionally wrong expectation must fail</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>cmake<span class="w"> </span>--build<span class="w"> </span>build/debug<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/debug<span class="w"> </span>-R<span class="w"> </span><span class="s1">'^foundation-01$'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+
+cmake<span class="w"> </span>--build<span class="w"> </span>build/release<span class="w"> </span>--parallel<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>ctest<span class="w"> </span>--test-dir<span class="w"> </span>build/release<span class="w"> </span>-R<span class="w"> </span><span class="s1">'^foundation-01$'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output-on-failure<span class="w"> </span>--no-tests<span class="o">=</span>error
+
+./build/release/foundation-01
+<span class="nb">echo</span><span class="w"> </span><span class="s2">"program exit status=</span><span class="nv">$?</span><span class="s2">"</span>
+</code></pre></figure>
+<p>Both selected CTest runs must report a failure, and the direct executable must
+return status <code>1</code>. CTest's own nonzero exit code need not equal the executable's
+<code>1</code>. The executable's diagnostic should be:</p>
+<figure class="code-block"><figcaption><span class="code-title">Expected diagnostic for the intentionally wrong expectation</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code>FAIL three values: expected count=3 sum=41, got count=3 sum=42
+</code></pre></figure>
+<p>This failure is useful precisely because the algorithm is still correct. We
+changed the oracle and observed its control over the process status. The compiler
+may optimize the implementation, but it cannot replace this required failure
+with success while preserving the program's behavior. No <code>assert</code> macro
+controls the check.</p>
+<p>Restore the expected sum to <code>42</code>, rebuild both configurations, and run their full
+test sets again. Both tests must return to passing before continuing. Do not
+“repair” the deliberate failed expectation by changing the correct accumulator.</p>
+<h3 id="locate-a-failure-at-the-right-layer">Locate a failure at the right layer</h3>
+<p>These symptoms suggest different first investigations:</p>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely boundary</th>
+<th>First useful action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stats.hpp</code> is not found</td>
+<td>Header lookup</td>
+<td>Check the filename, source location, and actual include search path.</td>
+</tr>
+<tr>
+<td>A type or member is unknown</td>
+<td>Compilation</td>
+<td>Read the first diagnostic and compare the included declaration with its use.</td>
+</tr>
+<tr>
+<td><code>strata::summarize</code> is undefined</td>
+<td>Linkage</td>
+<td>Confirm that the definition has the right namespace/signature and that its object or library is linked.</td>
+</tr>
+<tr>
+<td>A duplicate definition is reported</td>
+<td>Linkage</td>
+<td>Look for a <code>.cpp</code> included as text and also compiled, or a non-inline function body repeated in headers.</td>
+</tr>
+<tr>
+<td>The wide-sum fixture fails</td>
+<td>Arithmetic</td>
+<td>Inspect the accumulator's type and where widening occurs, not only the printed <code>42</code> example.</td>
+</tr>
+<tr>
+<td>CTest finds no tests</td>
+<td>Test discovery</td>
+<td>Check the build-tree path and root <code>enable_testing()</code>; do not accept an empty run.</td>
+</tr>
+<tr>
+<td>A known wrong expectation still passes</td>
+<td>Build/test selection</td>
+<td>Confirm the saved source, successful rebuild, chosen binary, and configuration.</td>
+</tr>
+<tr>
+<td>LLDB cannot inspect useful locals</td>
+<td>Debug configuration</td>
+<td>Use the current Debug binary with debug information, and verify breakpoint/source locations.</td>
+</tr>
+</tbody>
+</table>
+<p>Do not begin with a blanket reinstall or deletion of every build directory.
+Read the first meaningful error, identify the stage, and change the smallest
+relevant input. A compiler's successful exit, a linker's successful exit, and a
+test's successful exit answer three different questions.</p>
+<h2 id="a-legal-subrange-and-an-empty-range">A legal subrange and an empty range</h2>
+<p>For the final variation, predict the result of starting at the <strong>second</strong> element
+of <code>{10, 20, 12}</code> and consuming two elements. Insert these checks in <code>main</code>, after
+the existing checks and before the successful <code>std::cout</code> output:</p>
+<figure class="code-block"><figcaption><span class="code-title">Variation — insert into main.cpp before the output</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check_stats</span><span class="p">(</span><span class="s">"suffix"</span><span class="p">,</span><span class="w"> </span><span class="n">strata</span><span class="o">::</span><span class="n">summarize</span><span class="p">(</span><span class="n">values</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">32</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">check_stats</span><span class="p">(</span><span class="s">"empty with live pointer"</span><span class="p">,</span>
+<span class="w">                 </span><span class="n">strata</span><span class="o">::</span><span class="n">summarize</span><span class="p">(</span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>values + 1</code> advances by one element, or four bytes under the verified layout.
+The available suffix is <code>{20, 12}</code>, so the result is count two and sum 32. The
+second call has a non-null pointer but consumes no elements, again producing
+zeros. The function's empty-range behavior depends on the count, not on the
+pointer being null.</p>
+<p><code>values + 2</code> with length two would exceed this array. Do not execute that call
+and hope a passing run validates it. The pointer/length precondition must be
+established by the caller. Rebuild and run Debug and Release after adding the
+legal variation; successful output remains the same. This small extension is
+inside the chapter's implementation allocation.</p>
+<h2 id="what-carries-forward">What carries forward</h2>
+<p>Keep the five source/build files, including the two variation checks. You now
+have a repeatable native compilation, a static-library link boundary, an active
+runtime check, a C++20/library probe, and a debugger path from an input pointer
+to a returned value. No files, threads, or dynamic buffers are owned by the
+accumulator; there is nothing for its caller to free.</p>
+<p>The <a href="https://25d-228.github.io/cplusplus-learning/index.html">roadmap</a> places
+values, references, containers, and views next. That chapter will add a separate
+exercise and retain these targets. Its starting code is exactly the five files
+specified here, not a future storage engine or an unpublished helper library.</p>
+<h2 id="technical-references">Technical references</h2>
+<p>The mechanisms above are developed in the text; the references give precise
+contracts and command details. The public C++ working draft evolves beyond
+C++20, so only the facilities actually used here belong to this chapter's
+baseline. A current documentation site's version label is not a tool-version
+requirement.</p>
+<ul>
+<li><strong>Native environment:</strong> <a href="https://developer.apple.com/xcode/cpp/">Apple C++ language support</a>,
+<a href="https://developer.apple.com/library/archive/technotes/tn2339/_index.html">Apple command-line tools FAQ</a>,
+and <a href="https://cmake.org/download/">CMake downloads</a>. The Apple FAQ is archived;
+its sample installation paths and old system versions are not prescribed here.</li>
+<li><strong>Translation and declarations:</strong> <a href="https://eel.is/c++draft/lex.separate">separate translation</a>,
+<a href="https://eel.is/c++draft/basic.def.odr">one-definition rules</a>, and
+<a href="https://eel.is/c++draft/dcl.init.aggr">aggregate initialization</a>.</li>
+<li><strong>Types and checks:</strong> <a href="https://eel.is/c++draft/cstdint.syn"><code>&lt;cstdint&gt;</code></a>,
+<a href="https://eel.is/c++draft/basic.fundamental">integer ranges</a>,
+<a href="https://eel.is/c++draft/assertions">assertion disabling</a>,
+<a href="https://eel.is/c++draft/span.overview">span ownership</a>, and
+<a href="https://eel.is/c++draft/concepts.arithmetic">arithmetic concepts</a>.</li>
+<li><strong>Build and test:</strong> <a href="https://clang.llvm.org/docs/CommandGuide/clang.html#stage-selection-options">Clang stage-selection options</a>,
+<a href="https://cmake.org/cmake/help/latest/manual/cmake-compile-features.7.html#requiring-language-standards">CMake language requirements</a>,
+<a href="https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html">extension mode</a>,
+<a href="https://cmake.org/cmake/help/latest/variable/CMAKE_OSX_ARCHITECTURES.html">Apple architecture selection</a>,
+<a href="https://cmake.org/cmake/help/latest/manual/cmake.1.html">CMake command line</a>,
+<a href="https://cmake.org/cmake/help/latest/command/add_test.html"><code>add_test</code></a>, and
+<a href="https://cmake.org/cmake/help/latest/manual/ctest.1.html">CTest command line</a>.</li>
+<li><strong>Debugger:</strong> <a href="https://lldb.llvm.org/use/tutorial.html">LLDB tutorial</a>,
+<a href="https://lldb.llvm.org/use/map.html">command map, including source-pattern breakpoints</a>,
+and <a href="https://lldb.llvm.org/use/troubleshooting.html">breakpoint troubleshooting</a>.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="index.html"><small>Previous · Roadmap</small><span>Strata: a C++ storage and query engine</span></a><a href="chapter-02.html"><small>Next · Chapter 2</small><span>Values, references, containers, and views</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#observe-the-tools-before-changing-them">Observe the tools before changing them</a></li><li class="toc-h2"><a href="#a-small-source-tree-with-a-real-boundary">A small source tree with a real boundary</a></li><li class="toc-h2"><a href="#describe-the-result-before-writing-the-loop">Describe the result before writing the loop</a></li><li class="toc-h3"><a href="#what-the-pointer-promises-and-what-it-cannot-prove">What the pointer promises, and what it cannot prove</a></li><li class="toc-h3"><a href="#choose-a-numeric-range-that-makes-the-loop-exact">Choose a numeric range that makes the loop exact</a></li><li class="toc-h2"><a href="#turn-the-recurrence-into-one-complete-function">Turn the recurrence into one complete function</a></li><li class="toc-h2"><a href="#make-a-wrong-answer-observable">Make a wrong answer observable</a></li><li class="toc-h2"><a href="#compile-pieces-then-link-a-program">Compile pieces, then link a program</a></li><li class="toc-h3"><a href="#an-include-guard-is-not-a-linker-fix">An include guard is not a linker fix</a></li><li class="toc-h2"><a href="#probe-the-language-and-library-that-later-chapters-need">Probe the language and library that later chapters need</a></li><li class="toc-h2"><a href="#give-the-build-graph-to-cmake">Give the build graph to CMake</a></li><li class="toc-h3"><a href="#configure-build-then-test">Configure, build, then test</a></li><li class="toc-h2"><a href="#follow-the-state-in-lldb">Follow the state in LLDB</a></li><li class="toc-h2"><a href="#prove-that-the-check-can-fail-in-release">Prove that the check can fail in Release</a></li><li class="toc-h3"><a href="#locate-a-failure-at-the-right-layer">Locate a failure at the right layer</a></li><li class="toc-h2"><a href="#a-legal-subrange-and-an-empty-range">A legal subrange and an empty range</a></li><li class="toc-h2"><a href="#what-carries-forward">What carries forward</a></li><li class="toc-h2"><a href="#technical-references">Technical references</a></li></ul></aside>
+</div></body></html>

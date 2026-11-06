@@ -1,0 +1,1104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 6 · Part 1 — Records, bytes, and a dependable file boundary · C++ Systems Engineering: Strata</title>
+<meta name="description" content="Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.">
+<link rel="canonical" href="https://25d-228.github.io/cplusplus-learning/chapter-06.html">
+<link rel="stylesheet" href="assets/code-light.css">
+<link rel="stylesheet" href="assets/course.css">
+<script>window.MathJax = {startup: {typeset: false}, options: {enableMenu: false}, svg: {fontCache: "local"}};</script>
+<script defer src="assets/vendor/tex-svg.js"></script>
+<script defer src="assets/course.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to chapter</a>
+<header class="topbar"><a class="brand" href="index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 7C10 3 5 4 2 5v17c4-2 8-1 12 2m0-17c4-4 9-3 12-2v17c-4-2-8-1-12 2V7Z"/></svg><span>C++ Systems Engineering: Strata</span></a>
+<div class="header-actions"><a class="desktop-link" href="index.html">Overview</a><a class="desktop-link" href="chapter-01.html">Chapters</a><a class="desktop-link" href="https://github.com/25d-228/cplusplus-learning">Repository</a><button id="menu-toggle" type="button" aria-expanded="false" aria-controls="chapter-nav">Contents</button></div></header>
+<div class="book-layout">
+<aside class="sidebar" id="chapter-nav"><h2 class="sidebar-title">Contents</h2>
+<label for="chapter-filter">Find a chapter</label><input id="chapter-filter" type="search" placeholder="Search chapter titles…" autocomplete="off">
+<nav aria-label="Chapters"><ol><li><a href="index.html"><span class="chapter-label">Roadmap</span><span>Strata: a C++ storage and query engine</span></a></li><li><a href="chapter-01.html"><span class="chapter-label">Chapter 1</span><span>From C files to a native C++ program</span></a></li><li><a href="chapter-02.html"><span class="chapter-label">Chapter 2</span><span>Values, references, containers, and views</span></a></li><li><a href="chapter-03.html"><span class="chapter-label">Chapter 3</span><span>Lifetime, RAII, and move-only owners</span></a></li><li><a href="chapter-04.html"><span class="chapter-label">Chapter 4</span><span>Errors and failure-safe state changes</span></a></li><li><a href="chapter-05.html"><span class="chapter-label">Chapter 5</span><span>Templates, concepts, and ordering contracts</span></a></li><li><a href="chapter-06.html" aria-current="page"><span class="chapter-label">Chapter 6 · Part 1</span><span>Records, bytes, and a dependable file boundary</span></a></li><li><a href="chapter-06-part-2.html"><span class="chapter-label">Chapter 6 · Part 2</span><span>Deterministic faults and native checks</span></a></li><li><a href="chapter-07.html"><span class="chapter-label">Chapter 7 · Part 1</span><span>An arena-backed skip-list memtable</span></a></li><li><a href="chapter-07-part-2.html"><span class="chapter-label">Chapter 7 · Part 2</span><span>Prepare, publish, and verify</span></a></li><li><a href="chapter-08.html"><span class="chapter-label">Chapter 8 · Part 1</span><span>Indexed immutable tables</span></a></li><li><a href="chapter-08-part-2.html"><span class="chapter-label">Chapter 8 · Part 2</span><span>Seek, verify, and diagnose</span></a></li><li><a href="chapter-08-part-3.html"><span class="chapter-label">Chapter 8 · Part 3</span><span>Verification and native checks</span></a></li><li><a href="chapter-09.html"><span class="chapter-label">Chapter 9 · Part 1</span><span>Memory budgets and a pinned block cache</span></a></li><li><a href="chapter-09-part-2.html"><span class="chapter-label">Chapter 9 · Part 2</span><span>Recency, pins, and admission</span></a></li><li><a href="chapter-09-part-3.html"><span class="chapter-label">Chapter 9 · Part 3</span><span>Reader integration and pressure tests</span></a></li><li><a href="chapter-10.html"><span class="chapter-label">Chapter 10 · Part 1</span><span>Atomic batches and write-ahead recovery</span></a></li><li><a href="chapter-10-part-2.html"><span class="chapter-label">Chapter 10 · Part 2</span><span>Commit, uncertainty, and strict replay</span></a></li><li><a href="chapter-10-part-3.html"><span class="chapter-label">Chapter 10 · Part 3</span><span>Failure images, pressure, and native checks</span></a></li><li><a href="chapter-11.html"><span class="chapter-label">Chapter 11 · Part 1</span><span>Flush installation and database reopening</span></a></li><li><a href="chapter-11-part-2.html"><span class="chapter-label">Chapter 11 · Part 2</span><span>Install, rotate, flush, and reopen</span></a></li><li><a href="chapter-11-part-3.html"><span class="chapter-label">Chapter 11 · Part 3</span><span>Failure cases across process lifetimes</span></a></li><li><a href="chapter-12.html"><span class="chapter-label">Chapter 12 · Part 1</span><span>Immutable snapshots and merged reads</span></a></li><li><a href="chapter-12-part-2.html"><span class="chapter-label">Chapter 12 · Part 2</span><span>Merge versions without borrowing dead bytes</span></a></li><li><a href="chapter-12-part-3.html"><span class="chapter-label">Chapter 12 · Part 3</span><span>Retention, failure, and ownership checks</span></a></li><li><a href="chapter-13.html"><span class="chapter-label">Chapter 13 · Part 1</span><span>Streaming compaction and safe reclamation</span></a></li><li><a href="chapter-13-part-2.html"><span class="chapter-label">Chapter 13 · Part 2</span><span>Install new owners, then reclaim old names</span></a></li><li><a href="chapter-13-part-3.html"><span class="chapter-label">Chapter 13 · Part 3</span><span>Retention, bounds, and restart checks</span></a></li><li><a href="chapter-14.html"><span class="chapter-label">Chapter 14 · Part 1</span><span>Owned batches and a streaming query pipeline</span></a></li><li><a href="chapter-14-part-2.html"><span class="chapter-label">Chapter 14 · Part 2</span><span>Pull without confusing emptiness and completion</span></a></li><li><a href="chapter-14-part-3.html"><span class="chapter-label">Chapter 14 · Part 3</span><span>Boundary, retention, and refill checks</span></a></li><li><a href="chapter-15.html"><span class="chapter-label">Chapter 15 · Part 1</span><span>External sorting with bounded fan-in</span></a></li><li><a href="chapter-15-part-2.html"><span class="chapter-label">Chapter 15 · Part 2</span><span>Merge only what fits</span></a></li><li><a href="chapter-15-part-3.html"><span class="chapter-label">Chapter 15 · Part 3</span><span>Pressure, corruption, and the native run oracle</span></a></li><li><a href="chapter-16.html"><span class="chapter-label">Chapter 16 · Part 1</span><span>A streaming many-to-one merge join</span></a></li><li><a href="chapter-16-part-2.html"><span class="chapter-label">Chapter 16 · Part 2</span><span>Resume without borrowing stale rows</span></a></li><li><a href="chapter-16-part-3.html"><span class="chapter-label">Chapter 16 · Part 3</span><span>Skew, invalid streams, and snapshot checks</span></a></li><li><a href="chapter-17.html"><span class="chapter-label">Chapter 17 · Part 1</span><span>Grouping, checked aggregates, and complete queries</span></a></li><li><a href="chapter-17-part-2.html"><span class="chapter-label">Chapter 17 · Part 2</span><span>Keep one group; publish one complete result</span></a></li><li><a href="chapter-17-part-3.html"><span class="chapter-label">Chapter 17 · Part 3</span><span>Boundary, failure, and two-sort checks</span></a></li><li><a href="chapter-18.html"><span class="chapter-label">Chapter 18 · Part 1</span><span>Synchronization and thread lifetime</span></a></li><li><a href="chapter-18-part-2.html"><span class="chapter-label">Chapter 18 · Part 2</span><span>Join before destroying shared state</span></a></li><li><a href="chapter-19.html"><span class="chapter-label">Chapter 19 · Part 1</span><span>Bounded execution and cooperative cancellation</span></a></li><li><a href="chapter-19-part-2.html"><span class="chapter-label">Chapter 19 · Part 2</span><span>A terminal result owns no running query</span></a></li><li><a href="chapter-19-part-3.html"><span class="chapter-label">Chapter 19 · Part 3</span><span>Force the waiting and publication boundaries</span></a></li><li><a href="chapter-20.html"><span class="chapter-label">Chapter 20 · Part 1</span><span>Concurrent readers, ingestion, and maintenance</span></a></li><li><a href="chapter-20-part-2.html"><span class="chapter-label">Chapter 20 · Part 2</span><span>Build outside the lock; install against current authority</span></a></li><li><a href="chapter-20-part-3.html"><span class="chapter-label">Chapter 20 · Part 3</span><span>Force publication, failure, and shutdown boundaries</span></a></li><li><a href="chapter-21.html"><span class="chapter-label">Chapter 21 · Part 1</span><span>Reproducible workloads and independent answers</span></a></li><li><a href="chapter-21-part-2.html"><span class="chapter-label">Chapter 21 · Part 2</span><span>Parse bounded input; drive the existing engine</span></a></li><li><a href="chapter-21-part-3.html"><span class="chapter-label">Chapter 21 · Part 3</span><span>Force old, new, canceled, and reopened answers</span></a></li><li><a href="chapter-22.html"><span class="chapter-label">Chapter 22 · Part 1</span><span>Recovery and resource-pressure experiments</span></a></li><li><a href="chapter-22-part-2.html"><span class="chapter-label">Chapter 22 · Part 2</span><span>Recover an allowed history, not a convenient answer</span></a></li><li><a href="chapter-22-part-3.html"><span class="chapter-label">Chapter 22 · Part 3</span><span>Kill the process; retain the observer</span></a></li><li><a href="chapter-23.html"><span class="chapter-label">Chapter 23 · Part 1</span><span>Profiling, optimization, and the final demonstration</span></a></li><li><a href="chapter-23-part-2.html"><span class="chapter-label">Chapter 23 · Part 2</span><span>Remove work without changing the answer</span></a></li><li><a href="chapter-23-part-3.html"><span class="chapter-label">Chapter 23 · Part 3</span><span>Verify, repeat, and explain the result</span></a></li></ol></nav>
+<p class="sidebar-note">Build a single-node LSM storage engine with crash recovery, snapshot reads, bounded-memory query execution, and a deliberate concurrent runtime.</p></aside>
+<main id="main-content" tabindex="-1">
+<div class="breadcrumb"><a href="index.html">C++ Systems Engineering: Strata</a><span aria-hidden="true">/</span><span>Chapter 6 · Part 1</span></div>
+<div class="page-actions"><a href="https://github.com/25d-228/cplusplus-learning/issues/7">Read on GitHub</a><a href="source/chapter-06.md">Markdown</a></div>
+<details class="mobile-toc"><summary>In this chapter</summary><ul><li class="toc-h2"><a href="#part-1-encodings-and-file-ownership">Part 1 — Encodings and file ownership</a></li><li class="toc-h2"><a href="#begin-the-engine-without-disturbing-the-exercises">Begin the engine without disturbing the exercises</a></li><li class="toc-h2"><a href="#a-row-is-a-value-its-encoding-is-another-value">A row is a value; its encoding is another value</a></li><li class="toc-h3"><a href="#fix-the-byte-layout-before-writing-a-loop">Fix the byte layout before writing a loop</a></li><li class="toc-h2"><a href="#check-arithmetic-before-allocating-or-touching-a-file">Check arithmetic before allocating or touching a file</a></li><li class="toc-h3"><a href="#an-offset-is-not-a-pointer-and-not-necessarily-a-size">An offset is not a pointer and not necessarily a size</a></li><li class="toc-h2"><a href="#turn-an-unsigned-integer-into-bytes">Turn an unsigned integer into bytes</a></li><li class="toc-h2"><a href="#validate-a-complete-image-before-decoding-its-fields">Validate a complete image before decoding its fields</a></li><li class="toc-h2"><a href="#give-the-transfer-loop-a-narrow-operation-interface">Give the transfer loop a narrow operation interface</a></li><li class="toc-h3"><a href="#carry-failure-context-without-confusing-it-with-rollback">Carry failure context without confusing it with rollback</a></li><li class="toc-h3"><a href="#declare-one-owner-of-the-descriptor">Declare one owner of the descriptor</a></li><li class="toc-h2"><a href="#translate-native-calls-not-their-completion-policy">Translate native calls, not their completion policy</a></li><li class="toc-h3"><a href="#synchronization-is-an-explicit-requested-capability">Synchronization is an explicit requested capability</a></li><li class="toc-h2"><a href="#move-the-handle-and-close-it-exactly-once-at-the-owner-boundary">Move the handle and close it exactly once at the owner boundary</a></li><li class="toc-h2"><a href="#open-a-trusted-regular-path-without-truncating-existing-data">Open a trusted regular path without truncating existing data</a></li><li class="toc-h2"><a href="#finish-a-read-without-mistaking-a-short-count-for-end-of-file">Finish a read without mistaking a short count for end-of-file</a></li><li class="toc-h2"><a href="#finish-a-write-without-promising-to-undo-it">Finish a write without promising to undo it</a></li><li class="toc-h2"><a href="#continue-with-the-runnable-checks">Continue with the runnable checks</a></li></ul></details>
+<p id="math-status" hidden>Some mathematics could not be rendered. The original notation remains visible.</p>
+<article><h1 id="chapter-6-records-bytes-and-a-dependable-file-boundary">Chapter 6 — Records, bytes, and a dependable file boundary</h1>
+<h2 id="part-1-encodings-and-file-ownership">Part 1 — Encodings and file ownership</h2>
+<p>A row can be correct in memory and meaningless on disk. A write can return
+success after transferring only a prefix. An exception can release every file
+handle without restoring the bytes that existed before the operation. These
+are three different problems: representation, completion, and failure semantics.</p>
+<p>We will give Strata explicit record encodings and a move-only file owner. The
+owner will keep requesting the untransferred suffix, distinguish end-of-file
+from an operating-system error, and report synchronization failures explicitly.
+A deterministic backend will make short transfers and failure after four bytes
+ordinary test cases instead of rare accidents.</p>
+<p>Start from the restored workspace of
+<a href="https://25d-228.github.io/cplusplus-learning/chapter-05.html">Chapter 5</a>, retaining
+all six existing CTest entries. Chapters 2–5 supply spans, value types, RAII,
+move operations, exceptions, optional values, and templates. No earlier exercise
+<code>.cpp</code> is included in the engine. Every new helper needed here is defined below.</p>
+<blockquote>
+<p><strong>Learning objectives</strong></p>
+<p>Separate object layout from a byte format; encode unsigned fields without
+alignment assumptions; reject invalid lengths and arithmetic overflow; use a
+small virtual interface for deterministic I/O; transfer descriptor ownership;
+handle short and interrupted operations; distinguish cleanup, synchronization,
+and rollback; inspect a binary fixture with an independent decoder.</p>
+</blockquote>
+<p>The allocation remains <strong>3.0 implementation hours</strong>: 1.0 for encoding, 1.25 for
+file ownership and transfer loops, and 0.75 for fault checks and debugging.
+Reading is separate. This is the first reusable engine layer, not a database,
+write-ahead log, or claim of power-loss recovery.</p>
+<p>This chapter has two linked parts. Part 1 supplies the engine interfaces and
+implementation; <a href="https://25d-228.github.io/cplusplus-learning/chapter-06-part-2.html">Part 2</a>
+supplies the complete deterministic backend, tests, build additions, and byte
+oracle. Together they form one chapter with the single 3.0-hour allocation above.
+Read and implement both before advancing.</p>
+<h2 id="begin-the-engine-without-disturbing-the-exercises">Begin the engine without disturbing the exercises</h2>
+<p>Use the compatible native C++20 toolchain selected in Chapter 1. On the Apple
+compiler path:</p>
+<figure class="code-block"><figcaption><span class="code-title">Terminal — prepare the engine directories</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="nv">CXX</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>xcrun<span class="w"> </span>--find<span class="w"> </span>clang++<span class="k">)</span><span class="s2">"</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span>include/strata/core<span class="w"> </span>include/strata/io<span class="w"> </span>src/io<span class="w"> </span>tests<span class="w"> </span>scripts
+</code></pre></figure>
+<p>Write these files in the learner workspace:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>include/strata/core/record.hpp</code></td>
+<td>Numeric row and key value types</td>
+</tr>
+<tr>
+<td><code>include/strata/core/checked.hpp</code></td>
+<td>Size, total, and file-range arithmetic</td>
+</tr>
+<tr>
+<td><code>include/strata/core/codec.hpp</code></td>
+<td>Byte encoders, decoders, and format errors</td>
+</tr>
+<tr>
+<td><code>include/strata/io/file.hpp</code></td>
+<td>File owner, operation interface, I/O error context</td>
+</tr>
+<tr>
+<td><code>src/io/file.cpp</code></td>
+<td>Native adapter, ownership, and transfer loops</td>
+</tr>
+<tr>
+<td><code>tests/memory_file_ops.hpp</code></td>
+<td>Fixed-capacity deterministic I/O backend</td>
+</tr>
+<tr>
+<td><code>tests/core_io.cpp</code></td>
+<td>Checks and native fixture writer</td>
+</tr>
+<tr>
+<td><code>scripts/check_record_fixture.py</code></td>
+<td>Independent byte oracle and isolated native test</td>
+</tr>
+</tbody>
+</table>
+<p>Blocks with the same filename append <strong>in reading order</strong>. The CMake block
+appends to the existing root file. Headers close their guards in their last
+block; the source files close their namespaces where shown. Do not create
+future storage, log, or query files yet.</p>
+<p>The native layer requires regular seekable files, <code>pread</code>, <code>pwrite</code>, <code>open</code>,
+<code>fstat</code>, <code>fsync</code>, <code>close</code>, and <code>O_CLOEXEC</code>. It checks for eight-bit bytes and a
+signed file-offset type with at least 63 value bits. These are actual interface
+requirements, not a required compiler banner or an assumed macOS release.
+The native <code>full_device</code> synchronization path additionally requires the Apple
+<code>F_FULLFSYNC</code> operation; unsupported builds return an explicit error.</p>
+<h2 id="a-row-is-a-value-its-encoding-is-another-value">A row is a value; its encoding is another value</h2>
+<p>The two schemas remain the ones in the roadmap. Every integer field accepts
+its entire unsigned range, including zero. A day is a numeric label; cents
+are nonnegative integers. There is no floating-point amount or date parser.</p>
+<p><code>Relation</code> is a scoped enumeration with an explicitly chosen underlying type.
+The values 1 and 2 are format decisions. <code>Key</code> groups relation and primary key;
+<code>KeyLess</code> orders the relation first and the primary key second, without
+subtracting unsigned integers. It therefore works near both ends of the range.</p>
+<p><code>bool operator==(const Event&amp;) const = default;</code> asks C++20 to generate memberwise
+equality. It compares <strong>values</strong>, not padding bytes. The trailing <code>const</code> means
+the comparison does not mutate its left operand. See the language rules for
+<a href="https://eel.is/c++draft/dcl.enum">enumerations</a> and
+<a href="https://eel.is/c++draft/class.compare.default">defaulted comparisons</a>.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/core/record.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_CORE_RECORD_HPP</span>
+<span class="cp">#define STRATA_CORE_RECORD_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Relation</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">accounts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Key</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">Relation</span><span class="w"> </span><span class="n">relation</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">primary</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Key</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">KeyLess</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">Key</span><span class="o">&amp;</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Key</span><span class="o">&amp;</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">relation</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">relation</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">relation</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">primary</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">primary</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Event</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">event_id</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">account_id</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">day</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">amount_cents</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Event</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Account</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">account_id</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">region_id</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Account</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="n">Key</span><span class="w"> </span><span class="nf">key_of</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Event</span><span class="o">&amp;</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="n">event_id</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="n">Key</span><span class="w"> </span><span class="nf">key_of</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Account</span><span class="o">&amp;</span><span class="w"> </span><span class="n">account</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">,</span><span class="w"> </span><span class="n">account</span><span class="p">.</span><span class="n">account_id</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>The two <code>key_of</code> overloads are selected by their parameter type. An event with
+identifier 10 and an account with identifier 10 have different keys. The
+comparator places all event keys before account keys because the relation tags
+are ordered that way. This is an engine policy, not an inference from C++ member
+addresses. Later internal keys add sequence ordering separately.</p>
+<p>A compiler may insert padding between members to satisfy alignment requirements.
+For example, placing a 64-bit member after a 32-bit member can require unused
+space. The actual <code>sizeof(Event)</code> is a property of the selected implementation,
+not the number of bytes in our record. The C++ distinction between
+<a href="https://eel.is/c++draft/basic.types">object and value representation</a> explains
+why copying an object's representation is not a portable persistent format.</p>
+<p>We will not pack the structure or cast a disk byte pointer to <code>Event*</code>. Such a
+cast does not validate size, establish a suitably aligned object, correct byte
+order, or interpret a format version. Reading one byte at a time avoids all of
+those typed-access assumptions. Decoding constructs an ordinary aligned C++
+value after validating the bytes.</p>
+<h3 id="fix-the-byte-layout-before-writing-a-loop">Fix the byte layout before writing a loop</h3>
+<p>A record begins with version 1 and a relation tag, each one byte. All multi-byte
+integers use <strong>little-endian</strong> order: the least significant byte comes first.
+The common identifier is followed by that relation's fields. No padding bytes
+are present.</p>
+<table>
+<thead>
+<tr>
+<th>Event byte offsets</th>
+<th style="text-align:right">Width</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td style="text-align:right">1</td>
+<td>Version, exactly 1</td>
+</tr>
+<tr>
+<td>1</td>
+<td style="text-align:right">1</td>
+<td>Relation, exactly 1</td>
+</tr>
+<tr>
+<td>2–9</td>
+<td style="text-align:right">8</td>
+<td><code>event_id</code></td>
+</tr>
+<tr>
+<td>10–17</td>
+<td style="text-align:right">8</td>
+<td><code>account_id</code></td>
+</tr>
+<tr>
+<td>18–21</td>
+<td style="text-align:right">4</td>
+<td><code>day</code></td>
+</tr>
+<tr>
+<td>22–29</td>
+<td style="text-align:right">8</td>
+<td><code>amount_cents</code></td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Account byte offsets</th>
+<th style="text-align:right">Width</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td style="text-align:right">1</td>
+<td>Version, exactly 1</td>
+</tr>
+<tr>
+<td>1</td>
+<td style="text-align:right">1</td>
+<td>Relation, exactly 2</td>
+</tr>
+<tr>
+<td>2–9</td>
+<td style="text-align:right">8</td>
+<td><code>account_id</code></td>
+</tr>
+<tr>
+<td>10–13</td>
+<td style="text-align:right">4</td>
+<td><code>region_id</code></td>
+</tr>
+</tbody>
+</table>
+<p>Thus the sizes are <span class="math-input" data-display="false">1+1+8+8+4+8=30</span> and <span class="math-input" data-display="false">1+1+8+4=14</span> bytes. The decoder requires
+exactly one such image: trailing bytes are not silently accepted as part of a
+record. A higher-level table or log will provide its own framing, operation
+kind, sequence information, and checksums. Those mechanisms are not hidden in
+this codec. In particular, a bit change that produces another valid integer
+cannot be detected by these row decoders alone.</p>
+<p>Row images include the primary key. Storage metadata introduced later must
+agree with that key; a deletion will not be represented by inventing an all-zero
+row. The fixed two-record file at the end of this chapter is a fixture with known
+boundaries, not a general parser for a concatenated database.</p>
+<h2 id="check-arithmetic-before-allocating-or-touching-a-file">Check arithmetic before allocating or touching a file</h2>
+<p>Suppose a size type has maximum value <span class="math-input" data-display="false">M</span>, and <span class="math-input" data-display="false">a</span> and <span class="math-input" data-display="false">b</span> are nonnegative
+representable sizes. Checking <code>a + b &gt; M</code> is too late: unsigned addition may
+already have wrapped. Rearrange the condition to <span class="math-input" data-display="false">b \leq M-a</span> before adding.
+For a product of count <span class="math-input" data-display="false">n</span> and width <span class="math-input" data-display="false">w&gt;0</span>, require <span class="math-input" data-display="false">n \leq \lfloor M/w \rfloor</span>.
+When <span class="math-input" data-display="false">w=0</span>, the product is zero and no division is needed.</p>
+<p>Create the first part of the arithmetic header:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/core/checked.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_CORE_CHECKED_HPP</span>
+<span class="cp">#define STRATA_CORE_CHECKED_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="w"> </span><span class="p">{</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">checked_size_add</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">b</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"size addition overflow"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">checked_size_mul</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">width</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">width</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">()</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">width</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"size multiplication overflow"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">width</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">checked_u64_add</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">b</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">overflow_error</span><span class="p">(</span><span class="s">"unsigned total overflow"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p><code>checked_size_mul(3, 30)</code> returns 90. With an illustrative maximum of 255, a count
+of 9 at width 30 would be rejected because <span class="math-input" data-display="false">9&gt;\lfloor255/30\rfloor=8</span>. The actual
+code uses the maximum of <code>size_t</code>, not that illustrative limit. The <code>&amp;&amp;</code> condition
+short-circuits, so division by zero never occurs.</p>
+<p>The sum helper for <code>uint64_t</code> serves numerical totals, not allocation lengths.
+It uses <code>overflow_error</code> rather than treating a wrapped amount as a valid value.
+The size helpers use <code>length_error</code>. All checks happen before the arithmetic
+whose result they protect, and none needs a huge allocation to test its limit.</p>
+<h3 id="an-offset-is-not-a-pointer-and-not-necessarily-a-size">An offset is not a pointer and not necessarily a size</h3>
+<p>The file API accepts unsigned 64-bit offsets but deliberately restricts the
+<strong>exclusive end</strong> of each request to <span class="math-input" data-display="false">L=2^{63}-1</span>. For starting offset <span class="math-input" data-display="false">o</span> and
+byte count <span class="math-input" data-display="false">n</span>, require <span class="math-input" data-display="false">o\leq L</span> and <span class="math-input" data-display="false">n\leq L-o</span> before computing <span class="math-input" data-display="false">o+n</span>.
+This fits a signed 64-bit native offset. The stricter exclusive-end convention
+means the largest permitted nonempty byte index is <span class="math-input" data-display="false">L-1</span>.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/core/checked.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">file_offset_limit</span><span class="w"> </span><span class="o">=</span>
+<span class="w">    </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">int64_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">());</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="p">));</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">checked_file_end</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">offset</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">file_offset_limit</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">file_offset_limit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">offset</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">length_error</span><span class="p">(</span><span class="s">"file range exceeds signed 64-bit limit"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">length</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>For <span class="math-input" data-display="false">o=L-3</span> and <span class="math-input" data-display="false">n=3</span>, the exclusive end is exactly <span class="math-input" data-display="false">L</span> and the request is
+representable. At <span class="math-input" data-display="false">o=L</span>, only an empty request is permitted. An offset of
+<code>UINT64_MAX</code> is rejected even for zero bytes. The first <code>||</code> operand protects
+<code>L - offset</code> from underflow.</p>
+<p>The <code>size_t</code> width assertion makes conversion to <code>uint64_t</code> lossless on the
+supported targets. <code>static_cast</code> expresses a conversion; it does <strong>not</strong> check
+that arbitrary values fit. The surrounding bounds are the proof. Rejecting a
+request at this boundary is a no-side-effect error. A later operating-system
+failure has a different guarantee.</p>
+<h2 id="turn-an-unsigned-integer-into-bytes">Turn an unsigned integer into bytes</h2>
+<p><code>std::byte</code> denotes a storage byte without making ordinary numeric arithmetic
+implicit. Use <code>std::to_integer&lt;T&gt;</code> to obtain a number and <code>static_cast&lt;std::byte&gt;</code>
+to store a checked byte-sized value. The relevant library operations are defined
+in <a href="https://eel.is/c++draft/support.types.byteops">byte operations</a>; explicit
+conversions are specified by <a href="https://eel.is/c++draft/expr.static.cast">static casts</a>.</p>
+<p>A <code>FormatError</code> describes malformed external bytes. The public inheritance below
+means it can be caught either by its own type or by <code>std::runtime_error</code> and
+<code>std::exception</code>. Its constructor delegates message storage to its base class;
+it does not retain the supplied <code>const char*</code> as our own borrowed member.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/core/codec.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_CORE_CODEC_HPP</span>
+<span class="cp">#define STRATA_CORE_CODEC_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/record.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;array&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;climits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">static_assert</span><span class="p">(</span><span class="n">CHAR_BIT</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="s">"Strata's format uses 8-bit bytes"</span><span class="p">);</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">FormatError</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>Let <span class="math-input" data-display="false">W</span> be the integer width in bytes and <span class="math-input" data-display="false">x</span> its value. Byte <span class="math-input" data-display="false">i</span>, for
+<span class="math-input" data-display="false">0\leq i&lt;W</span>, is</p>
+<div class="math-input" data-display="true">b_i = \left\lfloor \frac{x}{2^{8i}} \right\rfloor \bmod 256.</div>
+<p>Decoding reverses this expansion:</p>
+<div class="math-input" data-display="true">x=\sum_{i=0}^{W-1} b_i\,2^{8i}.</div>
+<p>For 500, the first byte is <span class="math-input" data-display="false">500\bmod256=244</span>, hexadecimal <code>f4</code>. The next is
+<span class="math-input" data-display="false">\lfloor500/256\rfloor=1</span>. An eight-byte encoding is therefore
+<code>f4 01 00 00 00 00 00 00</code>. For <code>0x0102030405060708</code>, it is
+<code>08 07 06 05 04 03 02 01</code>.</p>
+<p>Here <code>Width</code> is a <strong>value template parameter</strong>, unlike Chapter 5's element type
+parameter. Only widths 4 and 8 satisfy the constraint. <code>if constexpr</code> chooses
+its branch at instantiation: only the four-byte encoder needs to reject values
+above <code>UINT32_MAX</code>. It is not an instruction to execute the whole function at
+compile time. See <a href="https://eel.is/c++draft/stmt.if">constexpr if</a>.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/core/codec.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">template</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">Width</span><span class="o">&gt;</span>
+<span class="k">requires</span><span class="w"> </span><span class="p">(</span><span class="n">Width</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">Width</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">8</span><span class="p">)</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">put_le</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Width</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"wrong integer output width"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="p">(</span><span class="n">Width</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">overflow_error</span><span class="p">(</span><span class="s">"value does not fit four bytes"</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">Width</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">output</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">((</span><span class="n">value</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">(</span><span class="mi">8</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">i</span><span class="p">))</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xffU</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">Width</span><span class="o">&gt;</span>
+<span class="k">requires</span><span class="w"> </span><span class="p">(</span><span class="n">Width</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">Width</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">8</span><span class="p">)</span>
+<span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">get_le</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Width</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"wrong integer input width"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">Width</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">value</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">to_integer</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">[</span><span class="n">i</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="p">(</span><span class="mi">8</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">i</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The encoder checks both destination length and value width <strong>before</strong> writing
+any byte. The mask <code>0xffU</code> keeps the low eight bits after shifting. The decoder
+converts each byte to <code>uint64_t</code> <strong>before</strong> the left shift: a large shift of a
+narrow promoted integer would not be repaired by widening its result afterward.
+For the largest width, shift amounts are 0, 8, ..., 56, never 64. This satisfies
+the <a href="https://eel.is/c++draft/expr.shift">shift-operator requirements</a>.</p>
+<p><code>|=</code> combines disjoint groups of bits; addition would yield the same result here
+because those groups do not overlap. The exact-span check precedes every index
+access. No pointer is reinterpreted, no unaligned 64-bit load is needed, and the
+host's byte order does not affect the output.</p>
+<p>Do not compare little-endian byte strings to order numeric keys. The first byte
+of 255 is <code>ff</code>, while the first byte of 256 is <code>00</code>. Lexicographic byte comparison
+would reverse their numeric order. <code>KeyLess</code> operates on decoded values.</p>
+<h2 id="validate-a-complete-image-before-decoding-its-fields">Validate a complete image before decoding its fields</h2>
+<p>The helper below checks length before touching either header byte. It then
+checks version and the expected relation. It does not cast an arbitrary input
+tag into a trusted enum and continue. The event decoder cannot accept an
+account tag simply because the rest of a padded input has enough bytes.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/core/codec.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">event_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">30</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">account_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">14</span><span class="p">;</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="w"> </span><span class="n">record_version</span><span class="p">{</span><span class="mi">1</span><span class="p">};</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">require_record</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="p">,</span><span class="w"> </span><span class="n">Relation</span><span class="w"> </span><span class="n">relation</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">size</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">size</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"record has wrong byte count"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">record_version</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"unsupported record version"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">tag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">to_integer</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">[</span><span class="mi">1</span><span class="p">]);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">tag</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">relation</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"wrong or unknown relation tag"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The <code>size &lt; 2</code> guard also prevents accidental misuse of this helper with a
+header shorter than its two inspected bytes. Its actual callers pass 30 and 14.
+An exact input span may safely be subdivided at the offsets in the layout table.
+The event encoder returns an owning array; the decoder returns an owning value.
+Neither retains a view into its argument.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/core/codec.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kr">inline</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">event_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">encode_event</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Event</span><span class="o">&amp;</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">event_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">result</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">out</span><span class="p">{</span><span class="n">result</span><span class="p">};</span>
+<span class="w">    </span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record_version</span><span class="p">;</span>
+<span class="w">    </span><span class="n">out</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">(</span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="n">event_id</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="n">account_id</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">18</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="n">day</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">22</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="n">amount_cents</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="n">Event</span><span class="w"> </span><span class="n">decode_event</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_record</span><span class="p">(</span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">event_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">events</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">)),</span>
+<span class="w">            </span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">)),</span>
+<span class="w">            </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">18</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">))),</span>
+<span class="w">            </span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">22</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">))};</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The four-byte <code>get_le</code> result is at most <code>UINT32_MAX</code>, which justifies the cast
+for <code>day</code>. The eight-byte fields need no narrowing. All fields are decoded into
+the returned value; there is no partially overwritten caller-owned record if a
+format check fails. Account encoding follows the same header and integer rules:</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/core/codec.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kr">inline</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">account_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">encode_account</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Account</span><span class="o">&amp;</span><span class="w"> </span><span class="n">account</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">array</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="n">account_bytes</span><span class="o">&gt;</span><span class="w"> </span><span class="n">result</span><span class="p">{};</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">out</span><span class="p">{</span><span class="n">result</span><span class="p">};</span>
+<span class="w">    </span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record_version</span><span class="p">;</span>
+<span class="w">    </span><span class="n">out</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="p">(</span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">),</span><span class="w"> </span><span class="n">account</span><span class="p">.</span><span class="n">account_id</span><span class="p">);</span>
+<span class="w">    </span><span class="n">put_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">out</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">account</span><span class="p">.</span><span class="n">region_id</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="n">Account</span><span class="w"> </span><span class="n">decode_account</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_record</span><span class="p">(</span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">account_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">Relation</span><span class="o">::</span><span class="n">accounts</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">8</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">)),</span>
+<span class="w">            </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">get_le</span><span class="o">&lt;</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)))};</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p>Arrays, spans, and return values do different jobs here. The local array owns
+exactly 30 or 14 bytes. The mutable span gives the integer helper access to a
+selected range without transferring ownership. The returned array is a value,
+not a span into a dead local. Decoding borrows only until the function returns.</p>
+<h2 id="give-the-transfer-loop-a-narrow-operation-interface">Give the transfer loop a narrow operation interface</h2>
+<p>A real file descriptor is an integer identifying an operating-system resource.
+Copying that integer does not duplicate ownership safely. We need one owner for
+the descriptor and a way to test what its operations do when they return short
+counts or errors.</p>
+<p><code>FileOps</code> separates <strong>one attempted operation</strong> from <strong>completion policy</strong>.
+The native implementation makes one system call. The test implementation uses
+a small array. Both report a count and error code; <code>File</code> performs retries and
+accumulates progress. Opening paths, creating directories, renaming, and removing
+names are not part of this four-operation interface.</p>
+<p>This introduces runtime polymorphism. A <code>virtual</code> member called through a base
+reference or pointer dispatches to the implementation in the actual derived
+object. <code>= 0</code> makes a member pure virtual: <code>FileOps</code> cannot be instantiated on its
+own. <code>public FileOps</code> exposes the derived object as that interface; <code>override</code>
+lets the compiler check the intended override; <code>final</code> later prevents further
+derivation from the concrete adapter. These are the language rules for
+<a href="https://eel.is/c++draft/class.virtual">virtual functions</a> and
+<a href="https://eel.is/c++draft/class.abstract">abstract classes</a>.</p>
+<p>The base destructor is virtual so destruction through a suitable owning base
+pointer would destroy the complete derived object. Our <code>File</code> will <strong>borrow</strong>
+this interface, not delete it; virtual destruction does not extend its lifetime.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/io/file.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#ifndef STRATA_IO_FILE_HPP</span>
+<span class="cp">#define STRATA_IO_FILE_HPP</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;span&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;system_error&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">io</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">SyncMode</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">full_device</span><span class="w"> </span><span class="p">};</span>
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">OpenMode</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">read_only</span><span class="p">,</span><span class="w"> </span><span class="n">read_write</span><span class="p">,</span><span class="w"> </span><span class="n">create_new</span><span class="w"> </span><span class="p">};</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Transfer</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">error</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">FileOps</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="o">~</span><span class="n">FileOps</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="n">Transfer</span><span class="w"> </span><span class="nf">read_at</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">,</span>
+<span class="w">                             </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="n">Transfer</span><span class="w"> </span><span class="nf">write_at</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                              </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">sync</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">SyncMode</span><span class="w"> </span><span class="n">mode</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></figure>
+<p>The interface contract is small but essential:</p>
+<table>
+<thead>
+<tr>
+<th>Result from one transfer</th>
+<th>Meaning to <code>File</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>error == 0</code>, <code>count &gt; 0</code></td>
+<td>That many bytes completed, no more than requested</td>
+</tr>
+<tr>
+<td><code>error == 0</code>, <code>count == 0</code> on read</td>
+<td>End-of-file for this regular-file operation</td>
+</tr>
+<tr>
+<td><code>error == 0</code>, <code>count == 0</code> on nonempty write</td>
+<td>No progress; treated as failure, not retried forever</td>
+</tr>
+<tr>
+<td>Positive <code>error</code>, zero <code>count</code></td>
+<td>Failed attempt; <code>EINTR</code> is retried, other errors propagate</td>
+</tr>
+</tbody>
+</table>
+<p>The interface does not return both a partial count and an error in the same
+result. A partial successful call followed by a failing call produces two
+results. The native adapter captures <code>errno</code> only on failure, before another
+operation can overwrite it. A successful call does not need to clear <code>errno</code>.
+<code>sync</code> and <code>close</code> return zero on success or a positive error number, <strong>not</strong> the
+native <code>-1</code> sentinel.</p>
+<p>All backend operations are <code>noexcept</code>: they report errors as values and do not
+allocate. This says nothing about whether a system call can block. Both backends
+must respect the borrowed buffer bounds. The operations interface is an internal
+contract, not a sandbox for arbitrary hostile subclasses.</p>
+<h3 id="carry-failure-context-without-confusing-it-with-rollback">Carry failure context without confusing it with rollback</h3>
+<p><code>IoError</code> adds the original requested offset and the number of bytes reported
+successful by earlier iterations. <code>std::system_error</code> already owns an error code
+and message; its <a href="https://eel.is/c++draft/syserr.syserr.members">members</a> expose
+<code>code()</code> and <code>what()</code>. The generic error category interprets the <code>errno</code> numbers
+used by these backends. Exact message wording is platform-dependent.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/io/file.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">IoError</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">system_error</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">IoError</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">error</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">operation</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">transferred</span><span class="p">)</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">system_error</span><span class="p">(</span><span class="n">error</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">generic_category</span><span class="p">(),</span><span class="w"> </span><span class="n">operation</span><span class="p">),</span>
+<span class="w">          </span><span class="n">offset_</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span><span class="w"> </span><span class="n">transferred_</span><span class="p">(</span><span class="n">transferred</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">offset_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">transferred</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">transferred_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">transferred_</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">io_chunk_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+</code></pre></figure>
+<p>For a write starting at offset 5 that fails after four reported bytes, the error
+has <code>offset() == 5</code> and <code>transferred() == 4</code>. That is observed progress, not a
+promise that precisely four bytes reached persistent storage. The failing call
+and storage stack may have further uncertain effects. A transaction layer must
+not turn this number into an automatic whole-batch retry policy.</p>
+<p>We cap each native request at one mebibyte. This bounds the count passed to an
+individual system call; it does <strong>not</strong> allocate a buffer or bound the caller's
+whole data set. The file layer borrows the caller's existing span.</p>
+<h3 id="declare-one-owner-of-the-descriptor">Declare one owner of the descriptor</h3>
+<p>The invariant is open: nonnegative descriptor and a valid backend pointer;
+closed: descriptor <code>-1</code> and null backend. <code>adopt</code> transfers responsibility for an
+already-valid handle with a matching backend. The caller must not close it or
+adopt it again. The backend must outlive the file, including after moves. Only
+the native factory and the controlled test fixture use this entry point here.</p>
+<figure class="code-block"><figcaption><span class="code-title">include/strata/io/file.hpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="k">class</span><span class="w"> </span><span class="nc">File</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">File</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="w">    </span><span class="o">~</span><span class="n">File</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">File</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">File</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">File</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">delete</span><span class="p">;</span>
+<span class="w">    </span><span class="n">File</span><span class="p">(</span><span class="n">File</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">File</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+
+<span class="w">    </span><span class="p">[[</span><span class="na">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="n">open</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="n">OpenMode</span><span class="w"> </span><span class="n">mode</span><span class="p">);</span>
+<span class="w">    </span><span class="p">[[</span><span class="na">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="n">adopt</span><span class="p">(</span><span class="n">FileOps</span><span class="o">&amp;</span><span class="w"> </span><span class="n">operations</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">is_open</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">descriptor_</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">read_up_to</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">read_exact</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">write_all</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">sync</span><span class="p">(</span><span class="n">SyncMode</span><span class="w"> </span><span class="n">mode</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">close_checked</span><span class="p">();</span>
+
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="n">File</span><span class="p">(</span><span class="n">FileOps</span><span class="o">&amp;</span><span class="w"> </span><span class="n">operations</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">operations_</span><span class="p">(</span><span class="o">&amp;</span><span class="n">operations</span><span class="p">),</span><span class="w"> </span><span class="n">descriptor_</span><span class="p">(</span><span class="n">descriptor</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">require_open</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="nf">close_once</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="p">;</span>
+<span class="w">    </span><span class="n">FileOps</span><span class="o">*</span><span class="w"> </span><span class="n">operations_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">-1</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::io</span>
+<span class="cp">#endif</span>
+</code></pre></figure>
+<p><code>static</code> factories belong to the class but need no existing instance. The private
+constructor installs a verified handle without allocating. Default construction
+produces an empty owner. Copying is deleted; moves are nonthrowing. Moving or
+closing the owner concurrently with an operation is forbidden. Explicit offsets
+remove dependence on a shared seek position, not the need for lifetime and
+higher-level synchronization rules.</p>
+<p><code>read_up_to</code> fills the requested span unless it reaches end-of-file, returning
+the completed count. <code>read_exact</code> requires the full count and otherwise throws
+<code>FormatError</code>. <code>write_all</code> either completes the requested transfer or throws;
+it does not undo a prefix. <code>sync</code> reports a requested synchronization result.
+<code>close_checked</code> reports close failure and consumes this owner's responsibility.
+The destructor performs only a best-effort, nonthrowing close, never a hidden
+synchronization. Error-reporting code itself may allocate; only the explicitly
+nonthrowing cleanup and backend methods promise not to propagate exceptions.</p>
+<h2 id="translate-native-calls-not-their-completion-policy">Translate native calls, not their completion policy</h2>
+<p>Create <code>src/io/file.cpp</code>. The unnamed namespace gives the adapter and helper
+internal linkage: other translation units use <code>File</code>, not <code>NativeOps</code>. The
+leading <code>::</code> in <code>::pread</code> selects the global operating-system function rather
+than a member with a similar name.</p>
+<p><code>pread</code> and <code>pwrite</code> accept an explicit offset and leave the shared file position
+unchanged. Their return type, <code>ssize_t</code>, can represent either a nonnegative
+count or <code>-1</code>. Convert to <code>size_t</code> <strong>after</strong> checking for a negative result.
+See Apple's <a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/pread.2.html">read interface</a>
+and <a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/pwrite.2.html">write interface</a>.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/io/file.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/io/file.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/checked.hpp"</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">"strata/core/codec.hpp"</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cerrno&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;limits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;fcntl.h&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;sys/stat.h&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;sys/types.h&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;unistd.h&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">strata</span><span class="o">::</span><span class="nn">io</span><span class="w"> </span><span class="p">{</span>
+<span class="k">namespace</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="kt">off_t</span><span class="o">&gt;::</span><span class="n">is_signed</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="kt">off_t</span><span class="o">&gt;::</span><span class="n">digits</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">63</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="kt">ssize_t</span><span class="o">&gt;::</span><span class="n">is_signed</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="kt">ssize_t</span><span class="o">&gt;::</span><span class="n">digits</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">21</span><span class="p">);</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">NativeOps</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">FileOps</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">Transfer</span><span class="w"> </span><span class="n">read_at</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">,</span>
+<span class="w">                     </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="kt">ssize_t</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">::</span><span class="n">pread</span><span class="p">(</span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span>
+<span class="w">                                       </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">off_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">offset</span><span class="p">));</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">errno</span><span class="p">;</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">error</span><span class="p">};</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">result</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">};</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">Transfer</span><span class="w"> </span><span class="nf">write_at</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="kt">ssize_t</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">::</span><span class="n">pwrite</span><span class="p">(</span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span>
+<span class="w">                                        </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">off_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">offset</span><span class="p">));</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">const</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">errno</span><span class="p">;</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">error</span><span class="p">};</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">result</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">};</span>
+<span class="w">    </span><span class="p">}</span>
+</code></pre></figure>
+<p><code>File</code> will validate the whole offset range and cap each request before invoking
+these methods. Thus the <code>off_t</code> cast cannot narrow a valid offset, and a returned
+count fits <code>ssize_t</code>. The 21-value-bit assertion is enough for a positive count
+of 1,048,576. The native methods do not retry: policy belongs in exactly one
+place, where the accumulated byte count is known.</p>
+<h3 id="synchronization-is-an-explicit-requested-capability">Synchronization is an explicit requested capability</h3>
+<p>For <code>SyncMode::file</code>, call <code>fsync</code>. For <code>full_device</code> on the Apple path, request
+<code>F_FULLFSYNC</code>. If the latter operation is not available at build time or fails at
+runtime, report that fact; do not silently substitute a weaker mode. Apple
+explains the distinction between moving data to a drive cache and requesting
+its flush in its <a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fsync.2.html">fsync manual</a>
+and <a href="https://developer.apple.com/videos/play/wwdc2019/419/">storage discussion</a>.
+A successful request is still not our proof of physical power-loss behavior.</p>
+<p>Append the rest of the adapter and the internal result validator. This closes
+<code>NativeOps</code> and the unnamed namespace, but keeps <code>strata::io</code> open:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/io/file.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="nf">sync</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">SyncMode</span><span class="w"> </span><span class="n">mode</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mode</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">SyncMode</span><span class="o">::</span><span class="n">file</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">::</span><span class="n">fsync</span><span class="p">(</span><span class="n">descriptor</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">errno</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mode</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">SyncMode</span><span class="o">::</span><span class="n">full_device</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">EINVAL</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="cp">#if defined(__APPLE__) &amp;&amp; defined(F_FULLFSYNC)</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">::</span><span class="n">fcntl</span><span class="p">(</span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="n">F_FULLFSYNC</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">errno</span><span class="p">;</span>
+<span class="cp">#else</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ENOTSUP</span><span class="p">;</span>
+<span class="cp">#endif</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">::</span><span class="n">close</span><span class="p">(</span><span class="n">descriptor</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">errno</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="n">FileOps</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">native_ops</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">NativeOps</span><span class="w"> </span><span class="n">operations</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">operations</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">require_transfer</span><span class="p">(</span><span class="n">Transfer</span><span class="w"> </span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">requested</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">requested</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span>
+<span class="w">        </span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"invalid FileOps transfer result"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace</span>
+</code></pre></figure>
+<p>The <code>#if</code> selects a native implementation at compilation; it is not an attempt
+to infer the learner's OS version. <code>ENOTSUP</code> explicitly distinguishes unsupported
+full-device synchronization from success. The archived Apple
+<a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fcntl.2.html"><code>fcntl</code> documentation</a>
+describes the request; its historical filesystem list is not a compatibility
+matrix for a current machine. Check the selected SDK headers, local manual,
+and actual call result.</p>
+<p><code>native_ops()</code> returns a reference to one function-local static adapter, rather
+than creating a dangling temporary backend for each file. Files must not outlive
+that adapter; ordinary function-scoped files satisfy this. We do not introduce
+global file owners with ambiguous program-termination ordering.</p>
+<p><code>require_transfer</code> catches impossible backend responses before they corrupt the
+loop's count, such as reporting more bytes than requested. This is a programming
+error (<code>logic_error</code>), not malformed record data. It does not validate whether
+a malicious backend actually respected the supplied memory range.</p>
+<h2 id="move-the-handle-and-close-it-exactly-once-at-the-owner-boundary">Move the handle and close it exactly once at the owner boundary</h2>
+<p>Append adoption, destruction, move operations, and the two forms of close:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/io/file.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">File</span><span class="w"> </span><span class="nf">File::adopt</span><span class="p">(</span><span class="n">FileOps</span><span class="o">&amp;</span><span class="w"> </span><span class="n">operations</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">descriptor</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"cannot adopt a negative descriptor"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">File</span><span class="p">(</span><span class="n">operations</span><span class="p">,</span><span class="w"> </span><span class="n">descriptor</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">File</span><span class="o">::~</span><span class="n">File</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">close_once</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="n">File</span><span class="o">::</span><span class="n">File</span><span class="p">(</span><span class="n">File</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">    </span><span class="o">:</span><span class="w"> </span><span class="n">operations_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">operations_</span><span class="p">,</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">)),</span>
+<span class="w">      </span><span class="n">descriptor_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">descriptor_</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="n">File</span><span class="o">&amp;</span><span class="w"> </span><span class="n">File</span><span class="o">::</span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">File</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="k">this</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">close_once</span><span class="p">();</span>
+<span class="w">        </span><span class="n">operations_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">operations_</span><span class="p">,</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">);</span>
+<span class="w">        </span><span class="n">descriptor_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">descriptor_</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">File</span><span class="o">::</span><span class="n">require_open</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">is_open</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span><span class="s">"file is closed"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="n">File</span><span class="o">::</span><span class="n">close_once</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">is_open</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">FileOps</span><span class="o">*</span><span class="w"> </span><span class="n">operations</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">operations_</span><span class="p">,</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">descriptor_</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">operations</span><span class="o">-&gt;</span><span class="n">close</span><span class="p">(</span><span class="n">descriptor</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">File</span><span class="o">::</span><span class="n">close_checked</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">close_once</span><span class="p">();</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">IoError</span><span class="p">(</span><span class="n">error</span><span class="p">,</span><span class="w"> </span><span class="s">"close"</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>The moves use the same exchange pattern as Chapter 3. Move construction empties
+the source. Move assignment first attempts to close its old descriptor, then
+transfers the pair; self-move leaves it unchanged. A valid backend moves with
+its handle. A destination cannot retain its old backend with a new descriptor.</p>
+<p>A move assignment is not a checked completion operation for its old file. When
+that error matters, explicitly synchronize and <code>close_checked()</code> before assigning
+another owner. Suppressing destructor errors is necessary for unwinding; it is
+not permission to suppress errors at the success boundary of a durable operation.</p>
+<p><code>close_once</code> marks the owner closed <strong>before</strong> calling the backend. If
+<code>close_checked</code> subsequently throws, the destructor cannot retry that raw integer.
+Closing an already-closed owner is an idempotent no-op. A close error leaves this
+wrapper closed even though persistence, and on some platforms descriptor state,
+may be uncertain.</p>
+<p>Do not apply the read/write <code>EINTR</code> retry loop mechanically to <code>close</code>. On Linux,
+the descriptor can already have been released and reused before an error is
+reported; retrying can close another resource. Its
+<a href="https://man7.org/linux/man-pages/man2/close.2.html">close manual</a> documents both
+that hazard and differing historical platform semantics. Apple's archived
+<a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/close.2.html">close manual</a>
+also reports <code>EINTR</code> and delayed write errors without establishing a universal
+retry rule. This adapter uses one attempt and surfaces the error; it does not
+promise portable leak-free recovery from an interrupted close on every POSIX
+system. A new platform needs its own verified close policy, not a blind retry.</p>
+<h2 id="open-a-trusted-regular-path-without-truncating-existing-data">Open a trusted regular path without truncating existing data</h2>
+<p>The ordinary path factory validates the C++ string before calling the C API.
+An embedded NUL would otherwise cause <code>c_str()</code> to name a shorter path than the
+caller intended. <code>create_new</code> uses <code>O_CREAT | O_EXCL</code>; an existing name is an
+error, never a reason to truncate it. <code>read_write</code> opens an existing file.</p>
+<p>The mode <code>0600</code> is an octal permission value: owner read/write, no group or other
+access before the process's mask is applied. <code>O_CLOEXEC</code> requests that the handle
+not survive a successful execution of another program. No <code>O_APPEND</code> flag is
+used: offsets are deliberate. In particular, the Linux
+<a href="https://man7.org/linux/man-pages/man2/pread.2.html"><code>pwrite</code> documentation</a> warns
+that append-opened descriptors do not honor the expected explicit-offset behavior.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/io/file.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">File</span><span class="w"> </span><span class="nf">File::open</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="n">OpenMode</span><span class="w"> </span><span class="n">mode</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">path</span><span class="p">.</span><span class="n">empty</span><span class="p">()</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">path</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="sc">'\0'</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">::</span><span class="n">npos</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"file path is empty or contains NUL"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">flags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">O_CLOEXEC</span><span class="p">;</span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">mode</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">OpenMode</span><span class="o">::</span><span class="no">read_only</span><span class="p">:</span><span class="w">  </span><span class="n">flags</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="n">O_RDONLY</span><span class="p">;</span><span class="w"> </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">OpenMode</span><span class="o">::</span><span class="no">read_write</span><span class="p">:</span><span class="w"> </span><span class="n">flags</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="n">O_RDWR</span><span class="p">;</span><span class="w"> </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">OpenMode</span><span class="o">::</span><span class="no">create_new</span><span class="p">:</span><span class="w"> </span><span class="n">flags</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="n">O_RDWR</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">O_CREAT</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">O_EXCL</span><span class="p">;</span><span class="w"> </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">default</span><span class="o">:</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"unknown open mode"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">descriptor</span><span class="p">;</span>
+<span class="w">    </span><span class="k">do</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">descriptor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">::</span><span class="n">open</span><span class="p">(</span><span class="n">path</span><span class="p">.</span><span class="n">c_str</span><span class="p">(),</span><span class="w"> </span><span class="n">flags</span><span class="p">,</span><span class="w"> </span><span class="mo">0600</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">descriptor</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">errno</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EINTR</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">descriptor</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">errno</span><span class="p">;</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">IoError</span><span class="p">(</span><span class="n">error</span><span class="p">,</span><span class="w"> </span><span class="s">"open"</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">File</span><span class="w"> </span><span class="n">result</span><span class="p">(</span><span class="n">native_ops</span><span class="p">(),</span><span class="w"> </span><span class="n">descriptor</span><span class="p">);</span>
+<span class="w">    </span><span class="k">struct</span><span class="w"> </span><span class="nc">stat</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="p">{};</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">outcome</span><span class="p">;</span>
+<span class="w">    </span><span class="k">do</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">outcome</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">::</span><span class="n">fstat</span><span class="p">(</span><span class="n">descriptor</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">status</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">outcome</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">errno</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EINTR</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">outcome</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">errno</span><span class="p">;</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">IoError</span><span class="p">(</span><span class="n">error</span><span class="p">,</span><span class="w"> </span><span class="s">"fstat"</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">S_ISREG</span><span class="p">(</span><span class="n">status</span><span class="p">.</span><span class="n">st_mode</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span><span class="s">"File requires a regular file"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>After <code>open</code> succeeds, install the handle in <code>result</code> before running the fallible
+<code>fstat</code> check. If metadata inspection or type validation throws, the local owner
+attempts cleanup during unwinding. <code>S_ISREG</code> checks the descriptor's actual file
+type, not a guessed filename suffix; see Apple's
+<a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/stat.2.html"><code>fstat</code> interface</a>.</p>
+<p>The factory is for trusted local engine paths, not a security sandbox for hostile
+path components or devices. A type check after opening does not prevent a device
+or FIFO open from blocking first. Nor does a failed post-creation check remove
+the new directory entry. Owning the descriptor and owning a pathname cleanup
+obligation are separate responsibilities.</p>
+<p>The path factory and namespace operations are intentionally not covered by our
+transfer fake. We test real creation and reopening independently. A later
+installation protocol will define temporary names, rename ordering, directory
+synchronization, and recovery; none is implied by this factory.</p>
+<h2 id="finish-a-read-without-mistaking-a-short-count-for-end-of-file">Finish a read without mistaking a short count for end-of-file</h2>
+<p>Let <span class="math-input" data-display="false">N</span> be the requested span size and <span class="math-input" data-display="false">d</span> the count completed so far. Maintain
+<span class="math-input" data-display="false">0\leq d\leq N</span>. Each call receives a view beginning at <code>output[d]</code>, a count no
+larger than <span class="math-input" data-display="false">N-d</span>, and file offset <span class="math-input" data-display="false">o+d</span>. For a positive result <span class="math-input" data-display="false">r</span>, update
+<span class="math-input" data-display="false">d\leftarrow d+r</span>. The full-range check has already proved that these offsets
+are representable.</p>
+<p>A successful short result is progress, not end-of-file. Only a subsequent zero
+result establishes that this attempt cannot read more from the regular file.</p>
+<figure class="code-block"><figcaption><span class="code-title">src/io/file.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">File::read_up_to</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_open</span><span class="p">();</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">checked_file_end</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">done</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">done</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">done</span><span class="p">,</span><span class="w"> </span><span class="n">io_chunk_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">Transfer</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">operations_</span><span class="o">-&gt;</span><span class="n">read_at</span><span class="p">(</span>
+<span class="w">            </span><span class="n">descriptor_</span><span class="p">,</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="n">done</span><span class="p">,</span><span class="w"> </span><span class="n">count</span><span class="p">),</span>
+<span class="w">            </span><span class="n">offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">done</span><span class="p">));</span>
+<span class="w">        </span><span class="n">require_transfer</span><span class="p">(</span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="n">count</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EINTR</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">continue</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">IoError</span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="p">,</span><span class="w"> </span><span class="s">"read_at"</span><span class="p">,</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">done</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">done</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">done</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">count</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">done</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">File::read_exact</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">read_up_to</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">output</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">output</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">FormatError</span><span class="p">(</span><span class="s">"unexpected end of file"</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></figure>
+<p>If the first attempt is interrupted before reporting progress, retry the same
+suffix and offset. If two bytes succeeded, the next attempt starts two bytes
+later. <code>EAGAIN</code>, <code>EIO</code>, and other errors are not converted into busy loops. This
+is blocking regular-file I/O, not a readiness-driven socket interface.</p>
+<p>For an empty span, an open file returns zero without making a backend call.
+The offset is still checked. A closed owner is a usage error even for an empty
+operation, making use-after-close detectable instead of conditionally invisible.</p>
+<p>A request for six bytes from a file containing only four remaining bytes can
+return four through <code>read_up_to</code>; <code>read_exact</code> instead throws. Both may have
+changed the destination's prefix. After an I/O error, do not decode the entire
+buffer as a valid record: the wrapper does not provide a strong no-change
+guarantee for borrowed output. Prepare a private buffer when installed state
+must survive a failed read. A read error's progress counts successful prior
+calls, not an assurance about every memory effect of the failing native call.</p>
+<h2 id="finish-a-write-without-promising-to-undo-it">Finish a write without promising to undo it</h2>
+<p>The write loop has the same progress invariant. Its zero-count case differs:
+there is no useful write-side end-of-file, so zero progress on a nonempty suffix
+becomes <code>EIO</code>. Otherwise a faulty backend could keep the loop alive forever.
+Append the write loop, explicit synchronization, and the namespace closure:</p>
+<figure class="code-block"><figcaption><span class="code-title">src/io/file.cpp</span><button type="button" class="copy-code" aria-label="Copy code">Copy</button></figcaption><pre><code><span class="kt">void</span><span class="w"> </span><span class="nf">File::write_all</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">span</span><span class="o">&lt;</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">byte</span><span class="o">&gt;</span><span class="w"> </span><span class="n">input</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_open</span><span class="p">();</span>
+<span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">checked_file_end</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">done</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">done</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">done</span><span class="p">,</span><span class="w"> </span><span class="n">io_chunk_bytes</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">Transfer</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">operations_</span><span class="o">-&gt;</span><span class="n">write_at</span><span class="p">(</span>
+<span class="w">            </span><span class="n">descriptor_</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">subspan</span><span class="p">(</span><span class="n">done</span><span class="p">,</span><span class="w"> </span><span class="n">count</span><span class="p">),</span>
+<span class="w">            </span><span class="n">offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">done</span><span class="p">));</span>
+<span class="w">        </span><span class="n">require_transfer</span><span class="p">(</span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="n">count</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EINTR</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">continue</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="n">IoError</span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">error</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">EIO</span><span class="p">,</span>
+<span class="w">                          </span><span class="s">"write_at"</span><span class="p">,</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">done</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">done</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">count</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">File::sync</span><span class="p">(</span><span class="n">SyncMode</span><span class="w"> </span><span class="n">mode</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">require_open</span><span class="p">();</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">error</span><span class="p">;</span>
+<span class="w">    </span><span class="k">do</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">operations_</span><span class="o">-&gt;</span><span class="n">sync</span><span class="p">(</span><span class="n">descriptor_</span><span class="p">,</span><span class="w"> </span><span class="n">mode</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EINTR</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">IoError</span><span class="p">(</span><span class="n">error</span><span class="p">,</span><span class="w"> </span><span class="s">"sync"</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace strata::io</span>
+</code></pre></figure>
+<p>Consider six bytes <code>{10,20,30,40,50,60}</code> written at offset 5 by a backend that
+accepts at most two bytes and fails after four:</p>
+<table>
+<thead>
+<tr>
+<th>Call</th>
+<th style="text-align:right">Requested offset</th>
+<th style="text-align:right">Remaining bytes</th>
+<th>Result</th>
+<th style="text-align:right">Completed count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td style="text-align:right">5</td>
+<td style="text-align:right">6</td>
+<td>Accept 2</td>
+<td style="text-align:right">2</td>
+</tr>
+<tr>
+<td>2</td>
+<td style="text-align:right">7</td>
+<td style="text-align:right">4</td>
+<td>Accept 2</td>
+<td style="text-align:right">4</td>
+</tr>
+<tr>
+<td>3</td>
+<td style="text-align:right">9</td>
+<td style="text-align:right">2</td>
+<td><code>EIO</code>, no reported progress</td>
+<td style="text-align:right">4</td>
+</tr>
+</tbody>
+</table>
+<p>The prefix at offsets 5–8 remains. Throwing and closing cannot undo it. Nor is
+its presence in the test backend evidence of persistence. A future log writer
+will stop accepting changes after an uncertain failure and use its recovery
+protocol; this low-level owner does not invent transaction state.</p>
+<p>For a five-byte transfer with one interruption followed by a two-byte cap,
+the results are <code>EINTR</code>, 2, 2, 1: <strong>four attempts</strong>, not three. Both buffer
+position and file offset must advance only with a positive reported count.</p>
+<p><code>sync</code> retries only interruption, without closing the handle. A non-interruption
+failure propagates while the file remains open for cleanup or diagnosis.
+Success of <code>write_all</code> means transfer completion; success of <code>sync</code> means the
+requested primitive reported success; success of <code>close_checked</code> means release
+reported success. None alone establishes atomic batch recovery or persistence
+of a newly created name.</p>
+<h2 id="continue-with-the-runnable-checks">Continue with the runnable checks</h2>
+<p>The engine headers and <code>src/io/file.cpp</code> are now complete. Keep the file owner's
+backend-lifetime contract, exact record sizes, and failure-progress semantics
+visible while testing them. <a href="https://25d-228.github.io/cplusplus-learning/chapter-06-part-2.html">Part 2 — Deterministic faults and native checks</a>
+provides every remaining test file, the CMake additions, expected output, and
+independent byte oracle. The chapter's runnable checkpoint is at the end of that
+part; no later chapter supplies missing code.</p>
+</article>
+<nav class="pager" aria-label="Previous and next chapters"><a href="chapter-05.html"><small>Previous · Chapter 5</small><span>Templates, concepts, and ordering contracts</span></a><a href="chapter-06-part-2.html"><small>Next · Chapter 6 · Part 2</small><span>Deterministic faults and native checks</span></a></nav>
+<footer>C++ Systems Engineering: Strata · Chapter 6 · Part 1</footer>
+</main>
+<aside class="page-toc" aria-label="In this chapter"><div class="toc-title">In this chapter</div><ul><li class="toc-h2"><a href="#part-1-encodings-and-file-ownership">Part 1 — Encodings and file ownership</a></li><li class="toc-h2"><a href="#begin-the-engine-without-disturbing-the-exercises">Begin the engine without disturbing the exercises</a></li><li class="toc-h2"><a href="#a-row-is-a-value-its-encoding-is-another-value">A row is a value; its encoding is another value</a></li><li class="toc-h3"><a href="#fix-the-byte-layout-before-writing-a-loop">Fix the byte layout before writing a loop</a></li><li class="toc-h2"><a href="#check-arithmetic-before-allocating-or-touching-a-file">Check arithmetic before allocating or touching a file</a></li><li class="toc-h3"><a href="#an-offset-is-not-a-pointer-and-not-necessarily-a-size">An offset is not a pointer and not necessarily a size</a></li><li class="toc-h2"><a href="#turn-an-unsigned-integer-into-bytes">Turn an unsigned integer into bytes</a></li><li class="toc-h2"><a href="#validate-a-complete-image-before-decoding-its-fields">Validate a complete image before decoding its fields</a></li><li class="toc-h2"><a href="#give-the-transfer-loop-a-narrow-operation-interface">Give the transfer loop a narrow operation interface</a></li><li class="toc-h3"><a href="#carry-failure-context-without-confusing-it-with-rollback">Carry failure context without confusing it with rollback</a></li><li class="toc-h3"><a href="#declare-one-owner-of-the-descriptor">Declare one owner of the descriptor</a></li><li class="toc-h2"><a href="#translate-native-calls-not-their-completion-policy">Translate native calls, not their completion policy</a></li><li class="toc-h3"><a href="#synchronization-is-an-explicit-requested-capability">Synchronization is an explicit requested capability</a></li><li class="toc-h2"><a href="#move-the-handle-and-close-it-exactly-once-at-the-owner-boundary">Move the handle and close it exactly once at the owner boundary</a></li><li class="toc-h2"><a href="#open-a-trusted-regular-path-without-truncating-existing-data">Open a trusted regular path without truncating existing data</a></li><li class="toc-h2"><a href="#finish-a-read-without-mistaking-a-short-count-for-end-of-file">Finish a read without mistaking a short count for end-of-file</a></li><li class="toc-h2"><a href="#finish-a-write-without-promising-to-undo-it">Finish a write without promising to undo it</a></li><li class="toc-h2"><a href="#continue-with-the-runnable-checks">Continue with the runnable checks</a></li></ul></aside>
+</div></body></html>
